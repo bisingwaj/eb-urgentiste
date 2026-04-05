@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "apps-v2",
+    "slug": "apps-v2",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.eburgentiste.app",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "L'application utilise le micro pour les appels avec la centrale de régulation.",
+        "NSCameraUsageDescription": "La caméra est utilisée pour les appels vidéo avec la centrale."
+      }
+    },
+    "android": {
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.CAMERA",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "package": "com.eburgentiste.app"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "@rnmapbox/maps",
+      "expo-secure-store"
+    ]
+  }
+}

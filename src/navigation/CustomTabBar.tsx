@@ -1,0 +1,144 @@
+import React, { useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, UIManager, LayoutAnimation } from 'react-native';
+import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { colors } from '../theme/colors';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={styles.wrapper}>
+      <View style={[styles.container, { paddingBottom: 0 }]}>
+        {state.routes.map((route, index) => {
+          const { options } = descriptors[route.key];
+
+          let label =
+            options.tabBarLabel !== undefined
+              ? options.tabBarLabel
+              : options.title !== undefined
+                ? options.title
+                : route.name;
+
+          if (route.name === 'ProfilHopital') label = 'Profil';
+
+          const isFocused = state.index === index;
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              const config = {
+                duration: 250,
+                update: { type: 'spring', springDamping: 0.7, property: 'scaleXY' },
+                create: { type: 'linear', property: 'opacity' },
+                delete: { type: 'linear', property: 'opacity' },
+              } as const;
+              LayoutAnimation.configureNext(config);
+              navigation.navigate(route.name);
+            }
+          };
+
+          const onLongPress = () => {
+            navigation.emit({
+              type: 'tabLongPress',
+              target: route.key,
+            });
+          };
+
+          const activeColor = colors.secondary;
+          const inactiveColor = 'rgba(255, 255, 255, 0.52)';
+          const activeBg = 'rgba(255, 255, 255, 0.96)';
+
+          return (
+            <TouchableOpacity
+              key={route.key}
+              accessibilityRole="button"
+              accessibilityState={isFocused ? { selected: true } : {}}
+              accessibilityLabel={options.tabBarAccessibilityLabel}
+              testID={(options as any).tabBarTestID}
+              onPress={onPress}
+              onLongPress={onLongPress}
+              style={[
+                styles.tabItem,
+                isFocused && [styles.tabItemFocused, { backgroundColor: activeBg }]
+              ]}
+              activeOpacity={0.8}
+            >
+              <View style={styles.iconContainer}>
+                {options.tabBarIcon && options.tabBarIcon({
+                  focused: isFocused,
+                  color: isFocused ? activeColor : inactiveColor,
+                  size: 24
+                })}
+              </View>
+
+              {isFocused && (
+                <Text
+                  style={[styles.labelStyle, { color: activeColor }]}
+                  numberOfLines={1}
+                >
+                  {label as string}
+                </Text>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  wrapper: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 30 : 50,
+    left: 20,
+    right: 20,
+    shadowColor: colors.secondary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 8,
+  },
+  container: {
+    flexDirection: 'row',
+    height: 64,
+    backgroundColor: colors.secondary,
+    borderRadius: 32,
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    justifyContent: 'space-between',
+    borderWidth: 0,
+  },
+  tabItem: {
+    height: 48,
+    width: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 24,
+  },
+  tabItemFocused: {
+    flexDirection: 'row',
+    width: 'auto',
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  iconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  labelStyle: {
+    marginLeft: 8,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+});
