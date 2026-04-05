@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Alert, Linking } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  StatusBar,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import {
@@ -18,10 +26,11 @@ import {
   setLocalAudioMuted,
   setLocalVideoMuted,
   setSpeakerphoneOn,
+  setVideoPublishingEnabled,
 } from '../../services/agoraRtc';
 
-type CallState = 'selection' | 'calling' | 'active';
-type CallType = 'audio' | 'video' | null;
+type CallState = 'connecting' | 'calling' | 'active';
+type CallType = 'audio' | 'video';
 
 function buildChannelName(): string {
   return `OP-${Date.now()}`;
@@ -30,18 +39,20 @@ function buildChannelName(): string {
 export function CallCenterScreen({ navigation }: { navigation: { goBack: () => void } }) {
   const { profile, session } = useAuth();
 
-  const [callState, setCallState] = useState<CallState>('selection');
-  const [callType, setCallType] = useState<CallType>(null);
+  const [callState, setCallState] = useState<CallState>('connecting');
+  const [callType, setCallType] = useState<CallType>('audio');
   const [currentCallId, setCurrentCallId] = useState<string | null>(null);
+  const [mediaReady, setMediaReady] = useState(false);
 
   const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isLocalCameraOff, setIsLocalCameraOff] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [remoteUid, setRemoteUid] = useState<number | null>(null);
 
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const autoStartRef = useRef(false);
 
   const cleanupSubscription = useCallback(() => {
     if (subscriptionRef.current) {
@@ -50,13 +61,11 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     }
   }, []);
 
-  // ── Realtime : statut de l'appel (prise en charge centrale) ──
   useEffect(() => {
     if (callState !== 'calling' || !currentCallId) {
       return;
     }
 
-    console.log('[Call] 📡 Abonnement Realtime pour call_id:', currentCallId);
     cleanupSubscription();
 
     const ch = supabase
@@ -70,7 +79,6 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
           filter: `id=eq.${currentCallId}`,
         },
         (payload: { new?: { status?: string } }) => {
-          console.log('[Call] 📥 Realtime UPDATE:', payload.new?.status);
           const status = payload.new?.status;
           if (status === 'active') {
             setCallState('active');
@@ -89,7 +97,6 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     };
   }, [callState, currentCallId, cleanupSubscription]);
 
-  // ── Timer durée d'appel ──
   useEffect(() => {
     if (callState === 'active') {
       timerRef.current = setInterval(() => {
@@ -117,17 +124,18 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     }
     cleanupSubscription();
     setAgoraRtcCallbacks({});
+    setMediaReady(false);
     leaveAgoraChannel();
-    setCallState('selection');
+    setCallState('connecting');
     setCurrentCallId(null);
     setCallDuration(0);
     setRemoteUid(null);
     setIsMuted(false);
-    setIsVideoOff(false);
+    setIsLocalCameraOff(false);
+    setCallType('audio');
     navigation.goBack();
   }, [cleanupSubscription, navigation]);
 
-  /** Raccrochage côté urgentiste : met à jour la ligne (ended_by = rescuer) puis quitte. */
   const endCallLocal = useCallback(async () => {
     try {
       leaveAgoraChannel();
@@ -148,7 +156,6 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     cleanupAndGoBack();
   }, [currentCallId, callDuration, cleanupAndGoBack]);
 
-  /** Fin d'appel déjà enregistrée côté centrale (Realtime) : ne pas réécrire le statut. */
   const endCallRemotely = useCallback(async () => {
     leaveAgoraChannel();
     cleanupAndGoBack();
@@ -158,6 +165,9 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
 
   useEffect(() => {
     setAgoraRtcCallbacks({
+      onJoinChannelSuccess: () => {
+        setMediaReady(true);
+      },
       onRemoteUserJoined: (uid) => {
         setRemoteUid(uid);
       },
@@ -174,17 +184,15 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     };
   }, []);
 
-  // ── Initier un appel : DB puis Agora ──
   const initiateCall = async (type: CallType) => {
     const chName = buildChannelName();
     try {
       setCallType(type);
       if (type === 'audio') {
-        setIsVideoOff(true);
+        setIsLocalCameraOff(true);
       }
       setCallState('calling');
 
-      console.log('[Call] 📞 INSERT call_history...', chName);
       const { data, error } = await supabase
         .from('call_history')
         .insert({
@@ -204,7 +212,8 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       if (error) {
         console.error('[Call] ❌ Erreur INSERT:', error.message);
         Alert.alert('Erreur', "Impossible de joindre la centrale. Réessayez.");
-        setCallState('selection');
+        setCallState('connecting');
+        navigation.goBack();
         return;
       }
 
@@ -232,22 +241,27 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
           })
           .eq('id', row.id);
         leaveAgoraChannel();
-        setCallState('selection');
+        setCallState('connecting');
         setCurrentCallId(null);
+        navigation.goBack();
       }
     } catch (err) {
       console.error('[Call] ❌ Exception:', err);
       Alert.alert('Erreur', 'Erreur réseau. Vérifiez votre connexion.');
-      setCallState('selection');
+      setCallState('connecting');
       leaveAgoraChannel();
+      navigation.goBack();
     }
   };
 
-  const callGSM = () => {
-    Linking.openURL('tel:+243000000000').catch(() => {
-      Alert.alert('Erreur', 'Impossible de passer un appel téléphonique.');
-    });
-  };
+  useEffect(() => {
+    if (autoStartRef.current) {
+      return;
+    }
+    autoStartRef.current = true;
+    void initiateCall('audio');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- démarrage unique à l’entrée écran
+  }, []);
 
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -261,156 +275,190 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
 
   useEffect(() => {
     if (callType === 'video') {
-      setLocalVideoMuted(isVideoOff);
+      setLocalVideoMuted(isLocalCameraOff);
     }
-  }, [isVideoOff, callType]);
+  }, [isLocalCameraOff, callType]);
 
   useEffect(() => {
     setSpeakerphoneOn(isSpeakerOn);
   }, [isSpeakerOn]);
 
+  const toggleVideoMode = useCallback(async () => {
+    if (!mediaReady) {
+      return;
+    }
+    const next = callType !== 'video';
+    try {
+      await setVideoPublishingEnabled(next);
+      setCallType(next ? 'video' : 'audio');
+      if (next) {
+        setIsLocalCameraOff(false);
+        setIsSpeakerOn(true);
+        setSpeakerphoneOn(true);
+        if (currentCallId) {
+          void supabase.from('call_history').update({ has_video: true }).eq('id', currentCallId);
+        }
+      } else {
+        setIsLocalCameraOff(false);
+      }
+    } catch (e) {
+      console.error('[Call] toggle video:', e);
+      Alert.alert('Vidéo', e instanceof Error ? e.message : 'Impossible d’activer la vidéo.');
+    }
+  }, [mediaReady, callType, currentCallId]);
+
+  const headerStatus = () => {
+    if (callState === 'connecting') {
+      return { dot: '#888', text: 'Connexion…' };
+    }
+    if (callState === 'calling') {
+      return { dot: '#FF9800', text: 'Sonnerie…' };
+    }
+    return { dot: colors.success, text: 'En ligne' };
+  };
+
+  const centerTitle = () => {
+    if (callState === 'connecting') {
+      return 'Connexion…';
+    }
+    if (callState === 'calling') {
+      return 'Appel en cours…';
+    }
+    return 'Appel en cours…';
+  };
+
+  const st = headerStatus();
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" />
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <StatusBar barStyle="light-content" backgroundColor="#000" />
 
-      {callState === 'selection' && (
-        <View style={{ flex: 1 }}>
-          <View style={styles.topHeader}>
-            <View style={styles.headerRow}>
-              <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-                <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-              </TouchableOpacity>
-              <View>
-                <Text style={styles.greetingText}>Régulation</Text>
-                <Text style={styles.hospitalName}>La Centrale</Text>
-              </View>
-              <View style={{ width: 44 }} />
-            </View>
-          </View>
+      <View style={styles.header}>
+        <TouchableOpacity
+          style={styles.headerIconBtn}
+          onPress={() => void endCallLocal()}
+          accessibilityLabel="Raccrocher et fermer"
+        >
+          <MaterialIcons name="expand-more" size={28} color="#FFF" />
+        </TouchableOpacity>
 
-          <View style={styles.profileTop}>
-            <View style={styles.avatarLarge}>
-              <Text style={styles.avatarInitials}>C</Text>
-              <View style={styles.onlineBadge} />
-            </View>
-            <Text style={styles.profileName}>La Centrale (SAMU)</Text>
-            <Text style={styles.profileStatus}>Prêt pour réception</Text>
+        <View style={styles.headerStatus}>
+          <View style={[styles.statusDot, { backgroundColor: st.dot }]} />
+          <Text style={styles.headerStatusText}>{st.text}</Text>
+        </View>
 
-            <View style={styles.callGridRow}>
-              <TouchableOpacity style={styles.miniCallCard} onPress={() => void initiateCall('audio')}>
-                <View style={[styles.miniCallIconBox, { backgroundColor: colors.success + '15' }]}>
-                  <MaterialIcons name="phone" color={colors.success} size={24} />
-                </View>
-                <Text style={styles.miniCallLabel}>Audio</Text>
-              </TouchableOpacity>
+        <View style={styles.headerIconBtn}>
+          <MaterialIcons name="wifi" size={22} color="#FFF" />
+        </View>
+      </View>
 
-              <TouchableOpacity style={styles.miniCallCard} onPress={() => void initiateCall('video')}>
-                <View style={[styles.miniCallIconBox, { backgroundColor: colors.secondary + '15' }]}>
-                  <MaterialIcons name="videocam" color={colors.secondary} size={24} />
-                </View>
-                <Text style={styles.miniCallLabel}>Vidéo</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.miniCallCard} onPress={callGSM}>
-                <View style={[styles.miniCallIconBox, { backgroundColor: '#FF980015' }]}>
-                  <MaterialIcons name="sim-card" color="#FF9800" size={24} />
-                </View>
-                <Text style={styles.miniCallLabel}>GSM</Text>
-                <Text style={styles.miniCallSub}>Airtime</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+      {callState === 'connecting' && (
+        <View style={styles.connectingWrap}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.connectingText}>Préparation de l’appel…</Text>
         </View>
       )}
 
       {(callState === 'calling' || callState === 'active') && (
-        <View style={styles.callBackground}>
-          <View style={styles.callHeader}>
-            <Text style={styles.encryptText}>Système de cryptage tactique actif</Text>
-
-            {callType === 'audio' && (
-              <View style={styles.audioCallerInfo}>
-                <View style={styles.audioAvatar}>
-                  <Text style={styles.audioAvatarText}>C</Text>
-                </View>
-                <Text style={styles.callerNameTitle}>La Centrale</Text>
-                <Text style={styles.timerText}>
-                  {callState === 'calling' ? 'Connexion…' : formatTime(callDuration)}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {callType === 'video' && (
-            <View style={styles.videoStage}>
-              {remoteUid != null ? (
-                <RtcSurfaceView
-                  style={styles.remoteVideo}
-                  canvas={{
-                    uid: remoteUid,
-                    renderMode: RenderModeType.RenderModeHidden,
-                  }}
-                />
-              ) : (
-                <View style={styles.remotePlaceholder}>
-                  <Text style={styles.placeholderText}>En attente de la centrale…</Text>
-                </View>
-              )}
-
-              {(callState === 'calling' || callState === 'active') && !isVideoOff && (
-                <View style={styles.pipWindow}>
+        <View style={styles.mainStage}>
+          {callType === 'video' ? (
+            <View style={styles.videoWrap}>
+              <View style={styles.videoStage}>
+                {remoteUid != null ? (
                   <RtcSurfaceView
-                    style={styles.localVideo}
+                    style={styles.remoteVideo}
                     canvas={{
-                      uid: 0,
-                      sourceType: VideoSourceType.VideoSourceCamera,
+                      uid: remoteUid,
                       renderMode: RenderModeType.RenderModeHidden,
                     }}
                   />
-                </View>
-              )}
+                ) : (
+                  <View style={styles.remotePlaceholder}>
+                    <Text style={styles.placeholderText}>En attente de la centrale…</Text>
+                  </View>
+                )}
 
-              {isVideoOff && (
-                <View style={styles.videoOffOverlay}>
-                  <Text style={styles.placeholderText}>Caméra désactivée</Text>
-                </View>
+                {!isLocalCameraOff && (
+                  <View style={styles.pipWindow}>
+                    <RtcSurfaceView
+                      style={styles.localVideo}
+                      canvas={{
+                        uid: 0,
+                        sourceType: VideoSourceType.VideoSourceCamera,
+                        renderMode: RenderModeType.RenderModeHidden,
+                      }}
+                    />
+                  </View>
+                )}
+
+                {isLocalCameraOff && (
+                  <View style={styles.videoOffOverlay}>
+                    <Text style={styles.placeholderText}>Caméra désactivée</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.videoCenterOverlay} pointerEvents="none">
+                <Text style={styles.centerTitle}>{centerTitle()}</Text>
+                {callState === 'active' && (
+                  <Text style={styles.timerLine}>{formatTime(callDuration)}</Text>
+                )}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.audioCenter}>
+              <View style={styles.bigPhoneRing}>
+                <MaterialIcons name="phone" size={56} color="#FF3B3B" />
+              </View>
+              <Text style={styles.centerTitle}>{centerTitle()}</Text>
+              {callState === 'active' && (
+                <Text style={styles.timerLine}>{formatTime(callDuration)}</Text>
               )}
             </View>
           )}
+        </View>
+      )}
 
-          <View style={styles.bottomControls}>
-            <View style={styles.controlsRow}>
-              <TouchableOpacity
-                style={styles.controlCircle}
-                onPress={() => setIsSpeakerOn((v) => !v)}
-              >
-                <MaterialIcons name={isSpeakerOn ? 'volume-up' : 'volume-off'} color="#FFF" size={28} />
-              </TouchableOpacity>
+      {(callState === 'calling' || callState === 'active') && (
+        <View style={styles.bottomDock}>
+          <View style={styles.bottomBar}>
+            <TouchableOpacity
+              style={[styles.roundBtn, !isMuted ? styles.roundBtnLight : styles.roundBtnDark]}
+              onPress={() => setIsMuted((v) => !v)}
+              disabled={!mediaReady}
+            >
+              <MaterialIcons name={isMuted ? 'mic-off' : 'mic'} size={26} color={isMuted ? '#FFF' : '#111'} />
+            </TouchableOpacity>
 
-              {callType === 'video' && (
-                <TouchableOpacity
-                  style={[styles.controlCircle, isVideoOff && { backgroundColor: '#FFF' }]}
-                  onPress={() => setIsVideoOff((v) => !v)}
-                >
-                  <MaterialIcons
-                    name={isVideoOff ? 'videocam-off' : 'videocam'}
-                    color={isVideoOff ? '#000' : '#FFF'}
-                    size={28}
-                  />
-                </TouchableOpacity>
-              )}
+            <TouchableOpacity
+              style={[
+                styles.roundBtn,
+                callType === 'video' ? styles.roundBtnLight : styles.roundBtnDim,
+              ]}
+              onPress={() => void toggleVideoMode()}
+              disabled={!mediaReady}
+            >
+              <MaterialIcons
+                name={callType === 'video' ? 'videocam' : 'videocam-off'}
+                size={26}
+                color="#FFF"
+              />
+            </TouchableOpacity>
 
-              <TouchableOpacity
-                style={[styles.controlCircle, isMuted && { backgroundColor: '#FFF' }]}
-                onPress={() => setIsMuted((v) => !v)}
-              >
-                <MaterialIcons name={isMuted ? 'mic-off' : 'mic'} color={isMuted ? '#000' : '#FFF'} size={28} />
-              </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.roundBtn, isSpeakerOn ? styles.roundBtnLight : styles.roundBtnDark]}
+              onPress={() => setIsSpeakerOn((v) => !v)}
+              disabled={!mediaReady}
+            >
+              <MaterialIcons
+                name={isSpeakerOn ? 'volume-up' : 'volume-down'}
+                size={26}
+                color={isSpeakerOn ? '#111' : '#FFF'}
+              />
+            </TouchableOpacity>
 
-              <TouchableOpacity style={styles.endCallCircle} onPress={() => void endCallLocal()}>
-                <MaterialIcons name="call-end" color="#FFFFFF" size={32} />
-              </TouchableOpacity>
-            </View>
+            <TouchableOpacity style={styles.roundBtnEnd} onPress={() => void endCallLocal()}>
+              <MaterialIcons name="call-end" size={30} color="#FFF" />
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -419,145 +467,109 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.mainBackground },
-  topHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
-    backgroundColor: '#0A0A0A',
+  container: {
+    flex: 1,
+    backgroundColor: '#000000',
   },
-  headerRow: {
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
   },
-  backBtn: {
+  headerIconBtn: {
     width: 44,
     height: 44,
-    borderRadius: 16,
+    borderRadius: 22,
     backgroundColor: '#1A1A1A',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
   },
-  greetingText: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1.5,
-  },
-  hospitalName: {
-    color: '#FFF',
-    fontSize: 24,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-
-  profileTop: { alignItems: 'center', marginTop: 40, paddingHorizontal: 24 },
-  avatarLarge: {
-    width: 120,
-    height: 120,
-    borderRadius: 44,
-    backgroundColor: '#1A1A1A',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  avatarInitials: { fontSize: 44, color: colors.secondary, fontWeight: '800' },
-  onlineBadge: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.success,
-    borderWidth: 4,
-    borderColor: colors.mainBackground,
-  },
-  profileName: { fontSize: 22, fontWeight: '900', color: '#FFF', marginBottom: 6 },
-  profileStatus: { fontSize: 13, color: colors.success, fontWeight: '800', letterSpacing: 1.5 },
-
-  callGridRow: {
+  headerStatus: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '100%',
-    marginTop: 40,
-    gap: 12,
-  },
-  miniCallCard: {
-    flex: 1,
-    backgroundColor: '#161616',
-    borderRadius: 24,
-    paddingVertical: 20,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    gap: 8,
   },
-  miniCallIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  headerStatusText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  connectingWrap: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    gap: 16,
   },
-  miniCallLabel: {
-    color: '#FFF',
-    fontSize: 12,
-    fontWeight: '800',
+  connectingText: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 15,
   },
-  miniCallSub: {
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 8,
-    fontWeight: '900',
-    marginTop: 2,
-    textTransform: 'uppercase',
+  mainStage: {
+    flex: 1,
   },
-
-  callBackground: { flex: 1, backgroundColor: '#0A0A0A', justifyContent: 'space-between' },
-  callHeader: { paddingTop: 40, paddingHorizontal: 20, alignItems: 'center' },
-  encryptText: {
-    color: 'rgba(255,255,255,0.3)',
-    fontSize: 10,
-    fontWeight: '900',
-    letterSpacing: 1.5,
+  videoWrap: {
+    flex: 1,
+    position: 'relative',
   },
-  audioCallerInfo: { alignItems: 'center', marginTop: 60 },
-  audioAvatar: {
+  audioCenter: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
+  bigPhoneRing: {
     width: 160,
     height: 160,
-    borderRadius: 60,
-    backgroundColor: '#1A1A1A',
+    borderRadius: 80,
+    backgroundColor: '#2A0A0A',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 30,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    marginBottom: 28,
+    borderWidth: 2,
+    borderColor: '#5C1515',
   },
-  audioAvatarText: { fontSize: 60, color: colors.secondary, fontWeight: '800' },
-  callerNameTitle: { fontSize: 32, color: '#FFF', fontWeight: '900', marginBottom: 12 },
-  timerText: { fontSize: 18, color: 'rgba(255,255,255,0.4)', fontWeight: '700' },
-
+  centerTitle: {
+    color: '#FFF',
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  timerLine: {
+    marginTop: 12,
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 18,
+    fontWeight: '600',
+    letterSpacing: 1,
+  },
   videoStage: {
     flex: 1,
-    marginTop: 8,
     backgroundColor: '#050505',
     position: 'relative',
   },
-  remoteVideo: { flex: 1, width: '100%' },
+  remoteVideo: {
+    flex: 1,
+    width: '100%',
+  },
   remotePlaceholder: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  placeholderText: { color: 'rgba(255,255,255,0.6)', fontSize: 16 },
-  localVideo: { width: '100%', height: '100%' },
+  placeholderText: {
+    color: 'rgba(255,255,255,0.55)',
+    fontSize: 16,
+  },
+  localVideo: {
+    width: '100%',
+    height: '100%',
+  },
   pipWindow: {
     position: 'absolute',
     top: 16,
@@ -576,27 +588,47 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  bottomControls: { paddingBottom: 60, paddingTop: 30, backgroundColor: 'transparent' },
-  controlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-evenly',
+  videoCenterOverlay: {
+    position: 'absolute',
+    top: 56,
+    left: 0,
+    right: 0,
     alignItems: 'center',
-    paddingHorizontal: 20,
   },
-  controlCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(255,255,255,0.1)',
+  bottomDock: {
+    paddingHorizontal: 16,
+    paddingBottom: 8,
+  },
+  bottomBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#141414',
+    borderRadius: 28,
+    paddingVertical: 18,
+    paddingHorizontal: 14,
+  },
+  roundBtn: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  endCallCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: colors.primary,
+  roundBtnLight: {
+    backgroundColor: '#F2F2F2',
+  },
+  roundBtnDark: {
+    backgroundColor: '#3A3A3A',
+  },
+  roundBtnDim: {
+    backgroundColor: '#3A3A3A',
+  },
+  roundBtnEnd: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#E53935',
     justifyContent: 'center',
     alignItems: 'center',
   },

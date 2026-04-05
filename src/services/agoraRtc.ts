@@ -160,6 +160,31 @@ export function setSpeakerphoneOn(on: boolean): void {
   engine?.setEnableSpeakerphone(on);
 }
 
+/** Active ou désactive la caméra pendant un appel (après join en audio). */
+export async function setVideoPublishingEnabled(enabled: boolean): Promise<void> {
+  const eng = getEngine();
+  if (!eng || !inChannel) {
+    return;
+  }
+  if (enabled) {
+    await ensureCallPermissions(true);
+    eng.enableVideo();
+    eng.startPreview();
+    eng.muteLocalVideoStream(false);
+    const options = new ChannelMediaOptions();
+    options.publishCameraTrack = true;
+    options.autoSubscribeVideo = true;
+    eng.updateChannelMediaOptions(options);
+  } else {
+    eng.muteLocalVideoStream(true);
+    eng.stopPreview();
+    eng.disableVideo();
+    const options = new ChannelMediaOptions();
+    options.publishCameraTrack = false;
+    eng.updateChannelMediaOptions(options);
+  }
+}
+
 export function getAgoraEngine(): IRtcEngine | null {
   return engine;
 }
