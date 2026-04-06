@@ -11,7 +11,7 @@ import {
   ScrollView,
   Switch,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import Mapbox from '@rnmapbox/maps';
 import { speakFrench, stopSpeech } from '../../lib/speechSafe';
 import { colors } from '../../theme/colors';
@@ -428,7 +428,7 @@ export function LiveMapTab() {
     : '';
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TabScreenSafeArea style={styles.container}>
       <StatusBar barStyle="light-content" />
 
       <View style={styles.topHeader}>
@@ -728,7 +728,7 @@ export function LiveMapTab() {
           </View>
         )}
       </View>
-    </SafeAreaView>
+    </TabScreenSafeArea>
   );
 }
 
@@ -788,8 +788,8 @@ const styles = StyleSheet.create({
     transformOrigin: '0% 0%',
   },
 
-  telemetryHUD: { position: 'absolute', bottom: 108, left: spacing.md },
-  legendHUD: { position: 'absolute', bottom: 108, right: spacing.md },
+  telemetryHUD: { position: 'absolute', bottom: spacing.md, left: spacing.md },
+  legendHUD: { position: 'absolute', bottom: spacing.md, right: spacing.md },
   glassCard: {
     backgroundColor: 'rgba(18,18,18,0.94)',
     borderRadius: radius.lg,

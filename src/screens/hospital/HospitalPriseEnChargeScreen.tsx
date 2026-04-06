@@ -195,7 +195,11 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
         ))}
       </View>
 
-      <ScrollView ref={scrollRef} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}
+      >
         {activeTab === "PC" && (
           <View style={styles.tabContent}>
 
@@ -397,7 +401,7 @@ const styles = StyleSheet.create({
   tabLabel: { color: "rgba(255,255,255,0.3)", fontSize: 11, fontWeight: "800" },
   tabLabelActive: { color: colors.secondary, fontWeight: "900" },
   tabIndicator: {},
-  scrollContent: { paddingBottom: 100 },
+  scrollContent: { paddingBottom: 24 },
   tabContent: { padding: 20 },
   sectionHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   sectionTitleGroup: { flexDirection: "row", alignItems: "center", gap: 8 },

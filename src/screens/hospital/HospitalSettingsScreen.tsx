@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   Dimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 
@@ -82,7 +82,7 @@ const SETTINGS_GROUPS = [
 
 export function HospitalSettingsScreen({ navigation }: any) {
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <TabScreenSafeArea style={styles.safeArea}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -149,7 +149,7 @@ export function HospitalSettingsScreen({ navigation }: any) {
           </Text>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </TabScreenSafeArea>
   );
 }
 

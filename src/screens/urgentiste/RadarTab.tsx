@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, Switch, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 
@@ -8,7 +8,7 @@ export function RadarTab() {
   const [isDutyActive, setIsDutyActive] = useState(false);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TabScreenSafeArea style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       {/* Harmonized Header */}
@@ -69,7 +69,7 @@ export function RadarTab() {
           </Text>
         </View>
       </View>
-    </SafeAreaView>
+    </TabScreenSafeArea>
   );
 }
 
