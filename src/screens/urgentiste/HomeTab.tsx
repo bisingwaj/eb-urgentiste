@@ -137,29 +137,58 @@ export function HomeTab({ navigation }: any) {
         <View style={styles.headerRow}>
           <View style={styles.headerTextCol}>
             <Text style={styles.hospitalName}>Bonjour, {profile?.first_name || 'Emmanuel'},</Text>
-            <View style={styles.locationContainer}>
-              <MaterialIcons name="local-shipping" size={14} color={colors.secondary} style={{ marginTop: 2 }} />
-              <View style={styles.locationTextCol}>
-                <Text style={styles.locationLabel}>Unité</Text>
-                {unitName === null ? (
-                  <ActivityIndicator color={colors.secondary} style={{ marginTop: 8, alignSelf: 'flex-start' }} />
-                ) : (
-                  <Text style={styles.unitNameValue} numberOfLines={2}>
-                    {unitName}
+            <View style={styles.metaInfoColumn}>
+              <View style={styles.metaRowWithIcon}>
+                <View style={styles.metaIconSlot}>
+                  <MaterialIcons
+                    name="local-shipping"
+                    size={16}
+                    color={colors.secondary}
+                  />
+                </View>
+                <View style={styles.metaRowText}>
+                  <Text style={styles.locationLabel}>Unité</Text>
+                  {unitName === null ? (
+                    <ActivityIndicator
+                      color={colors.secondary}
+                      style={{ marginTop: 8, alignSelf: 'flex-start' }}
+                    />
+                  ) : (
+                    <Text style={styles.unitNameValue} numberOfLines={2}>
+                      {unitName}
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <View style={[styles.metaRowWithIcon, styles.metaBlockSpacing]}>
+                <View style={styles.metaIconSlot}>
+                  <MaterialIcons name="badge" size={16} color="#90CAF9" />
+                </View>
+                <View style={styles.metaRowText}>
+                  <Text style={styles.locationLabel}>Grade • statut</Text>
+                  <Text style={styles.userMetaText}>
+                    {(profile?.grade?.trim() || '—') +
+                      ' • ' +
+                      (isDutyActive ? 'En service' : 'Hors service')}
                   </Text>
-                )}
-                <Text style={[styles.locationLabel, styles.metaBlockSpacing]}>
-                  Grade • statut
-                </Text>
-                <Text style={styles.userMetaText}>
-                  {(profile?.grade?.trim() || '—') +
-                    ' • ' +
-                    (isDutyActive ? 'En service' : 'Hors service')}
-                </Text>
-                <Text style={[styles.locationLabel, styles.metaBlockSpacing]}>Zone</Text>
-                <Text style={styles.zoneValue} numberOfLines={3}>
-                  {profile?.zone?.trim() ? profile.zone.trim() : 'Non renseignée'}
-                </Text>
+                </View>
+              </View>
+              <View style={[styles.metaRowWithIcon, styles.metaBlockSpacing]}>
+                <View style={styles.metaIconSlot}>
+                  <MaterialIcons
+                    name="my-location"
+                    size={16}
+                    color={colors.success}
+                  />
+                </View>
+                <View style={styles.metaRowText}>
+                  <Text style={styles.locationLabel}>Zone</Text>
+                  <Text style={styles.zoneValue} numberOfLines={3}>
+                    {profile?.zone?.trim()
+                      ? profile.zone.trim()
+                      : 'Non renseignée'}
+                  </Text>
+                </View>
               </View>
             </View>
           </View>
@@ -343,15 +372,9 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "900",
   },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
+  /** Colonne d’icônes fixe : même alignement que la carte « Prêt pour intervention » */
+  metaInfoColumn: {
     marginTop: 10,
-  },
-  locationTextCol: {
-    flex: 1,
-    minWidth: 0,
   },
   locationLabel: {
     color: 'rgba(255,255,255,0.4)',
@@ -362,6 +385,21 @@ const styles = StyleSheet.create({
   },
   metaBlockSpacing: {
     marginTop: 10,
+  },
+  metaRowWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 20,
+  },
+  metaIconSlot: {
+    width: 24,
+    alignItems: 'center',
+    paddingTop: 2,
+    flexShrink: 0,
+  },
+  metaRowText: {
+    flex: 1,
+    minWidth: 0,
   },
   unitNameValue: {
     color: '#FFF',
