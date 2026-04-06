@@ -2,7 +2,7 @@
   "expo": {
     "name": "apps-v2",
     "slug": "apps-v2",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -32,7 +32,8 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.eburgentiste.app"
+      "package": "com.eburgentiste.app",
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -40,6 +41,11 @@
     "plugins": [
       "@rnmapbox/maps",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "f8b5d6a4-d96d-44cf-9c3d-1c9c4d225377"
+      }
+    }
   }
 }

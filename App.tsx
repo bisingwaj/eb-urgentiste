@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar, ActivityIndicator, View } from 'react-native';
+import { StatusBar, ActivityIndicator, View, Text, ScrollView } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 
@@ -11,6 +11,7 @@ if (mapboxToken) {
 }
 
 import { colors } from './src/theme/colors';
+import { isSupabaseConfigured } from './src/lib/supabase';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { MissionProvider } from './src/contexts/MissionContext';
 import { GlobalAlert } from './src/components/shared/GlobalAlert';
@@ -61,6 +62,30 @@ const navTheme = {
     notification: colors.primary,
   },
 };
+
+/** Build sans variables Supabase (souvent APK EAS sans secrets) : message clair au lieu d’un crash silencieux. */
+function ConfigErrorScreen() {
+  return (
+    <View style={{ flex: 1, backgroundColor: '#050505', padding: 24, justifyContent: 'center' }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '600', marginBottom: 12 }}>
+          Configuration manquante
+        </Text>
+        <Text style={{ color: '#ccc', fontSize: 15, lineHeight: 22 }}>
+          L’application a été compilée sans les variables{' '}
+          <Text style={{ color: colors.secondary }}>EXPO_PUBLIC_SUPABASE_URL</Text> et{' '}
+          <Text style={{ color: colors.secondary }}>EXPO_PUBLIC_SUPABASE_ANON_KEY</Text>.
+          {'\n\n'}
+          Pour un APK de test (EAS Build), ajoutez ces variables dans le tableau de bord Expo : projet →
+          Environment variables (profil preview / production), puis relancez le build.
+          {'\n\n'}
+          En local, renseignez-les dans <Text style={{ color: colors.secondary }}>.local.env</Text> (voir{' '}
+          <Text style={{ color: colors.secondary }}>.local.env.example</Text>).
+        </Text>
+      </ScrollView>
+    </View>
+  );
+}
 
 // Écran de chargement pendant la vérification de session
 function LoadingScreen() {
@@ -139,7 +164,16 @@ function RootNavigator() {
 }
 
 export default function App() {
-   return (
+  if (!isSupabaseConfigured()) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar barStyle="light-content" backgroundColor={colors.mainBackground} />
+        <ConfigErrorScreen />
+      </SafeAreaProvider>
+    );
+  }
+
+  return (
     <AuthProvider>
       <MissionProvider>
         <SafeAreaProvider>

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 
 // Profil urgentiste depuis users_directory
@@ -82,7 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Écouter les changements de session Supabase
   useEffect(() => {
-    // 1. Récupérer la session existante
+    if (!isSupabaseConfigured()) {
+      setState({ session: null, profile: null, isLoading: false, isAuthenticated: false });
+      return;
+    }
+
     // 1. Récupérer la session existante
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log('[Auth] getSession:', session ? `User ${session.user.id}` : 'Pas de session');

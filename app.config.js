@@ -9,14 +9,25 @@ const appJson = require('./app.json');
 
 module.exports = () => {
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
+  const base = appJson.expo;
+
+  // EAS CLI lit `expo.extra.eas` (projectId, etc.) — doit toujours exister comme objet.
+  const extra = {
+    ...(base.extra || {}),
+    eas: {
+      ...(base.extra?.eas || {}),
+    },
+  };
 
   return {
     expo: {
-      ...appJson.expo,
+      ...base,
+      owner: 'arack',
+      extra,
       ios: {
-        ...appJson.expo.ios,
+        ...base.ios,
         infoPlist: {
-          ...(appJson.expo.ios?.infoPlist || {}),
+          ...(base.ios?.infoPlist || {}),
           MBXAccessToken: mapboxToken,
         },
       },

@@ -2,14 +2,22 @@ import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim();
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim() ?? '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY?.trim() ?? '';
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'EXPO_PUBLIC_SUPABASE_URL et EXPO_PUBLIC_SUPABASE_ANON_KEY sont requis (voir .local.env.example).'
-  );
+/** True quand l’URL et la clé anon sont présentes (build local ou secrets EAS). */
+export function isSupabaseConfigured(): boolean {
+  return Boolean(supabaseUrl && supabaseAnonKey);
 }
+
+// Valeurs factices : le bundle release sans EXPO_PUBLIC_* ne doit pas crasher au chargement du module.
+// L’app affiche un écran d’erreur si `!isSupabaseConfigured()` ; pas d’appels réseau auth inutiles.
+const PLACEHOLDER_URL = 'https://placeholder.supabase.co';
+const PLACEHOLDER_ANON_KEY =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIn0.placeholder';
+
+const resolvedUrl = isSupabaseConfigured() ? supabaseUrl : PLACEHOLDER_URL;
+const resolvedKey = isSupabaseConfigured() ? supabaseAnonKey : PLACEHOLDER_ANON_KEY;
 
 // Adapter SecureStore pour Supabase Auth storage (persistance des tokens)
 const ExpoSecureStoreAdapter = {
@@ -36,11 +44,17 @@ const ExpoSecureStoreAdapter = {
   },
 };
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    storage: ExpoSecureStoreAdapter,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false, // Pas de deep linking pour l'instant
-  },
+export const supabase = createClient(resolvedUrl, resolvedKey, {
+  auth: isSupabaseConfigured()
+    ? {
+        storage: ExpoSecureStoreAdapter,
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: false,
+      }
+    : {
+        autoRefreshToken: false,
+        persistSession: false,
+        detectSessionInUrl: false,
+      },
 });
