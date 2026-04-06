@@ -1,18 +1,18 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Platform,
-  Alert,
   StatusBar,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
+import { useAuth } from "../../contexts/AuthContext";
 
 const { width } = Dimensions.get("window");
 
@@ -319,6 +319,26 @@ export const getStatusConfig = (status: CaseStatus) => {
 };
 
 export function HospitalDashboardTab({ navigation }: any) {
+  const { profile } = useAuth();
+
+  const { displayName, displayIdLine } = useMemo(() => {
+    const name =
+      profile?.first_name || profile?.last_name
+        ? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim()
+        : "";
+    const displayNameResolved = name.length > 0 ? name : "Structure sanitaire";
+    const displayIdLineResolved =
+      profile?.agent_login_id != null &&
+      String(profile.agent_login_id).length > 0
+        ? `Identifiant : ${profile.agent_login_id}`
+        : profile?.matricule != null && String(profile.matricule).length > 0
+          ? `Matricule : ${profile.matricule}`
+          : profile?.id != null
+            ? `ID : ${profile.id.slice(0, 8)}…`
+            : null;
+    return { displayName: displayNameResolved, displayIdLine: displayIdLineResolved };
+  }, [profile]);
+
   const [filter, setFilter] = useState<
     "all" | "en_attente" | "en_cours" | "termine"
   >("all");
@@ -341,9 +361,55 @@ export function HospitalDashboardTab({ navigation }: any) {
 
       <View style={styles.topHeader}>
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.greetingText}>Centre Hospitalier</Text>
-            <Text style={styles.hospitalName}>H. Central Kinshasa</Text>
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.greetingText}>Centre hospitalier</Text>
+            {!profile ? (
+              <ActivityIndicator
+                color={colors.secondary}
+                style={{ marginTop: 14, alignSelf: "flex-start" }}
+              />
+            ) : (
+              <>
+                <Text style={styles.hospitalName} numberOfLines={2}>
+                  {displayName}
+                </Text>
+                {displayIdLine ? (
+                  <Text style={styles.headerIdLine}>{displayIdLine}</Text>
+                ) : null}
+                {profile.address?.trim() ? (
+                  <View style={styles.headerMetaRow}>
+                    <MaterialIcons
+                      name="location-on"
+                      size={15}
+                      color={colors.secondary}
+                    />
+                    <Text style={styles.headerMetaText} numberOfLines={2}>
+                      {profile.address.trim()}
+                    </Text>
+                  </View>
+                ) : null}
+                {profile.phone?.trim() ? (
+                  <View style={styles.headerMetaRow}>
+                    <MaterialIcons
+                      name="phone"
+                      size={15}
+                      color={colors.success}
+                    />
+                    <Text style={styles.headerMetaText} numberOfLines={1}>
+                      {profile.phone.trim()}
+                    </Text>
+                  </View>
+                ) : null}
+                {profile.zone?.trim() ? (
+                  <View style={styles.headerMetaRow}>
+                    <MaterialIcons name="map" size={15} color="#90CAF9" />
+                    <Text style={styles.headerMetaText} numberOfLines={1}>
+                      {profile.zone.trim()}
+                    </Text>
+                  </View>
+                ) : null}
+              </>
+            )}
           </View>
           <TouchableOpacity style={styles.notifBtn}>
             <MaterialCommunityIcons name="bell-badge-outline" color="#FFF" size={26} />
@@ -411,9 +477,30 @@ export function HospitalDashboardTab({ navigation }: any) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.mainBackground },
   topHeader: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24, borderBottomLeftRadius: 36, borderBottomRightRadius: 36, backgroundColor: "#0A0A0A" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
+  headerTextBlock: { flex: 1, paddingRight: 12 },
   greetingText: { color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: "800", letterSpacing: 0.5 },
   hospitalName: { color: "#FFF", fontSize: 24, fontWeight: "700", marginTop: 4 },
+  headerIdLine: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 6,
+  },
+  headerMetaRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginTop: 8,
+    maxWidth: "100%",
+  },
+  headerMetaText: {
+    flex: 1,
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
   notifBtn: { width: 50, height: 50, borderRadius: 18, backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   notifBadge: { position: "absolute", top: 14, right: 14, width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF5252", borderWidth: 2, borderColor: "#1A1A1A" },
   summaryContainer: { flexDirection: "row", gap: 12 },
