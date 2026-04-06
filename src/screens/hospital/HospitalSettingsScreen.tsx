@@ -6,10 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Alert,
 } from "react-native";
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
+import { useAuth } from "../../contexts/AuthContext";
 
 const { width } = Dimensions.get("window");
 
@@ -74,13 +76,31 @@ const SETTINGS_GROUPS = [
         label: "Déconnexion",
         icon: "logout",
         color: "#FF5252",
-        route: "Login",
+        route: null as string | null,
+        logout: true,
       },
     ],
   },
 ];
 
 export function HospitalSettingsScreen({ navigation }: any) {
+  const { profile, signOut } = useAuth();
+
+  const onSettingPress = (item: (typeof SETTINGS_GROUPS)[0]["items"][0]) => {
+    if ("logout" in item && item.logout) {
+      Alert.alert("Déconnexion", "Voulez-vous vous déconnecter ?", [
+        { text: "Annuler", style: "cancel" },
+        { text: "Se déconnecter", style: "destructive", onPress: () => void signOut() },
+      ]);
+      return;
+    }
+    if (item.route) navigation.navigate(item.route);
+  };
+
+  const footerLabel = profile
+    ? `Connecté — ${profile.first_name} ${profile.last_name}`.trim()
+    : "Portail hôpital";
+
   return (
     <TabScreenSafeArea style={styles.safeArea}>
       {/* Header */}
@@ -107,10 +127,8 @@ export function HospitalSettingsScreen({ navigation }: any) {
                 <View key={item.id}>
                   <TouchableOpacity
                     style={styles.settingItem}
-                    onPress={() =>
-                      item.route && navigation.navigate(item.route)
-                    }
-                    disabled={!item.route}
+                    onPress={() => onSettingPress(item)}
+                    disabled={!item.route && !("logout" in item && item.logout)}
                   >
                     <View
                       style={[
@@ -144,9 +162,7 @@ export function HospitalSettingsScreen({ navigation }: any) {
           <Text style={styles.versionText}>
             Application Hospitalière v1.2.0
           </Text>
-          <Text style={styles.copyrightText}>
-            Connecté en tant que Admin HCK
-          </Text>
+          <Text style={styles.copyrightText}>{footerLabel}</Text>
         </View>
       </ScrollView>
     </TabScreenSafeArea>

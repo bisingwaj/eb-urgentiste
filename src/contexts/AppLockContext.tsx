@@ -68,7 +68,6 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     nativeModuleLinked &&
     isAuthenticated &&
     !!profile &&
-    !profile.must_change_password &&
     appLockEnabled;
 
   useEffect(() => {

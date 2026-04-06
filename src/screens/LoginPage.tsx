@@ -9,7 +9,7 @@ const { height } = Dimensions.get('window');
 
 export function LoginPage({ route, navigation }: any) {
   const role = route.params?.role || 'urgentiste';
-  const { signInWithAgent } = useAuth();
+  const { signInWithAgent, validatePortalRole, signOut, refreshProfile } = useAuth();
 
   const [currentStep, setCurrentStep] = useState(0); // 0 = ID, 1 = PIN
   const [identifier, setIdentifier] = useState('');
@@ -62,9 +62,20 @@ export function LoginPage({ route, navigation }: any) {
         return;
       }
 
+      const portal = role === 'hopital' ? 'hopital' : 'urgentiste';
+      const portalCheck = await validatePortalRole(portal);
+      if (!portalCheck.ok) {
+        await signOut();
+        setErrorMessage(portalCheck.error || 'Accès refusé pour ce portail.');
+        setPin('');
+        setIsLoading(false);
+        return;
+      }
+
+      await refreshProfile();
+
       // Login réussi — la navigation est gérée automatiquement par
       // le AuthContext dans App.tsx (conditional navigator)
-      // Pas besoin de navigation.replace() ici
       console.log('[Login] Succès ! Navigation auto via AuthContext...');
 
     } catch (err) {

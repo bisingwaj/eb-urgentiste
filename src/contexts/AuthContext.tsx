@@ -18,6 +18,7 @@ export interface UserProfile {
   matricule: string | null;
   specialization: string | null;
   zone: string | null;
+  address: string | null;
   assigned_unit_id: string | null;
   must_change_password: boolean;
   agent_login_id: string | null;
@@ -30,8 +31,12 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
+export type AuthPortal = 'urgentiste' | 'hopital';
+
 interface AuthContextType extends AuthState {
   signInWithAgent: (agentLoginId: string, pinCode: string) => Promise<{ success: boolean; error?: string; mustChangePassword?: boolean }>;
+  /** Après connexion : vérifie que le rôle `users_directory` correspond au portail choisi (urgentiste ≠ hopital). */
+  validatePortalRole: (portal: AuthPortal) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
 }
@@ -51,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase
         .from('users_directory')
-        .select('id, auth_user_id, role, first_name, last_name, email, phone, photo_url, status, available, grade, matricule, specialization, zone, assigned_unit_id, must_change_password, agent_login_id')
+        .select('id, auth_user_id, role, first_name, last_name, email, phone, photo_url, status, available, grade, matricule, specialization, zone, address, assigned_unit_id, must_change_password, agent_login_id')
         .eq('auth_user_id', authUserId)
         .not('agent_login_id', 'is', null)  // Préférer l'entrée avec agent_login_id
         .limit(1)
@@ -62,7 +67,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // Fallback: essayer sans le filtre agent_login_id
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('users_directory')
-          .select('id, auth_user_id, role, first_name, last_name, email, phone, photo_url, status, available, grade, matricule, specialization, zone, assigned_unit_id, must_change_password, agent_login_id')
+          .select('id, auth_user_id, role, first_name, last_name, email, phone, photo_url, status, available, grade, matricule, specialization, zone, address, assigned_unit_id, must_change_password, agent_login_id')
           .eq('auth_user_id', authUserId)
           .limit(1)
           .maybeSingle();
@@ -211,6 +216,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const validatePortalRole = useCallback(
+    async (portal: AuthPortal): Promise<{ ok: boolean; error?: string }> => {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+      if (userError || !userData.user) {
+        return { ok: false, error: 'Session introuvable. Réessayez.' };
+      }
+      const loaded = await fetchProfile(userData.user.id);
+      if (!loaded) {
+        return {
+          ok: false,
+          error: 'Profil introuvable. Vérifiez vos droits ou contactez l’administrateur.',
+        };
+      }
+      if (portal === 'hopital') {
+        if (loaded.role !== 'hopital') {
+          return {
+            ok: false,
+            error: 'Ce compte n’est pas autorisé sur le portail hôpital.',
+          };
+        }
+      } else {
+        if (loaded.role === 'hopital') {
+          return {
+            ok: false,
+            error: 'Ce compte est réservé au portail hôpital. Choisissez « Hôpital » sur l’écran d’accueil.',
+          };
+        }
+      }
+      return { ok: true };
+    },
+    [fetchProfile],
+  );
+
   // Déconnexion propre
   const signOut = useCallback(async () => {
     try {
@@ -239,6 +277,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     <AuthContext.Provider value={{
       ...state,
       signInWithAgent,
+      validatePortalRole,
       signOut,
       refreshProfile,
     }}>
