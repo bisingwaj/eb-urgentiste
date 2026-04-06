@@ -1,9 +1,28 @@
 node_modules
 .expo/
 
+# Builds natifs (APK/AAB, caches Gradle/Xcode) — lourds et régénérés ; évite les pulls lents et conflits
+android/app/build/
+android/build/
+android/.gradle/
+android/.cxx/
+ios/build/
+ios/Pods/
+*.apk
+*.aab
+*.ipa
+*.dSYM.zip
+
+# Caches tooling (optionnel mais utile si jamais versionnés par erreur)
+.turbo
+dist/
+web-build/
+
 # Secrets & env (ne jamais committer)
 .local.env
 .env
 .env.*
 !.local.env.example
 *.md
+
+patches/
