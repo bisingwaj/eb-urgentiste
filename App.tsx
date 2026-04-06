@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import * as SystemUI from 'expo-system-ui';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { navigationRef } from './src/navigation/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar, ActivityIndicator, View, Text, ScrollView } from 'react-native';
+import { StatusBar, ActivityIndicator, View, Text, ScrollView, Appearance } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 
@@ -170,10 +171,16 @@ function RootNavigator() {
 }
 
 export default function App() {
+  useEffect(() => {
+    /** Toujours sombre : barres système / contrôles comme en mode dark, même si le téléphone est en mode clair. */
+    Appearance.setColorScheme('dark');
+    void SystemUI.setBackgroundColorAsync('#000000');
+  }, []);
+
   if (!isSupabaseConfigured()) {
     return (
       <SafeAreaProvider>
-        <StatusBar barStyle="light-content" backgroundColor={colors.mainBackground} />
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
         <ConfigErrorScreen />
       </SafeAreaProvider>
     );
@@ -184,7 +191,7 @@ export default function App() {
       <MissionProvider>
         <AppLockProvider>
           <SafeAreaProvider>
-            <StatusBar barStyle="light-content" backgroundColor={colors.mainBackground} />
+            <StatusBar barStyle="light-content" backgroundColor="#000000" />
             <NavigationContainer ref={navigationRef} theme={navTheme}>
               <CallSessionProvider>
                 <RootNavigator />
