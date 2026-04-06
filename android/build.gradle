@@ -1,4 +1,4 @@
-// Top-level build file where you can add configuration options common to all sub-projects/modules.
+// Top-level build file where you add configuration options common to all sub-projects/modules.
 
 buildscript {
   repositories {
@@ -31,6 +31,13 @@ allprojects {
       }
     }
   }
+}
+
+// Windows + New Architecture : NDK 27 provoque souvent des erreurs ld.lld (symboles
+// libc++ / __cxa_* / std::* non résolus). NDK 26 est stable ici. Expo n’écrase pas
+// ext.ndkVersion s’il est déjà défini (ExpoRootProjectPlugin#setIfNotExist).
+if (System.getProperty("os.name", "").toLowerCase().contains("windows")) {
+  ext.ndkVersion = "26.1.10909125"
 }
 
 apply plugin: "expo-root-project"

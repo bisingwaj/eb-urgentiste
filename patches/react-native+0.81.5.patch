@@ -1,0 +1,38 @@
+diff --git a/node_modules/react-native/ReactCommon/cmake-utils/react-native-flags.cmake b/node_modules/react-native/ReactCommon/cmake-utils/react-native-flags.cmake
+index d005a4e..7cc9bc1 100644
+--- a/node_modules/react-native/ReactCommon/cmake-utils/react-native-flags.cmake
++++ b/node_modules/react-native/ReactCommon/cmake-utils/react-native-flags.cmake
+@@ -31,5 +31,11 @@ function(target_compile_reactnative_options target_name scope)
+   # TODO T228344694 improve this so that it works for all platforms
+   if(ANDROID)
+     target_compile_definitions(${target_name} ${scope} RN_SERIALIZABLE_STATE)
++    # Prefab ships headers from the published AAR; prefer the same ReactCommon tree as
++    # node_modules (e.g. patch-package fixes) over prefab includes.
++    if(DEFINED REACT_ANDROID_DIR)
++      target_include_directories(
++        ${target_name} BEFORE ${scope} "${REACT_ANDROID_DIR}/../ReactCommon")
++    endif()
+   endif()
+ endfunction()
+diff --git a/node_modules/react-native/ReactCommon/react/renderer/core/graphicsConversions.h b/node_modules/react-native/ReactCommon/react/renderer/core/graphicsConversions.h
+index bb59351..31950c9 100644
+--- a/node_modules/react-native/ReactCommon/react/renderer/core/graphicsConversions.h
++++ b/node_modules/react-native/ReactCommon/react/renderer/core/graphicsConversions.h
+@@ -76,8 +76,15 @@ inline folly::dynamic toDynamic(const YGValue& dimension) {
+       return "stretch";
+     case YGUnitPoint:
+       return dimension.value;
+-    case YGUnitPercent:
+-      return std::format("{}%", dimension.value);
++    case YGUnitPercent: {
++      std::array<char, 64> buffer{};
++      std::snprintf(
++          buffer.data(),
++          buffer.size(),
++          "%g%%",
++          static_cast<double>(dimension.value));
++      return buffer.data();
++    }
+   }
+ 
+   return nullptr;

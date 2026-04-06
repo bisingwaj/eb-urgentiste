@@ -1,6 +1,10 @@
-# OSX
-#
+# macOS
 .DS_Store
+**/.DS_Store
+
+# Windows (si ouverture du dossier ios/ sous Windows)
+Thumbs.db
+Desktop.ini
 
 # Xcode
 #
