@@ -1,7 +1,9 @@
-node_modules
-.expo/
+# Dépendances
+node_modules/
 
-# Builds natifs (APK/AAB, caches Gradle/Xcode) — lourds et régénérés ; évite les pulls lents et conflits
+# patch-package : versionner et commiter le dossier patches/ (obligatoire pour postinstall).
+
+# Builds natifs (APK/AAB, caches Gradle/Xcode) — lourds et régénérés
 android/app/build/
 android/build/
 android/.gradle/
@@ -13,15 +15,55 @@ ios/Pods/
 *.ipa
 *.dSYM.zip
 
-# Caches tooling (optionnel mais utile si jamais versionnés par erreur)
-.turbo
+# Expo / Metro
+.expo/
 dist/
 web-build/
 
-# Secrets & env (ne jamais committer)
+# Caches tooling
+.turbo
+
+# Variables d’environnement & secrets (tous emplacements)
 .local.env
 .env
+**/.env
+**/.env.local
 .env.*
+**/.env.*
 !.local.env.example
-*.md
+!.env.example
+!**/.env.example
+!.env.sample
+!**/.env.sample
 
+# macOS
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Logs & caches
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+*.tsbuildinfo
+
+# IDE (JetBrains / Android Studio — chemins locaux)
+.idea/
+
+# Tests
+coverage/
+
+# Fichiers temporaires EAS / CLI locale
+eas-whoami.txt
+eas-whoami-err.txt
