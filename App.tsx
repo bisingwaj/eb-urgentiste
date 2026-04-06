@@ -22,8 +22,6 @@ import { GlobalAlert } from './src/components/shared/GlobalAlert';
 // Shared entry screens
 import { LoginPage } from './src/screens/LoginPage';
 import { RoleSelectionScreen } from './src/screens/RoleSelectionScreen';
-import { ChangePasswordScreen } from './src/screens/ChangePasswordScreen';
-
 // Navigators
 import { HospitalTabs } from './src/navigation/HospitalTabs';
 import { MainTabs } from './src/navigation/MainTabs';
@@ -128,13 +126,8 @@ function RootNavigator() {
           <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
           <Stack.Screen name="Login" component={LoginPage} />
         </>
-      ) : profile?.must_change_password ? (
-        // ── Authentifié mais doit changer le mot de passe
-        <>
-          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
-        </>
       ) : (
-        // ── Authentifié ── Écrans principaux
+        // ── Authentifié ── Écrans principaux (auth ID + PIN uniquement, pas d’écran mot de passe obligatoire)
         <>
           {/* Écran initial basé sur le rôle */}
           {profile?.role === 'hopital' ? (
