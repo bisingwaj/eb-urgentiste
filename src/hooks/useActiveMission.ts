@@ -10,6 +10,13 @@ export interface AssignedStructure {
   type: string;
 }
 
+export interface SosResponseItem {
+  question_key: string;
+  question_text: string | null;
+  answer: string | null;
+  answered_at: string;
+}
+
 export interface Mission {
   id: string;
   incident_id: string;
@@ -21,10 +28,12 @@ export interface Mission {
   incident_status: string;
   dispatch_status: 'dispatched' | 'en_route' | 'on_scene' | 'en_route_hospital' | 'arrived_hospital' | 'mission_end' | 'completed';
   location: {
-    lat: number;
-    lng: number;
+    lat: number | null;
+    lng: number | null;
     address: string | null;
     commune?: string | null;
+    ville?: string | null;
+    province?: string | null;
   };
   caller: {
     name: string;
@@ -36,6 +45,20 @@ export interface Mission {
   dispatched_at?: string;
   arrived_at?: string;
   completed_at?: string;
+  /** Notes côté dispatch (unité) */
+  dispatch_notes?: string | null;
+  /** Notes incident / opérateur */
+  incident_notes?: string | null;
+  recommended_actions?: string | null;
+  incident_at?: string | null;
+  caller_realtime_lat?: number | null;
+  caller_realtime_lng?: number | null;
+  caller_realtime_updated_at?: string | null;
+  sos_responses?: SosResponseItem[];
+  media_urls?: string[] | null;
+  battery_level?: string | null;
+  network_state?: string | null;
+  incident_updated_at?: string | null;
 }
 
 export function useActiveMission() {

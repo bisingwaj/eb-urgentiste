@@ -214,8 +214,16 @@ export function HistoryTab({ navigation }: any) {
                         color={colors.secondary}
                         size={16}
                       />
-                      <Text style={styles.addressText} numberOfLines={1}>
-                        {mission.location.address}
+                      <Text style={styles.addressText} numberOfLines={2}>
+                        {mission.location?.address?.trim() ||
+                          [
+                            mission.location?.commune,
+                            mission.location?.ville,
+                            mission.location?.province,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ') ||
+                          '—'}
                       </Text>
                     </View>
                     <View style={styles.cardDivider} />
