@@ -25,4 +25,3 @@ web-build/
 !.local.env.example
 *.md
 
-patches/
