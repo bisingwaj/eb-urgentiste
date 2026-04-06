@@ -1,12 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert, Switch } from 'react-native';
 import { useAuth } from '../../contexts/AuthContext';
+import { useAppLock } from '../../contexts/AppLockContext';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 
 export function ProfileTab({ navigation }: any) {
   const { profile, signOut } = useAuth();
+  const { appLockEnabled, setAppLockEnabled, biometricAvailable, nativeModuleLinked } = useAppLock();
 
   const handleLogout = () => {
     Alert.alert(
@@ -103,20 +105,45 @@ export function ProfileTab({ navigation }: any) {
               <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.1)" size={24} />
            </TouchableOpacity>
 
-           <TouchableOpacity style={styles.menuItem}>
+           <View style={styles.menuItem}>
               <View style={[styles.menuIcon, { backgroundColor: "#1A1A1A" }]}>
-                 <MaterialIcons name="lock" color={colors.textMuted} size={20} />
+                 <MaterialIcons name="fingerprint" color={colors.textMuted} size={20} />
               </View>
               <View style={styles.menuText}>
-                 <Text style={styles.menuLabel}>Biométrie Factice</Text>
-                 <Text style={styles.menuValue}>Désactivé</Text>
+                 <Text style={styles.menuLabel}>Verrouillage appareil</Text>
+                 <Text style={styles.menuValue}>
+                   {!nativeModuleLinked
+                     ? 'Recompilez l’app (expo run:android) pour activer la biométrie'
+                     : biometricAvailable
+                       ? 'Face ID / empreinte / code du téléphone'
+                       : 'Configurez le verrouillage dans les réglages du téléphone'}
+                 </Text>
               </View>
-              <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.1)" size={24} />
-           </TouchableOpacity>
+              <Switch
+                value={appLockEnabled}
+                disabled={!nativeModuleLinked}
+                onValueChange={(v) => void setAppLockEnabled(v)}
+                trackColor={{ false: '#3A3A3A', true: colors.secondary + '99' }}
+                thumbColor={appLockEnabled ? colors.secondary : '#888'}
+              />
+           </View>
         </View>
 
         <Text style={styles.sectionTitle}>SYSTÈME</Text>
         <View style={styles.menuList}>
+           <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('CallHistoryCalls')}
+           >
+              <View style={[styles.menuIcon, { backgroundColor: colors.secondary + '18' }]}>
+                 <MaterialIcons name="phone-callback" color={colors.secondary} size={20} />
+              </View>
+              <View style={styles.menuText}>
+                 <Text style={styles.menuLabel}>Historique des appels (centrale)</Text>
+                 <Text style={styles.menuValue}>Appels entrants et sortants</Text>
+              </View>
+              <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.1)" size={24} />
+           </TouchableOpacity>
            <TouchableOpacity style={styles.menuItem}>
               <View style={[styles.menuIcon, { backgroundColor: "#1A1A1A" }]}>
                  <MaterialIcons name="settings" color={colors.textMuted} size={20} />

@@ -7,9 +7,12 @@ import {
   StatusBar,
   Alert,
   ActivityIndicator,
+  PanResponder,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useRoute } from '@react-navigation/native';
 import {
   RtcSurfaceView,
   RenderModeType,
@@ -19,6 +22,8 @@ import {
 import { colors } from '../../theme/colors';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { buildInternalChannelName } from '../../lib/callChannel';
+import type { CallCenterRouteParams } from '../../navigation/navigationRef';
 import {
   joinAgoraChannel,
   leaveAgoraChannel,
@@ -32,27 +37,44 @@ import {
 type CallState = 'connecting' | 'calling' | 'active';
 type CallType = 'audio' | 'video';
 
-function buildChannelName(): string {
-  return `OP-${Date.now()}`;
-}
+const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
+const PIP_W = 112;
+const PIP_H = 168;
 
 export function CallCenterScreen({ navigation }: { navigation: { goBack: () => void } }) {
   const { profile, session } = useAuth();
+  const route = useRoute();
+  const routeParams = (route.params ?? {}) as CallCenterRouteParams;
 
   const [callState, setCallState] = useState<CallState>('connecting');
   const [callType, setCallType] = useState<CallType>('audio');
   const [currentCallId, setCurrentCallId] = useState<string | null>(null);
   const [mediaReady, setMediaReady] = useState(false);
+  const [answeredAtIso, setAnsweredAtIso] = useState<string | null>(null);
 
   const [isMuted, setIsMuted] = useState(false);
   const [isLocalCameraOff, setIsLocalCameraOff] = useState(false);
   const [isSpeakerOn, setIsSpeakerOn] = useState(false);
   const [callDuration, setCallDuration] = useState(0);
   const [remoteUid, setRemoteUid] = useState<number | null>(null);
+  const [swapFeeds, setSwapFeeds] = useState(false);
+  const [pipOffset, setPipOffset] = useState({ x: 0, y: 0 });
 
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const subscriptionRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   const autoStartRef = useRef(false);
+  const incomingJoinCallIdRef = useRef<string | null>(null);
+  const activeFallbackStartRef = useRef<number | null>(null);
+  const pipDragStart = useRef({ x: 0, y: 0 });
+  const endCallRemotelyRef = useRef<() => Promise<void>>(async () => {});
+
+  const callTypeRef = useRef(callType);
+  const mediaReadyRef = useRef(mediaReady);
+  useEffect(() => {
+    callTypeRef.current = callType;
+  }, [callType]);
+  useEffect(() => {
+    mediaReadyRef.current = mediaReady;
+  }, [mediaReady]);
 
   const cleanupSubscription = useCallback(() => {
     if (subscriptionRef.current) {
@@ -62,7 +84,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   }, []);
 
   useEffect(() => {
-    if (callState !== 'calling' || !currentCallId) {
+    if (!currentCallId) {
       return;
     }
 
@@ -78,11 +100,36 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
           table: 'call_history',
           filter: `id=eq.${currentCallId}`,
         },
-        (payload: { new?: { status?: string } }) => {
-          const status = payload.new?.status;
+        (payload: { new?: Record<string, unknown> }) => {
+          const row = payload.new;
+          if (!row) {
+            return;
+          }
+          const status = row.status as string | undefined;
+          const at = row.answered_at as string | undefined;
+
           if (status === 'active') {
             setCallState('active');
-          } else if (status && ['completed', 'failed', 'missed'].includes(status)) {
+            if (at) {
+              setAnsweredAtIso(at);
+            }
+          }
+
+          if (row.has_video === true && callTypeRef.current === 'audio' && mediaReadyRef.current) {
+            void (async () => {
+              try {
+                await setVideoPublishingEnabled(true);
+                setCallType('video');
+                setIsLocalCameraOff(false);
+                setIsSpeakerOn(true);
+                setSpeakerphoneOn(true);
+              } catch (e) {
+                console.error('[Call] sync has_video:', e);
+              }
+            })();
+          }
+
+          if (status && ['completed', 'failed', 'missed'].includes(status)) {
             Alert.alert('Appel terminé', "L'opérateur a mis fin à l'appel.");
             void endCallRemotelyRef.current();
           }
@@ -95,48 +142,69 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     return () => {
       cleanupSubscription();
     };
-  }, [callState, currentCallId, cleanupSubscription]);
+  }, [currentCallId, cleanupSubscription]);
 
   useEffect(() => {
-    if (callState === 'active') {
-      timerRef.current = setInterval(() => {
-        setCallDuration((prev) => prev + 1);
-      }, 1000);
-      if (callType === 'video') {
-        setIsSpeakerOn(true);
-        setSpeakerphoneOn(true);
-      }
+    if (callState === 'active' && !answeredAtIso) {
+      activeFallbackStartRef.current = Date.now();
+    } else if (callState !== 'active') {
+      activeFallbackStartRef.current = null;
     }
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
+  }, [callState, answeredAtIso]);
+
+  useEffect(() => {
+    if (callState !== 'active') {
+      setCallDuration(0);
+      return;
+    }
+    const tick = () => {
+      if (answeredAtIso) {
+        const secs = Math.floor((Date.now() - new Date(answeredAtIso).getTime()) / 1000);
+        setCallDuration(Math.max(0, secs));
+      } else if (activeFallbackStartRef.current) {
+        const secs = Math.floor((Date.now() - activeFallbackStartRef.current) / 1000);
+        setCallDuration(Math.max(0, secs));
       }
     };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [callState, answeredAtIso]);
+
+  useEffect(() => {
+    if (callState === 'active' && callType === 'video') {
+      setIsSpeakerOn(true);
+      setSpeakerphoneOn(true);
+    }
   }, [callState, callType]);
 
-  const endCallRemotelyRef = useRef<() => Promise<void>>(async () => {});
-
   const cleanupAndGoBack = useCallback(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
     cleanupSubscription();
     setAgoraRtcCallbacks({});
     setMediaReady(false);
     leaveAgoraChannel();
     setCallState('connecting');
     setCurrentCallId(null);
+    setAnsweredAtIso(null);
     setCallDuration(0);
     setRemoteUid(null);
     setIsMuted(false);
     setIsLocalCameraOff(false);
     setCallType('audio');
+    setSwapFeeds(false);
+    setPipOffset({ x: 0, y: 0 });
+    incomingJoinCallIdRef.current = null;
     navigation.goBack();
   }, [cleanupSubscription, navigation]);
 
   const endCallLocal = useCallback(async () => {
+    let durationSec = callDuration;
+    if (answeredAtIso) {
+      durationSec = Math.max(
+        0,
+        Math.floor((Date.now() - new Date(answeredAtIso).getTime()) / 1000)
+      );
+    }
     try {
       leaveAgoraChannel();
       if (currentCallId) {
@@ -146,7 +214,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
             status: 'completed',
             ended_by: 'rescuer',
             ended_at: new Date().toISOString(),
-            duration_seconds: callDuration,
+            duration_seconds: durationSec,
           })
           .eq('id', currentCallId);
       }
@@ -154,7 +222,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       console.error('[Call] Erreur endCall:', e);
     }
     cleanupAndGoBack();
-  }, [currentCallId, callDuration, cleanupAndGoBack]);
+  }, [currentCallId, callDuration, answeredAtIso, cleanupAndGoBack]);
 
   const endCallRemotely = useCallback(async () => {
     leaveAgoraChannel();
@@ -167,6 +235,25 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     setAgoraRtcCallbacks({
       onJoinChannelSuccess: () => {
         setMediaReady(true);
+        const incId = incomingJoinCallIdRef.current;
+        if (incId) {
+          incomingJoinCallIdRef.current = null;
+          void (async () => {
+            const now = new Date().toISOString();
+            const { error } = await supabase
+              .from('call_history')
+              .update({
+                status: 'active',
+                answered_at: now,
+              })
+              .eq('id', incId);
+            if (error) {
+              console.error('[Call] UPDATE incoming:', error.message);
+            }
+            setAnsweredAtIso(now);
+            setCallState('active');
+          })();
+        }
       },
       onRemoteUserJoined: (uid) => {
         setRemoteUid(uid);
@@ -185,7 +272,13 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   }, []);
 
   const initiateCall = async (type: CallType) => {
-    const chName = buildChannelName();
+    const uid = session?.user?.id;
+    if (!uid) {
+      Alert.alert('Erreur', 'Session invalide.');
+      navigation.goBack();
+      return;
+    }
+    const chName = buildInternalChannelName(uid);
     try {
       setCallType(type);
       if (type === 'audio') {
@@ -203,7 +296,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
           caller_phone: profile?.phone ?? null,
           has_video: type === 'video',
           role: profile?.role ?? 'secouriste',
-          citizen_id: session?.user?.id,
+          citizen_id: uid,
           started_at: new Date().toISOString(),
         })
         .select('id, channel_name')
@@ -254,13 +347,59 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     }
   };
 
+  const joinIncomingCall = async (callId: string, channelName: string, isVideo: boolean) => {
+    incomingJoinCallIdRef.current = callId;
+    setCurrentCallId(callId);
+    setCallType(isVideo ? 'video' : 'audio');
+    if (!isVideo) {
+      setIsLocalCameraOff(true);
+    }
+    setCallState('calling');
+    try {
+      await joinAgoraChannel({
+        channelId: channelName,
+        isVideo,
+      });
+    } catch (e) {
+      console.error('[Call] incoming Agora:', e);
+      incomingJoinCallIdRef.current = null;
+      Alert.alert('Appel entrant', e instanceof Error ? e.message : 'Connexion impossible.');
+      await supabase
+        .from('call_history')
+        .update({
+          status: 'failed',
+          ended_at: new Date().toISOString(),
+          ended_by: 'rescuer',
+        })
+        .eq('id', callId);
+      leaveAgoraChannel();
+      setCallState('connecting');
+      setCurrentCallId(null);
+      navigation.goBack();
+    }
+  };
+
   useEffect(() => {
+    const incoming =
+      routeParams.incoming === true &&
+      typeof routeParams.callId === 'string' &&
+      typeof routeParams.channelName === 'string';
+
+    if (incoming) {
+      void joinIncomingCall(
+        routeParams.callId as string,
+        routeParams.channelName as string,
+        routeParams.hasVideo === true
+      );
+      return;
+    }
+
     if (autoStartRef.current) {
       return;
     }
     autoStartRef.current = true;
     void initiateCall('audio');
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- démarrage unique à l’entrée écran
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- entrée écran : entrant vs sortant
   }, []);
 
   const formatTime = (seconds: number) => {
@@ -307,6 +446,26 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     }
   }, [mediaReady, callType, currentCallId]);
 
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        pipDragStart.current = { ...pipOffset };
+      },
+      onPanResponderMove: (_, g) => {
+        const nx = pipDragStart.current.x + g.dx;
+        const ny = pipDragStart.current.y + g.dy;
+        const margin = 16;
+        const maxX = SCREEN_W - PIP_W - margin * 2;
+        const maxY = SCREEN_H - PIP_H - 220;
+        setPipOffset({
+          x: Math.max(-maxX, Math.min(maxX, nx)),
+          y: Math.max(-maxY, Math.min(maxY, ny)),
+        });
+      },
+    })
+  ).current;
+
   const headerStatus = () => {
     if (callState === 'connecting') {
       return { dot: '#888', text: 'Connexion…' };
@@ -328,6 +487,96 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   };
 
   const st = headerStatus();
+
+  const renderLocalPip = () => {
+    if (isLocalCameraOff) {
+      return null;
+    }
+    return (
+      <View
+        style={[
+          styles.pipWindow,
+          {
+            transform: [{ translateX: pipOffset.x }, { translateY: pipOffset.y }],
+          },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        <RtcSurfaceView
+          style={styles.localVideo}
+          canvas={{
+            uid: 0,
+            sourceType: VideoSourceType.VideoSourceCamera,
+            renderMode: RenderModeType.RenderModeHidden,
+          }}
+        />
+      </View>
+    );
+  };
+
+  const renderRemoteMain = () => {
+    if (remoteUid == null) {
+      return (
+        <View style={styles.remotePlaceholder}>
+          <Text style={styles.placeholderText}>En attente de la centrale…</Text>
+        </View>
+      );
+    }
+    return (
+      <RtcSurfaceView
+        style={styles.remoteVideo}
+        canvas={{
+          uid: remoteUid,
+          renderMode: RenderModeType.RenderModeHidden,
+        }}
+      />
+    );
+  };
+
+  const renderRemotePip = () => {
+    if (remoteUid == null) {
+      return null;
+    }
+    return (
+      <View
+        style={[
+          styles.pipWindow,
+          {
+            transform: [{ translateX: pipOffset.x }, { translateY: pipOffset.y }],
+          },
+        ]}
+        {...panResponder.panHandlers}
+      >
+        <RtcSurfaceView
+          style={styles.localVideo}
+          canvas={{
+            uid: remoteUid,
+            renderMode: RenderModeType.RenderModeHidden,
+          }}
+        />
+      </View>
+    );
+  };
+
+  const renderLocalMain = () => {
+    if (isLocalCameraOff) {
+      return (
+        <View style={styles.remotePlaceholder}>
+          <Text style={styles.placeholderText}>Caméra désactivée</Text>
+        </View>
+      );
+    }
+    return (
+      <RtcSurfaceView
+        style={styles.remoteVideo}
+        canvas={{
+          uid: 0,
+          sourceType: VideoSourceType.VideoSourceCamera,
+          renderMode: RenderModeType.RenderModeHidden,
+        }}
+      />
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -364,38 +613,31 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
           {callType === 'video' ? (
             <View style={styles.videoWrap}>
               <View style={styles.videoStage}>
-                {remoteUid != null ? (
-                  <RtcSurfaceView
-                    style={styles.remoteVideo}
-                    canvas={{
-                      uid: remoteUid,
-                      renderMode: RenderModeType.RenderModeHidden,
-                    }}
-                  />
+                {!swapFeeds ? (
+                  <>
+                    {renderRemoteMain()}
+                    {renderLocalPip()}
+                  </>
                 ) : (
-                  <View style={styles.remotePlaceholder}>
-                    <Text style={styles.placeholderText}>En attente de la centrale…</Text>
-                  </View>
+                  <>
+                    {renderLocalMain()}
+                    {renderRemotePip()}
+                  </>
                 )}
 
-                {!isLocalCameraOff && (
-                  <View style={styles.pipWindow}>
-                    <RtcSurfaceView
-                      style={styles.localVideo}
-                      canvas={{
-                        uid: 0,
-                        sourceType: VideoSourceType.VideoSourceCamera,
-                        renderMode: RenderModeType.RenderModeHidden,
-                      }}
-                    />
-                  </View>
-                )}
-
-                {isLocalCameraOff && (
+                {isLocalCameraOff && !swapFeeds && (
                   <View style={styles.videoOffOverlay}>
                     <Text style={styles.placeholderText}>Caméra désactivée</Text>
                   </View>
                 )}
+
+                <TouchableOpacity
+                  style={styles.swapFab}
+                  onPress={() => setSwapFeeds((v) => !v)}
+                  accessibilityLabel="Inverser les vues"
+                >
+                  <MaterialIcons name="swap-horiz" size={26} color="#FFF" />
+                </TouchableOpacity>
               </View>
               <View style={styles.videoCenterOverlay} pointerEvents="none">
                 <Text style={styles.centerTitle}>{centerTitle()}</Text>
@@ -574,13 +816,26 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 16,
     right: 16,
-    width: 112,
-    height: 168,
+    width: PIP_W,
+    height: PIP_H,
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
     backgroundColor: '#111',
+  },
+  swapFab: {
+    position: 'absolute',
+    bottom: 24,
+    left: 24,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   videoOffOverlay: {
     ...StyleSheet.absoluteFillObject,

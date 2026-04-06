@@ -1,5 +1,6 @@
 import React from 'react';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { navigationRef } from './src/navigation/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar, ActivityIndicator, View, Text, ScrollView } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +14,7 @@ if (mapboxToken) {
 import { colors } from './src/theme/colors';
 import { isSupabaseConfigured } from './src/lib/supabase';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
+import { AppLockProvider } from './src/contexts/AppLockContext';
 import { MissionProvider } from './src/contexts/MissionContext';
 import { GlobalAlert } from './src/components/shared/GlobalAlert';
 
@@ -41,6 +43,8 @@ import { HospitalAdmissionsListScreen } from './src/screens/hospital/HospitalAdm
 
 // Urgentiste Screens
 import { CallCenterScreen } from './src/screens/urgentiste/CallCenterScreen';
+import { CallHistoryCallsScreen } from './src/screens/urgentiste/CallHistoryCallsScreen';
+import { IncomingCallSubscriber } from './src/components/calls/IncomingCallSubscriber';
 import { SignalementScreen } from './src/screens/urgentiste/SignalementScreen';
 import { ProtocolesScreen } from './src/screens/urgentiste/ProtocolesScreen';
 import { SignalerProblemeScreen } from './src/screens/urgentiste/SignalerProblemeScreen';
@@ -153,6 +157,7 @@ function RootNavigator() {
 
           {/* Urgentiste Stack */}
           <Stack.Screen name="CallCenter" component={CallCenterScreen} />
+          <Stack.Screen name="CallHistoryCalls" component={CallHistoryCallsScreen} />
           <Stack.Screen name="Signalement" component={SignalementScreen} />
           <Stack.Screen name="Protocoles" component={ProtocolesScreen} />
           <Stack.Screen name="SignalerProbleme" component={SignalerProblemeScreen} />
@@ -178,13 +183,16 @@ export default function App() {
   return (
     <AuthProvider>
       <MissionProvider>
-        <SafeAreaProvider>
-          <StatusBar barStyle="light-content" backgroundColor={colors.mainBackground} />
-          <NavigationContainer theme={navTheme}>
-            <RootNavigator />
-            <GlobalAlert />
-          </NavigationContainer>
-        </SafeAreaProvider>
+        <AppLockProvider>
+          <SafeAreaProvider>
+            <StatusBar barStyle="light-content" backgroundColor={colors.mainBackground} />
+            <NavigationContainer ref={navigationRef} theme={navTheme}>
+              <RootNavigator />
+              <IncomingCallSubscriber />
+              <GlobalAlert />
+            </NavigationContainer>
+          </SafeAreaProvider>
+        </AppLockProvider>
       </MissionProvider>
     </AuthProvider>
   );
