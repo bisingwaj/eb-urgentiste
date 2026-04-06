@@ -5,6 +5,8 @@ export type CallCenterRouteParams = {
   callId?: string;
   channelName?: string;
   hasVideo?: boolean;
+  /** Reprise après réduction (appel toujours actif côté Agora). */
+  resume?: boolean;
 };
 
 export type RootStackParamList = ParamListBase & {

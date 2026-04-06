@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   ActivityIndicator,
   PanResponder,
   Dimensions,
+  BackHandler,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -22,6 +24,7 @@ import {
 import { colors } from '../../theme/colors';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
+import { useCallSession } from '../../contexts/CallSessionContext';
 import { buildInternalChannelName } from '../../lib/callChannel';
 import type { CallCenterRouteParams } from '../../navigation/navigationRef';
 import {
@@ -38,11 +41,12 @@ type CallState = 'connecting' | 'calling' | 'active';
 type CallType = 'audio' | 'video';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
-const PIP_W = 112;
-const PIP_H = 168;
+const PIP_W = 120;
+const PIP_H = 180;
 
-export function CallCenterScreen({ navigation }: { navigation: { goBack: () => void } }) {
+export function CallCenterScreen({ navigation }: { navigation: { goBack: () => void; setParams?: (p: object) => void } }) {
   const { profile, session } = useAuth();
+  const { minimized: minimizedSnapshot, setMinimized } = useCallSession();
   const route = useRoute();
   const routeParams = (route.params ?? {}) as CallCenterRouteParams;
 
@@ -65,6 +69,8 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   const incomingJoinCallIdRef = useRef<string | null>(null);
   const activeFallbackStartRef = useRef<number | null>(null);
   const pipDragStart = useRef({ x: 0, y: 0 });
+  const skipLeaveChannelRef = useRef(false);
+  const resumeAppliedRef = useRef(false);
   const endCallRemotelyRef = useRef<() => Promise<void>>(async () => {});
 
   const callTypeRef = useRef(callType);
@@ -179,6 +185,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   }, [callState, callType]);
 
   const cleanupAndGoBack = useCallback(() => {
+    setMinimized(null);
     cleanupSubscription();
     setAgoraRtcCallbacks({});
     setMediaReady(false);
@@ -195,7 +202,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     setPipOffset({ x: 0, y: 0 });
     incomingJoinCallIdRef.current = null;
     navigation.goBack();
-  }, [cleanupSubscription, navigation]);
+  }, [cleanupSubscription, navigation, setMinimized]);
 
   const endCallLocal = useCallback(async () => {
     let durationSec = callDuration;
@@ -230,6 +237,97 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   }, [cleanupAndGoBack]);
 
   endCallRemotelyRef.current = endCallRemotely;
+
+  const minimizeCall = useCallback(() => {
+    if (!currentCallId) {
+      navigation.goBack();
+      return;
+    }
+    setMinimized({
+      callId: currentCallId,
+      callType,
+      answeredAtIso,
+      callState,
+      isMuted,
+      isLocalCameraOff,
+      isSpeakerOn,
+      swapFeeds,
+      pipOffset,
+      remoteUid,
+      mediaReady,
+    });
+    skipLeaveChannelRef.current = true;
+    navigation.goBack();
+  }, [
+    currentCallId,
+    callType,
+    answeredAtIso,
+    callState,
+    isMuted,
+    isLocalCameraOff,
+    isSpeakerOn,
+    swapFeeds,
+    pipOffset,
+    remoteUid,
+    mediaReady,
+    setMinimized,
+    navigation,
+  ]);
+
+  useLayoutEffect(() => {
+    if (!routeParams.resume || resumeAppliedRef.current) {
+      return;
+    }
+    const snap = minimizedSnapshot;
+    if (!snap) {
+      navigation.setParams?.({ resume: undefined } as never);
+      return;
+    }
+    resumeAppliedRef.current = true;
+    setMinimized(null);
+    setCurrentCallId(snap.callId);
+    setCallType(snap.callType);
+    setAnsweredAtIso(snap.answeredAtIso);
+    setCallState(snap.callState);
+    setIsMuted(snap.isMuted);
+    setIsLocalCameraOff(snap.isLocalCameraOff);
+    setIsSpeakerOn(snap.isSpeakerOn);
+    setSwapFeeds(snap.swapFeeds);
+    setPipOffset(snap.pipOffset);
+    setRemoteUid(snap.remoteUid);
+    setMediaReady(snap.mediaReady);
+    navigation.setParams?.({ resume: undefined } as never);
+    void supabase
+      .from('call_history')
+      .select('status')
+      .eq('id', snap.callId)
+      .maybeSingle()
+      .then(({ data }) => {
+        const st = data?.status as string | undefined;
+        if (st && ['completed', 'failed', 'missed'].includes(st)) {
+          Alert.alert('Appel terminé', "L'appel n'est plus actif.");
+          void endCallRemotelyRef.current();
+        }
+      });
+  }, [routeParams.resume, minimizedSnapshot, navigation, setMinimized]);
+
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      minimizeCall();
+      return true;
+    });
+    return () => sub.remove();
+  }, [minimizeCall]);
+
+  useEffect(() => {
+    return () => {
+      if (skipLeaveChannelRef.current) {
+        skipLeaveChannelRef.current = false;
+        return;
+      }
+      leaveAgoraChannel();
+    };
+  }, []);
 
   useEffect(() => {
     setAgoraRtcCallbacks({
@@ -380,6 +478,10 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   };
 
   useEffect(() => {
+    if (routeParams.resume) {
+      return;
+    }
+
     const incoming =
       routeParams.incoming === true &&
       typeof routeParams.callId === 'string' &&
@@ -585,19 +687,26 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.headerIconBtn}
-          onPress={() => void endCallLocal()}
-          accessibilityLabel="Raccrocher et fermer"
+          onPress={minimizeCall}
+          accessibilityLabel="Réduire l’appel sans raccrocher"
         >
-          <MaterialIcons name="expand-more" size={28} color="#FFF" />
+          <MaterialIcons name="keyboard-arrow-down" size={28} color="#FFF" />
         </TouchableOpacity>
 
-        <View style={styles.headerStatus}>
-          <View style={[styles.statusDot, { backgroundColor: st.dot }]} />
-          <Text style={styles.headerStatusText}>{st.text}</Text>
+        <View style={styles.headerCenter}>
+          <Text style={styles.headerBrand}>Centrale</Text>
+          <View style={styles.headerStatus}>
+            <View style={[styles.statusDot, { backgroundColor: st.dot }]} />
+            <Text style={styles.headerStatusText}>{st.text}</Text>
+          </View>
         </View>
 
-        <View style={styles.headerIconBtn}>
-          <MaterialIcons name="wifi" size={22} color="#FFF" />
+        <View style={styles.headerIconBtnMuted}>
+          <MaterialIcons
+            name={callType === 'video' ? 'videocam' : 'call'}
+            size={22}
+            color="rgba(255,255,255,0.35)"
+          />
         </View>
       </View>
 
@@ -612,6 +721,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
         <View style={styles.mainStage}>
           {callType === 'video' ? (
             <View style={styles.videoWrap}>
+              <View style={styles.videoStageOuter}>
               <View style={styles.videoStage}>
                 {!swapFeeds ? (
                   <>
@@ -636,8 +746,9 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
                   onPress={() => setSwapFeeds((v) => !v)}
                   accessibilityLabel="Inverser les vues"
                 >
-                  <MaterialIcons name="swap-horiz" size={26} color="#FFF" />
+                  <MaterialIcons name="swap-horiz" size={24} color="#FFF" />
                 </TouchableOpacity>
+              </View>
               </View>
               <View style={styles.videoCenterOverlay} pointerEvents="none">
                 <Text style={styles.centerTitle}>{centerTitle()}</Text>
@@ -711,20 +822,42 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#030303',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(8,8,8,0.98)',
+  },
+  headerCenter: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  headerBrand: {
+    color: '#FFF',
+    fontSize: 17,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   headerIconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1A1A1A',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerIconBtnMuted: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -732,6 +865,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginTop: 4,
   },
   statusDot: {
     width: 8,
@@ -739,8 +873,8 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   headerStatusText: {
-    color: '#FFF',
-    fontSize: 16,
+    color: 'rgba(255,255,255,0.72)',
+    fontSize: 13,
     fontWeight: '600',
   },
   connectingWrap: {
@@ -759,6 +893,25 @@ const styles = StyleSheet.create({
   videoWrap: {
     flex: 1,
     position: 'relative',
+    paddingHorizontal: 12,
+    paddingTop: 8,
+  },
+  videoStageOuter: {
+    flex: 1,
+    borderRadius: 20,
+    overflow: 'hidden',
+    backgroundColor: '#0a0a0a',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.45,
+        shadowRadius: 16,
+      },
+      android: { elevation: 12 },
+    }),
   },
   audioCenter: {
     flex: 1,
@@ -792,7 +945,7 @@ const styles = StyleSheet.create({
   },
   videoStage: {
     flex: 1,
-    backgroundColor: '#050505',
+    backgroundColor: '#080808',
     position: 'relative',
   },
   remoteVideo: {
@@ -814,28 +967,37 @@ const styles = StyleSheet.create({
   },
   pipWindow: {
     position: 'absolute',
-    top: 16,
-    right: 16,
+    top: 14,
+    right: 14,
     width: PIP_W,
     height: PIP_H,
-    borderRadius: 16,
+    borderRadius: 18,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.45)',
     backgroundColor: '#111',
+    ...Platform.select({
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.5,
+        shadowRadius: 8,
+      },
+      android: { elevation: 10 },
+    }),
   },
   swapFab: {
     position: 'absolute',
-    bottom: 24,
-    left: 24,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    bottom: 20,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0,0,0,0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    borderColor: 'rgba(255,255,255,0.28)',
   },
   videoOffOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -845,23 +1007,26 @@ const styles = StyleSheet.create({
   },
   videoCenterOverlay: {
     position: 'absolute',
-    top: 56,
-    left: 0,
-    right: 0,
+    top: 20,
+    left: 12,
+    right: 12,
     alignItems: 'center',
   },
   bottomDock: {
-    paddingHorizontal: 16,
-    paddingBottom: 8,
+    paddingHorizontal: 14,
+    paddingBottom: 10,
+    paddingTop: 4,
   },
   bottomBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#141414',
-    borderRadius: 28,
-    paddingVertical: 18,
-    paddingHorizontal: 14,
+    backgroundColor: 'rgba(22,22,22,0.98)',
+    borderRadius: 32,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
   },
   roundBtn: {
     width: 56,
