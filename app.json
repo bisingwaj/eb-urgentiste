@@ -17,7 +17,8 @@
       "bundleIdentifier": "com.eburgentiste.app",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "L'application utilise le micro pour les appels avec la centrale de régulation.",
-        "NSCameraUsageDescription": "La caméra est utilisée pour les appels vidéo avec la centrale."
+        "NSCameraUsageDescription": "La caméra est utilisée pour les appels vidéo avec la centrale.",
+        "NSFaceIDUsageDescription": "L'application utilise Face ID pour déverrouiller l'accès après connexion."
       }
     },
     "android": {
@@ -40,7 +41,13 @@
     },
     "plugins": [
       "@rnmapbox/maps",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "L'application utilise Face ID pour déverrouiller l'accès après connexion."
+        }
+      ]
     ],
     "extra": {
       "eas": {

@@ -1,10 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import { useAppLock } from '../../contexts/AppLockContext';
 
 export function HospitalProfileTab({ navigation }: any) {
+  const { appLockEnabled, setAppLockEnabled, biometricAvailable, nativeModuleLinked } = useAppLock();
+
   const handleLogout = () => {
     navigation.getParent()?.reset({
       index: 0,
@@ -50,6 +53,27 @@ export function HospitalProfileTab({ navigation }: any) {
               <MaterialIcons name="chevron-right" color="rgba(255, 255, 255, 0.2)" size={20} />
             </View>
           ))}
+        </View>
+
+        <View style={styles.securityCard}>
+          <MaterialIcons name="fingerprint" size={22} color={colors.secondary} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.securityTitle}>Verrouillage appareil</Text>
+            <Text style={styles.securitySub}>
+              {!nativeModuleLinked
+                ? 'Recompilez l’app (expo run:android) pour activer la biométrie'
+                : biometricAvailable
+                  ? 'Face ID / empreinte / code du téléphone'
+                  : 'Configurez le verrouillage dans les réglages du téléphone'}
+            </Text>
+          </View>
+          <Switch
+            value={appLockEnabled}
+            disabled={!nativeModuleLinked}
+            onValueChange={(v) => void setAppLockEnabled(v)}
+            trackColor={{ false: '#3A3A3A', true: colors.secondary + '99' }}
+            thumbColor={appLockEnabled ? colors.secondary : '#888'}
+          />
         </View>
 
         {/* Logout */}
@@ -113,7 +137,30 @@ const styles = StyleSheet.create({
   infoList: {
     width: '100%',
     gap: 8,
-    marginBottom: 40,
+    marginBottom: 24,
+  },
+  securityCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    padding: 18,
+    borderRadius: 16,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    marginBottom: 32,
+  },
+  securityTitle: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  securitySub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '600',
   },
   infoCard: {
     flexDirection: 'row',

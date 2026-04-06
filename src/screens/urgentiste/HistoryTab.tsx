@@ -94,7 +94,23 @@ export function HistoryTab({ navigation }: any) {
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollPad} showsVerticalScrollIndicator={false}>
-        
+        <TouchableOpacity
+          style={styles.callHistoryCard}
+          onPress={() => navigation.navigate('CallHistoryCalls')}
+          activeOpacity={0.88}
+        >
+          <View style={[styles.callHistoryIcon, { backgroundColor: colors.secondary + '22' }]}>
+            <MaterialIcons name="phone-callback" color={colors.secondary} size={26} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.callHistoryTitle}>Appels vers la centrale</Text>
+            <Text style={styles.callHistorySub}>
+              Historique audio / vidéo (mis à jour à chaque visite)
+            </Text>
+          </View>
+          <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={24} />
+        </TouchableOpacity>
+
         <Text style={styles.sectionTitle}>Missions récentes</Text>
 
         {isLoading ? (
@@ -204,6 +220,27 @@ const styles = StyleSheet.create({
   summaryNumber: { color: "#FFF", fontSize: 32, fontWeight: "900" },
 
   scrollPad: { paddingBottom: 40 },
+  callHistoryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginHorizontal: 20,
+    marginTop: 8,
+    padding: 18,
+    borderRadius: 28,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    gap: 14,
+  },
+  callHistoryIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  callHistoryTitle: { color: '#FFF', fontSize: 17, fontWeight: '800' },
+  callHistorySub: { color: 'rgba(255,255,255,0.45)', fontSize: 13, marginTop: 4, fontWeight: '600' },
   sectionTitle: { color: "#FFF", fontSize: 18, fontWeight: "600", marginHorizontal: 24, marginTop: 24, marginBottom: 16 },
 
   listContainer: { paddingBottom: 100 },
