@@ -21,7 +21,7 @@ export function ProtocolesScreen({ navigation }: any) {
   if (viewing) {
     const doc = PROTOCOLS.find(p => p.id === viewing);
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar barStyle="light-content" />
         <View style={styles.topHeader}>
           <View style={styles.headerRow}>
@@ -53,7 +53,7 @@ export function ProtocolesScreen({ navigation }: any) {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" />
       
       <View style={styles.topHeader}>

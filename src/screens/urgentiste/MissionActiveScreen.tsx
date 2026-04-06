@@ -106,7 +106,7 @@ export function MissionActiveScreen({ navigation }: any) {
 
   if (!activeMission) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <StatusBar barStyle="light-content" />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <MaterialCommunityIcons name="check-circle-outline" color="#30D158" size={64} />
@@ -209,7 +209,7 @@ export function MissionActiveScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" />
       
       <View style={styles.topHeader}>

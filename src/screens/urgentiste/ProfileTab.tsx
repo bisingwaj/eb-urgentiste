@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, StatusBar, Alert } from 'react-native';
+import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -30,7 +31,7 @@ export function ProfileTab({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <TabScreenSafeArea style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       <View style={styles.topHeader}>
@@ -133,7 +134,7 @@ export function ProfileTab({ navigation }: any) {
         </TouchableOpacity>
 
       </ScrollView>
-    </SafeAreaView>
+    </TabScreenSafeArea>
   );
 }
 
@@ -195,7 +196,7 @@ const styles = StyleSheet.create({
   idBadge: { backgroundColor: "rgba(255,255,255,0.05)", alignSelf: 'flex-start', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   idBadgeText: { fontSize: 10, fontWeight: '900', color: colors.textMuted, letterSpacing: 1 },
 
-  scrollPad: { paddingBottom: 100 },
+  scrollPad: { paddingBottom: 24 },
   statsRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, marginTop: 24 },
   statBox: { flex: 1, backgroundColor: "#1A1A1A", borderRadius: 24, padding: 20, marginHorizontal: 4, alignItems: 'center', borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },
   statIcon: { width: 44, height: 44, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },

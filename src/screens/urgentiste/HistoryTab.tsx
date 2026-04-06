@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 
@@ -58,7 +58,7 @@ export function HistoryTab({ navigation }: any) {
   const successCount = history.filter(m => m.dispatch_status === 'completed').length;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TabScreenSafeArea style={styles.container}>
       <StatusBar barStyle="light-content" />
       
       <View style={styles.topHeader}>
@@ -149,7 +149,7 @@ export function HistoryTab({ navigation }: any) {
         )}
 
       </ScrollView>
-    </SafeAreaView>
+    </TabScreenSafeArea>
   );
 }
 
@@ -203,10 +203,10 @@ const styles = StyleSheet.create({
   summaryLabel: { color: "rgba(255,255,255,0.6)", fontSize: 10, fontWeight: "900", letterSpacing: 0.5 },
   summaryNumber: { color: "#FFF", fontSize: 32, fontWeight: "900" },
 
-  scrollPad: { paddingBottom: 40 },
+  scrollPad: { paddingBottom: 24 },
   sectionTitle: { color: "#FFF", fontSize: 18, fontWeight: "600", marginHorizontal: 24, marginTop: 24, marginBottom: 16 },
 
-  listContainer: { paddingBottom: 100 },
+  listContainer: { paddingBottom: 24 },
   alertCard: { backgroundColor: "#1A1A1A", marginHorizontal: 20, borderRadius: 32, padding: 22, flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },
   cardInfo: { flex: 1 },
   cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },

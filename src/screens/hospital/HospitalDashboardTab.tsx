@@ -10,7 +10,7 @@ import {
   StatusBar,
   Dimensions,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 
@@ -336,7 +336,7 @@ export function HospitalDashboardTab({ navigation }: any) {
   ).length;
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <TabScreenSafeArea style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
 
       <View style={styles.topHeader}>
@@ -371,7 +371,7 @@ export function HospitalDashboardTab({ navigation }: any) {
         </View>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Alertes récentes</Text>
           <View style={styles.filterOptions}>
@@ -404,7 +404,7 @@ export function HospitalDashboardTab({ navigation }: any) {
           );
         })}
       </ScrollView>
-    </SafeAreaView>
+    </TabScreenSafeArea>
   );
 }
 

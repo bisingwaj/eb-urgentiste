@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, StatusBar, Animated, Dimensions, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuth } from '../../contexts/AuthContext';
@@ -92,7 +92,7 @@ export function HomeTab({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <TabScreenSafeArea style={styles.container}>
       <StatusBar barStyle="light-content" />
 
       {/* Harmonized Header */}
@@ -255,13 +255,13 @@ export function HomeTab({ navigation }: any) {
         </View>
 
       </ScrollView>
-    </SafeAreaView>
+    </TabScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.mainBackground },
-  scrollContent: { padding: 20, paddingBottom: 100 },
+  scrollContent: { padding: 20, paddingBottom: 24 },
 
   // Harmonized Header
   topHeader: {

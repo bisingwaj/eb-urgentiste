@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 
@@ -13,7 +13,7 @@ export function HospitalProfileTab({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <TabScreenSafeArea style={styles.safeArea}>
       <View style={styles.appBar}>
         <Text style={styles.appBarTitle}>Profil</Text>
       </View>
@@ -58,7 +58,7 @@ export function HospitalProfileTab({ navigation }: any) {
           <Text style={styles.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+    </TabScreenSafeArea>
   );
 }
 

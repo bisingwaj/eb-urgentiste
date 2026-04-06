@@ -2,7 +2,7 @@ import React from 'react';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { StatusBar, ActivityIndicator, View, Text, ScrollView } from 'react-native';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 
 const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN?.trim();
@@ -66,7 +66,8 @@ const navTheme = {
 /** Build sans variables Supabase (souvent APK EAS sans secrets) : message clair au lieu d’un crash silencieux. */
 function ConfigErrorScreen() {
   return (
-    <View style={{ flex: 1, backgroundColor: '#050505', padding: 24, justifyContent: 'center' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#050505' }} edges={['top', 'bottom', 'left', 'right']}>
+      <View style={{ flex: 1, padding: 24, justifyContent: 'center' }}>
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <Text style={{ color: '#fff', fontSize: 20, fontWeight: '600', marginBottom: 12 }}>
           Configuration manquante
@@ -83,7 +84,8 @@ function ConfigErrorScreen() {
           <Text style={{ color: colors.secondary }}>.local.env.example</Text>).
         </Text>
       </ScrollView>
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 

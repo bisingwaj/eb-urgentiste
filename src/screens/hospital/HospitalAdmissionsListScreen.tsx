@@ -9,7 +9,7 @@ import {
   StatusBar,
   Dimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { MOCK_CASES, getLevelConfig, getStatusConfig } from './HospitalDashboardTab';
@@ -27,7 +27,7 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <TabScreenSafeArea style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
 
       {/* 🔝 Premium Header with Search */}
@@ -129,7 +129,7 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
           })
         )}
       </ScrollView>
-    </SafeAreaView>
+    </TabScreenSafeArea>
   );
 }
 

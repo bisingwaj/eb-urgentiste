@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform, UIManager, LayoutAn
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
+import { TAB_BAR_FLOAT_GAP } from './tabBarLayout';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -11,9 +12,11 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
+  const bottomOffset = insets.bottom + TAB_BAR_FLOAT_GAP;
+
   return (
-    <View style={styles.wrapper}>
-      <View style={[styles.container, { paddingBottom: 0 }]}>
+    <View style={[styles.wrapper, { bottom: bottomOffset }]}>
+      <View style={styles.container}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
 
@@ -100,7 +103,6 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 30 : 50,
     left: 20,
     right: 20,
     shadowColor: colors.secondary,
