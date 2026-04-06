@@ -136,7 +136,7 @@ export function HomeTab({ navigation }: any) {
       <View style={styles.topHeader}>
         <View style={styles.headerRow}>
           <View style={styles.headerTextCol}>
-            <Text style={styles.hospitalName}>Bonjour, {profile?.first_name || 'Emmanuel'},</Text>
+            <Text style={styles.hospitalName}>Bonjour, {profile?.first_name || ' '}</Text>
             <View style={styles.metaInfoColumn}>
               <View style={styles.metaRowWithIcon}>
                 <View style={styles.metaIconSlot}>
@@ -154,13 +154,13 @@ export function HomeTab({ navigation }: any) {
                       style={{ marginTop: 8, alignSelf: 'flex-start' }}
                     />
                   ) : (
-                    <Text style={styles.unitNameValue} numberOfLines={2}>
+                    <Text style={styles.userMetaText} numberOfLines={2}>
                       {unitName}
                     </Text>
                   )}
                 </View>
               </View>
-              <View style={[styles.metaRowWithIcon, styles.metaBlockSpacing]}>
+              {/* <View style={[styles.metaRowWithIcon, styles.metaBlockSpacing]}>
                 <View style={styles.metaIconSlot}>
                   <MaterialIcons name="badge" size={16} color="#90CAF9" />
                 </View>
@@ -189,7 +189,7 @@ export function HomeTab({ navigation }: any) {
                       : 'Non renseignée'}
                   </Text>
                 </View>
-              </View>
+              </View> */}
             </View>
           </View>
           <View style={styles.headerIconRow}>

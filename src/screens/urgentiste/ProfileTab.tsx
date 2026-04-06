@@ -131,9 +131,33 @@ export function ProfileTab({ navigation }: any) {
           </View>
         </View> */}
 
-        {/* Menu Groups */}
-        <Text style={styles.sectionTitle}>SÉCURITÉ ET CONTACT</Text>
+        {/* Informations agent */}
+        <Text style={styles.sectionTitle}>INFORMATIONS AGENT</Text>
         <View style={styles.menuList}>
+          <View style={styles.menuItem}>
+            <View style={[styles.menuIcon, { backgroundColor: "#1A1A1A" }]}>
+              <MaterialIcons name="badge" color="#90CAF9" size={20} />
+            </View>
+            <View style={styles.menuText}>
+              <Text style={styles.menuLabel}>Grade</Text>
+              <Text style={styles.menuValue}>
+                {profile?.grade?.trim() || "Non renseigné"}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.menuItem}>
+            <View style={[styles.menuIcon, { backgroundColor: "#1A1A1A" }]}>
+              <MaterialIcons name="my-location" color={colors.success} size={20} />
+            </View>
+            <View style={styles.menuText}>
+              <Text style={styles.menuLabel}>Zone</Text>
+              <Text style={styles.menuValue} numberOfLines={3}>
+                {profile?.zone?.trim() || "Non renseignée"}
+              </Text>
+            </View>
+          </View>
+
           <TouchableOpacity style={styles.menuItem}>
             <View style={[styles.menuIcon, { backgroundColor: "#1A1A1A" }]}>
               <MaterialIcons name="phone" color={colors.textMuted} size={20} />
