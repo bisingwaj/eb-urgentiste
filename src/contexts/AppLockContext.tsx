@@ -100,12 +100,17 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
     })();
   }, [nativeModuleLinked]);
 
+  /**
+   * Verrouillage uniquement quand l’app passe en arrière-plan réel (`background`).
+   * Ne pas utiliser `inactive` : sur iOS il se déclenche souvent (centre de contrôle,
+   * notifications, modales système) sans quitter l’app → demandes biométriques répétées.
+   */
   useEffect(() => {
     if (!appLockEnabled) {
       return;
     }
     const sub = AppState.addEventListener('change', (next: AppStateStatus) => {
-      if (next === 'background' || next === 'inactive') {
+      if (next === 'background') {
         setIsUnlocked(false);
       }
     });
