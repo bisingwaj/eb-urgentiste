@@ -35,3 +35,16 @@ export function formatIncidentType(raw: string | null | undefined): string {
   if (!raw?.trim()) return "Urgence médicale";
   return raw.trim().replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
+
+/**
+ * Découpe une description d'alerte contenant des éléments séparés par des virgules
+ * (ex. "conscient : oui, Respiration : oui, Hémorragie : non")
+ * en un tableau de lignes pour un affichage en colonne.
+ */
+export function formatDescriptionLines(raw: string | null | undefined): string[] {
+  if (!raw?.trim()) return [];
+  const text = raw.trim();
+  const parts = text.split(",").map((s) => s.trim()).filter(Boolean);
+  if (parts.length <= 1) return [text];
+  return parts;
+}

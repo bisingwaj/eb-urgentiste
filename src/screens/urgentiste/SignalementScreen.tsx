@@ -24,7 +24,7 @@ import * as Location from "expo-location";
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from "../../lib/mapbox";
 import { MapboxMapView } from "../../components/map/MapboxMapView";
 import { openExternalDirections } from "../../utils/navigation";
-import { formatMissionAddress, formatIncidentType } from "../../utils/missionAddress";
+import { formatMissionAddress, formatIncidentType, formatDescriptionLines } from "../../utils/missionAddress";
 import { HeartPulse, Ambulance, Hospital as HospitalIcon } from "lucide-react-native";
 
 // Helper for ETA and distance
@@ -1028,9 +1028,9 @@ export function SignalementScreen({ navigation, route }: any) {
                                </Text>
                               <View style={styles.divider} />
                               <Text style={styles.detailLabel}>Descriptif central</Text>
-                              <Text style={styles.detailDesc}>
-                                 {selectedMission.description}
-                              </Text>
+                              {formatDescriptionLines(selectedMission.description).map((line, i) => (
+                                 <Text key={i} style={styles.detailDesc}>{"\u2022  "}{line}</Text>
+                              ))}
                            </View>
                         </ScrollView>
 

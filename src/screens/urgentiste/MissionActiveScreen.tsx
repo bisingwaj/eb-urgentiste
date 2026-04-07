@@ -9,7 +9,7 @@ import * as Location from 'expo-location';
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from '../../lib/mapbox';
 import { MapboxMapView } from '../../components/map/MapboxMapView';
 import { openExternalDirections } from '../../utils/navigation';
-import { formatMissionAddress } from '../../utils/missionAddress';
+import { formatMissionAddress, formatDescriptionLines } from '../../utils/missionAddress';
 
 const STATUS_STEPS = [
   { key: 'dispatched', label: 'Dispatché', icon: 'assignment', color: '#FF9500' },
@@ -334,7 +334,9 @@ export function MissionActiveScreen({ navigation }: any) {
           {/* Description */}
           {activeMission.description && (
             <View style={styles.descriptionBox}>
-              <Text style={styles.descriptionText} numberOfLines={3}>{activeMission.description}</Text>
+              {formatDescriptionLines(activeMission.description).map((line, i) => (
+                <Text key={i} style={styles.descriptionText}>{"\u2022  "}{line}</Text>
+              ))}
             </View>
           )}
 
