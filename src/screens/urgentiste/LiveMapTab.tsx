@@ -45,6 +45,7 @@ import {
   openExternalDirections,
   openWazeDirections,
 } from "../../utils/navigation";
+import { spreadOverlappingMarkers } from "../../utils/mapMarkerLayout";
 import { MapboxMapView } from "../../components/map/MapboxMapView";
 import {
   MePuck,
@@ -356,6 +357,28 @@ export function LiveMapTab() {
     }
     return list;
   }, [incidentsInView, userLngLat, selection]);
+
+  const rescuersForMapDisplay = useMemo(
+    () =>
+      spreadOverlappingMarkers(rescuersForMap, (r) =>
+        r.lat != null && r.lng != null ? [r.lng, r.lat] : null,
+      ),
+    [rescuersForMap],
+  );
+
+  const hospitalsForMapDisplay = useMemo(
+    () =>
+      spreadOverlappingMarkers(hospitalsForMap, (h) =>
+        h.lat != null && h.lng != null ? [h.lng, h.lat] : null,
+      ),
+    [hospitalsForMap],
+  );
+
+  const incidentsForMapDisplay = useMemo(
+    () =>
+      spreadOverlappingMarkers(incidentsForMap, (inc) => incidentLngLat(inc)),
+    [incidentsForMap],
+  );
 
   const rescuerTruncLegend = rescuersOthers.length > rescuersForMap.length;
   const hospTruncLegend = hospitalsFiltered.length > hospitalsForMap.length;
@@ -866,11 +889,11 @@ export function LiveMapTab() {
               <MePuck headingDeg={heading} />
             </Mapbox.PointAnnotation>
 
-            {rescuersForMap.map((r) => (
+            {rescuersForMapDisplay.map(({ item: r, displayCoord }) => (
               <Mapbox.MarkerView
                 key={r.id}
                 id={`rescuer-mv-${r.id}`}
-                coordinate={[r.lng, r.lat]}
+                coordinate={displayCoord}
               >
                 <UnitMarker
                   status={r.status}
@@ -879,11 +902,11 @@ export function LiveMapTab() {
               </Mapbox.MarkerView>
             ))}
 
-            {hospitalsForMap.map((h) => (
+            {hospitalsForMapDisplay.map(({ item: h, displayCoord }) => (
               <Mapbox.MarkerView
                 key={h.id}
                 id={`hospital-mv-${h.id}`}
-                coordinate={[h.lng!, h.lat!]}
+                coordinate={displayCoord}
               >
                 <HospitalMarker
                   label={h.short_name || h.name.slice(0, 10)}
@@ -893,24 +916,20 @@ export function LiveMapTab() {
               </Mapbox.MarkerView>
             ))}
 
-            {incidentsForMap.map((inc) => {
-              const c = incidentLngLat(inc);
-              if (!c) return null;
-              return (
-                <Mapbox.MarkerView
-                  key={inc.id}
-                  id={`incident-mv-${inc.id}`}
-                  coordinate={c}
-                >
-                  <IncidentMarker
-                    priority={inc.priority}
-                    onPress={() =>
-                      setSelection({ kind: "incident", data: inc })
-                    }
-                  />
-                </Mapbox.MarkerView>
-              );
-            })}
+            {incidentsForMapDisplay.map(({ item: inc, displayCoord }) => (
+              <Mapbox.MarkerView
+                key={inc.id}
+                id={`incident-mv-${inc.id}`}
+                coordinate={displayCoord}
+              >
+                <IncidentMarker
+                  priority={inc.priority}
+                  onPress={() =>
+                    setSelection({ kind: "incident", data: inc })
+                  }
+                />
+              </Mapbox.MarkerView>
+            ))}
           </MapboxMapView>
         )}
 
