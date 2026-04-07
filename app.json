@@ -34,7 +34,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.eburgentiste.app",
-      "versionCode": 2
+      "versionCode": 6
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -51,7 +51,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "f8b5d6a4-d96d-44cf-9c3d-1c9c4d225377"
+        "projectId": "7e38def9-f974-422a-a713-053e2138c7e2"
       }
     }
   }

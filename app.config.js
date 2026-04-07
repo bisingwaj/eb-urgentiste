@@ -22,7 +22,7 @@ module.exports = () => {
   return {
     expo: {
       ...base,
-      owner: 'arack',
+      owner: 'emmanuelklm',
       extra,
       ios: {
         ...base.ios,

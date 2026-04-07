@@ -20,6 +20,8 @@ export interface SosResponseItem {
 export interface Mission {
   id: string;
   incident_id: string;
+  /** `auth.users.id` du citoyen — pour appel in-app (Edge `rescuer-call-citizen`). */
+  citizen_id: string | null;
   reference: string;
   type: string;
   title: string;

@@ -9,6 +9,7 @@ import {
    Dimensions,
    Platform,
    StatusBar,
+   Alert,
    TextInput,
    ActivityIndicator,
    FlatList,
@@ -41,6 +42,8 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
 import { useFocusEffect } from "@react-navigation/native";
 import { useActiveMission } from "../../hooks/useActiveMission";
 import { useMission, Hospital } from "../../contexts/MissionContext";
+import { alertVoipError, startRescuerToCitizenVoipCall } from "../../lib/rescuerCallCitizen";
+import { canOfferVictimContactCalls } from "../../lib/missionVictimCall";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const IS_TABLET = SCREEN_WIDTH > 600;
@@ -166,6 +169,7 @@ export function SignalementScreen({ navigation, route }: any) {
    const [routeDuration, setRouteDuration] = useState<number | null>(null);
    const [routeDistance, setRouteDistance] = useState<number | null>(null);
    const lastRouteFetch = useRef<number>(0);
+   const [voipLoading, setVoipLoading] = useState(false);
 
    useEffect(() => {
       if (!urgentisteLoc || !selectedMission) return;
@@ -827,6 +831,100 @@ export function SignalementScreen({ navigation, route }: any) {
 
    const missionTypeLabel = formatIncidentType(selectedMission?.type);
 
+   const runVictimVoipFromSignalement = async () => {
+      const m = selectedMission;
+      if (!m?.citizen_id || !m?.incident_id || voipLoading) {
+         if (m && !m.citizen_id) {
+            Alert.alert(
+               "Appel (application)",
+               "Aucun compte citoyen lié à cet incident (incidents.citizen_id). L’appel in-app n’est pas disponible.",
+            );
+         }
+         return;
+      }
+      setVoipLoading(true);
+      try {
+         await startRescuerToCitizenVoipCall({
+            incidentId: m.incident_id,
+            citizenId: m.citizen_id,
+            callType: "audio",
+         });
+      } catch (e) {
+         alertVoipError(e);
+      } finally {
+         setVoipLoading(false);
+      }
+   };
+
+   const callVictimPstnFromSignalement = () => {
+      const m = selectedMission;
+      const phone = m?.caller?.phone;
+      if (phone && phone !== "-") {
+         Linking.openURL(`tel:${phone}`);
+      } else {
+         Alert.alert("Téléphone", "Aucun numéro renseigné pour cette victime.");
+      }
+   };
+
+   /** Bandeau contacter victime — uniquement avant arrivée sur les lieux (dispatché / en route). Vidéo via l’écran d’appel. */
+   const renderVictimContactStripContent = () => {
+      if (!selectedMission || !canOfferVictimContactCalls(selectedMission.dispatch_status)) {
+         return null;
+      }
+      const hasPhone = !!(selectedMission.caller?.phone && selectedMission.caller.phone !== "-");
+      const hasCitizen = !!selectedMission.citizen_id;
+      return (
+         <View style={styles.victimContactStrip}>
+            <Text style={styles.victimContactStripTitle}>Contacter la victime (avant arrivée sur place)</Text>
+            <View style={styles.victimContactRow}>
+               <TouchableOpacity
+                  style={[styles.victimContactChip, !hasPhone && styles.victimContactChipDisabled]}
+                  onPress={callVictimPstnFromSignalement}
+               >
+                  <MaterialIcons
+                     name="phone"
+                     size={20}
+                     color={hasPhone ? "#30D158" : "rgba(255,255,255,0.25)"}
+                  />
+                  <Text
+                     style={[
+                        styles.victimContactChipText,
+                        !hasPhone && styles.victimContactChipTextDisabled,
+                     ]}
+                  >
+                     Téléphone
+                  </Text>
+               </TouchableOpacity>
+               <TouchableOpacity
+                  style={[
+                     styles.victimContactChip,
+                     (!hasCitizen || voipLoading) && styles.victimContactChipDisabled,
+                  ]}
+                  onPress={() => void runVictimVoipFromSignalement()}
+                  disabled={voipLoading || !hasCitizen}
+               >
+                  {voipLoading ? (
+                     <ActivityIndicator color={colors.secondary} size="small" />
+                  ) : (
+                     <>
+                        <MaterialIcons name="phone-in-talk" size={20} color={colors.secondary} />
+                        <Text style={styles.victimContactChipText}>App audio</Text>
+                     </>
+                  )}
+               </TouchableOpacity>
+            </View>
+            {!hasCitizen && (
+               <Text style={styles.victimContactHint}>
+                  App in-app : identifiant citoyen absent (vérifiez incidents.citizen_id en base).
+               </Text>
+            )}
+            {!hasPhone && hasCitizen && (
+               <Text style={styles.victimContactHint}>Pas de numéro de téléphone sur la fiche.</Text>
+            )}
+         </View>
+      );
+   };
+
    const renderStepInlineHeader = () => (
       <View style={[styles.stepInlineHeader, { paddingTop: Math.max(insets.top, 12) }]}>
          <TouchableOpacity
@@ -1033,6 +1131,13 @@ export function SignalementScreen({ navigation, route }: any) {
                               ))}
                            </View>
                         </ScrollView>
+
+                        {selectedMission &&
+                           canOfferVictimContactCalls(selectedMission.dispatch_status) && (
+                              <View style={styles.victimStripReceptionWrap}>
+                                 {renderVictimContactStripContent()}
+                              </View>
+                           )}
 
                         <View style={styles.stickySwipeWrapper}>
                            <View style={styles.swipeContainer}>
@@ -1899,6 +2004,13 @@ export function SignalementScreen({ navigation, route }: any) {
                   </View>
                )}
             </Animated.View>
+            {selectedMission &&
+               step !== "standby" &&
+               step !== "reception" &&
+               step !== "closure" &&
+               canOfferVictimContactCalls(selectedMission.dispatch_status) && (
+                  <View style={styles.victimStripGlobalWrap}>{renderVictimContactStripContent()}</View>
+               )}
             {step !== "standby" && step !== "reception" && (
                <View style={{ height: 250 }}>{renderTimeline()}</View>
             )}
@@ -2118,6 +2230,56 @@ const styles = StyleSheet.create({
       borderRadius: 15,
    },
    assignActionText: { color: "#FFF", fontSize: 14, fontWeight: "900" },
+   victimStripReceptionWrap: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 4,
+      backgroundColor: "rgba(0,0,0,0.55)",
+   },
+   victimStripGlobalWrap: {
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: 6,
+      backgroundColor: colors.mainBackground,
+   },
+   victimContactStrip: {
+      backgroundColor: "#161616",
+      borderRadius: 16,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+   },
+   victimContactStripTitle: {
+      color: "rgba(255,255,255,0.5)",
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0.8,
+      marginBottom: 10,
+   },
+   victimContactRow: { flexDirection: "row", gap: 8, alignItems: "stretch" },
+   victimContactChip: {
+      flex: 1,
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      paddingVertical: 10,
+      paddingHorizontal: 6,
+      borderRadius: 12,
+      backgroundColor: "#222",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.08)",
+      minHeight: 72,
+   },
+   victimContactChipDisabled: { opacity: 0.45 },
+   victimContactChipText: { color: "#FFF", fontSize: 11, fontWeight: "800", textAlign: "center" },
+   victimContactChipTextDisabled: { color: "rgba(255,255,255,0.35)" },
+   victimContactHint: {
+      color: "rgba(255,255,255,0.35)",
+      fontSize: 11,
+      marginTop: 10,
+      lineHeight: 15,
+   },
    receptionView: { flex: 1, flexDirection: "column", padding: 0 },
    receptionBottomPanel: { flex: 1, minHeight: 180 },
    floatingBackSignalement: {
