@@ -26,3 +26,12 @@ export function formatMissionAddress(
   if (resolvedFallback?.trim()) return resolvedFallback.trim();
   return "Recherche de l'adresse...";
 }
+
+/**
+ * Transforme une clé snake_case de type d'incident (ex. `urgence_medicale`)
+ * en libellé lisible (ex. `Urgence médicale`).
+ */
+export function formatIncidentType(raw: string | null | undefined): string {
+  if (!raw?.trim()) return "Urgence médicale";
+  return raw.trim().replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+}

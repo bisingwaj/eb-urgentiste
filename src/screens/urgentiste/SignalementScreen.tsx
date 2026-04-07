@@ -24,7 +24,7 @@ import * as Location from "expo-location";
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from "../../lib/mapbox";
 import { MapboxMapView } from "../../components/map/MapboxMapView";
 import { openExternalDirections } from "../../utils/navigation";
-import { formatMissionAddress } from "../../utils/missionAddress";
+import { formatMissionAddress, formatIncidentType } from "../../utils/missionAddress";
 
 // Helper for ETA and distance
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -56,6 +56,19 @@ type MissionStep =
    | "transport_mode"
    | "transport"
    | "closure";
+
+const STEP_LABELS: Record<MissionStep, string> = {
+   standby: "Attente",
+   reception: "Réception",
+   arrival: "En route",
+   assessment: "Évaluation initiale",
+   aid: "Premiers soins",
+   decision: "Plan d'évacuation",
+   assignment: "Affectation",
+   transport_mode: "Mode de transport",
+   transport: "Transport en cours",
+   closure: "Clôture",
+};
 
 interface TimelineEvent {
    id: string;
@@ -810,10 +823,29 @@ export function SignalementScreen({ navigation, route }: any) {
       </View>
    );
 
+   const missionTypeLabel = formatIncidentType(selectedMission?.type);
+
+   const renderStepInlineHeader = () => (
+      <View style={[styles.stepInlineHeader, { paddingTop: Math.max(insets.top, 12) }]}>
+         <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.stepInlineBack}
+            accessibilityRole="button"
+            accessibilityLabel="Retour"
+         >
+            <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+         </TouchableOpacity>
+         <View style={styles.stepInlineTextCol}>
+            <Text style={styles.stepInlineLabel}>{STEP_LABELS[step]}</Text>
+            <Text style={styles.stepInlineTitle} numberOfLines={2}>{missionTypeLabel}</Text>
+         </View>
+      </View>
+   );
+
    return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
          <StatusBar barStyle="light-content" />
-         {step !== "reception" && step !== "arrival" && (
+         {step === "standby" && (
             <View style={styles.topHeader}>
                <View style={styles.headerRow}>
                   <TouchableOpacity
@@ -823,19 +855,10 @@ export function SignalementScreen({ navigation, route }: any) {
                      <MaterialIcons name="arrow-back" color="#FFF" size={24} />
                   </TouchableOpacity>
                   <View style={{ flex: 1, paddingHorizontal: 15 }}>
-                     <Text style={styles.greetingText}>
-                        {step === "standby"
-                           ? "Centrale régulation"
-                           : "Unité intervention"}
-                     </Text>
+                     <Text style={styles.greetingText}>Centrale régulation</Text>
                      <Text style={styles.hospitalName} numberOfLines={1}>
-                        {step === "standby"
-                           ? "Attente d'affectation..."
-                           : selectedMission?.type || "Mission"}
+                        Attente d'affectation...
                      </Text>
-                  </View>
-                  <View style={styles.stepBadge}>
-                     <Text style={styles.stepBadgeText}>{step}</Text>
                   </View>
                </View>
             </View>
@@ -988,7 +1011,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                  />
                                  <View style={{ flex: 1, minWidth: 0 }}>
                                     <Text style={styles.detailMissionType} numberOfLines={2}>
-                                       {selectedMission.type || "Mission"}
+                                       {formatIncidentType(selectedMission.type)}
                                     </Text>
                                     <Text style={styles.priorityStatusText}>
                                        {selectedMission.priority} • {selectedMission.time}{" "}
@@ -1132,7 +1155,8 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "assessment" && (
                   <View style={styles.stepBase}>
-                     <Text style={styles.stepHeading}>Évaluation initiale</Text>
+                     {renderStepInlineHeader()}
+                     <Text style={styles.stepSectionHeading}>Évaluation initiale</Text>
                      <ScrollView
                         style={{ flex: 1 }}
                         showsVerticalScrollIndicator={false}
@@ -1333,7 +1357,8 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "aid" && (
                   <View style={styles.stepBase}>
-                     <Text style={styles.stepHeading}>Premiers soins</Text>
+                     {renderStepInlineHeader()}
+                     <Text style={styles.stepSectionHeading}>Premiers soins</Text>
                      <ScrollView
                         style={{ flex: 1 }}
                         showsVerticalScrollIndicator={false}
@@ -1417,7 +1442,8 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "decision" && (
                   <View style={styles.stepBase}>
-                     <Text style={styles.stepHeading}>Plan d'évacuation</Text>
+                     {renderStepInlineHeader()}
+                     <Text style={styles.stepSectionHeading}>Plan d'évacuation</Text>
                      <View style={styles.decisionGrid}>
                         <TouchableOpacity
                            style={styles.decisionCardGrid}
@@ -1486,6 +1512,7 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "assignment" && (
                   <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
+                     <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</View>
                      {!targetHospital && !pendingStructureInfo ? (
                         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
                            <ActivityIndicator size="large" color={colors.secondary} />
@@ -1655,7 +1682,8 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "transport_mode" && (
                   <View style={styles.stepBase}>
-                     <Text style={styles.stepHeading}>Mode de transport</Text>
+                     {renderStepInlineHeader()}
+                     <Text style={styles.stepSectionHeading}>Mode de transport</Text>
                      <View style={styles.aidGrid}>
                         <TouchableOpacity
                            style={styles.aidCardGrid}
@@ -1743,6 +1771,14 @@ export function SignalementScreen({ navigation, route }: any) {
                {step === "transport" && targetHospital && (
                   <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
                      <View style={{ flex: 1, borderRadius: 0, overflow: "hidden" }}>
+                        <TouchableOpacity
+                           onPress={() => navigation.goBack()}
+                           style={[styles.floatingBackSignalement, { top: insets.top + 10 }]}
+                           accessibilityRole="button"
+                           accessibilityLabel="Retour"
+                        >
+                           <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+                        </TouchableOpacity>
                         <MapboxMapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
                            {urgentisteLoc ? (
                               <Mapbox.Camera
@@ -1816,7 +1852,7 @@ export function SignalementScreen({ navigation, route }: any) {
                            </View>
                            {transportMode && (
                               <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-                                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700' }}>{transportMode}</Text>
+                                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' }}>{transportMode}</Text>
                               </View>
                            )}
                         </View>
@@ -1835,6 +1871,7 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "closure" && (
                   <View style={styles.stepBase}>
+                     {renderStepInlineHeader()}
                      <View style={styles.closureView}>
                         <View style={styles.successHalo}>
                            <MaterialIcons
@@ -1887,7 +1924,7 @@ const styles = StyleSheet.create({
    },
    greetingText: {
       color: "rgba(255,255,255,0.4)",
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "900",
       letterSpacing: 1,
    },
@@ -1897,23 +1934,50 @@ const styles = StyleSheet.create({
       fontWeight: "900",
       marginTop: 2,
    },
-   stepBadge: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 10,
-      backgroundColor: colors.secondary + "20",
-      borderWidth: 1,
-      borderColor: colors.secondary + "40",
-   },
-   stepBadgeText: { color: colors.secondary, fontSize: 10, fontWeight: "900" },
    mainWrapper: { flex: 1 },
    contentArea: { flex: 1 },
    stepBase: { flex: 1, padding: 24 },
-   stepHeading: {
+   stepInlineHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: 14,
+      gap: 12,
+   },
+   stepInlineBack: {
+      width: 44,
+      height: 44,
+      borderRadius: 16,
+      backgroundColor: "#1A1A1A",
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.1)",
+   },
+   stepInlineTextCol: {
+      flex: 1,
+      minWidth: 0,
+      paddingTop: 2,
+   },
+   stepInlineLabel: {
+      color: "rgba(255,255,255,0.45)",
+      fontSize: 13,
+      fontWeight: "800",
+      letterSpacing: 1.2,
+      marginBottom: 6,
+      textTransform: "uppercase",
+   },
+   stepInlineTitle: {
       color: "#FFF",
-      fontSize: 24,
+      fontSize: 22,
       fontWeight: "900",
-      marginBottom: 25,
+      letterSpacing: -0.3,
+      lineHeight: 28,
+   },
+   stepSectionHeading: {
+      color: "rgba(255,255,255,0.9)",
+      fontSize: 17,
+      fontWeight: "800",
+      marginBottom: 14,
    },
    divider: {
       height: 1,
@@ -2036,7 +2100,7 @@ const styles = StyleSheet.create({
    },
    assignHeader: {
       color: "rgba(255,255,255,0.5)",
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "900",
       letterSpacing: 1,
    },
@@ -2084,7 +2148,7 @@ const styles = StyleSheet.create({
    },
    detailLabel: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "900",
       letterSpacing: 1.5,
       marginBottom: 4,
@@ -2266,7 +2330,7 @@ const styles = StyleSheet.create({
    },
    structureCoords: {
       color: 'rgba(255,255,255,0.3)',
-      fontSize: 10,
+      fontSize: 12,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       marginTop: 4,
    },
@@ -2304,7 +2368,7 @@ const styles = StyleSheet.create({
       gap: 8,
    },
    mapAddressOverlayLabel: {
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "800",
       color: "rgba(255,255,255,0.45)",
       letterSpacing: 1,
@@ -2369,7 +2433,7 @@ const styles = StyleSheet.create({
    },
    assessmentRowTitle: {
       color: "rgba(255,255,255,0.4)",
-      fontSize: 9,
+      fontSize: 13,
       fontWeight: "900",
       letterSpacing: 1,
    },
@@ -2403,14 +2467,14 @@ const styles = StyleSheet.create({
    },
    miniToggleText: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: "900",
    },
    miniToggleTextActive: { color: colors.secondary },
    miniToggleTextCrit: { color: colors.primary },
    sectionHeader: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: "900",
       letterSpacing: 1.5,
       marginBottom: 16,
@@ -2428,7 +2492,7 @@ const styles = StyleSheet.create({
       gap: 8,
    },
    severityItemText: {
-      fontSize: 9,
+      fontSize: 13,
       fontWeight: "900",
       color: "rgba(255,255,255,0.3)",
    },
@@ -2444,7 +2508,7 @@ const styles = StyleSheet.create({
    },
    smartAlertBoxText: {
       color: "#FFF",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: "900",
       flex: 1,
    },
@@ -2476,7 +2540,7 @@ const styles = StyleSheet.create({
    },
    aidLabelGrid: {
       color: "rgba(255,255,255,0.5)",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: "800",
       textAlign: "center",
    },
@@ -2528,7 +2592,7 @@ const styles = StyleSheet.create({
    },
    decisionLabel: {
       color: "rgba(255,255,255,0.5)",
-      fontSize: 9,
+      fontSize: 13,
       fontWeight: "900",
       textAlign: "center",
       letterSpacing: 0.3,
@@ -2560,7 +2624,7 @@ const styles = StyleSheet.create({
    },
    hospResBadgeText: {
       color: colors.secondary,
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "900",
    },
    transportChoiceCard: {
@@ -2627,7 +2691,7 @@ const styles = StyleSheet.create({
    },
    timelineHeader: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "900",
       marginBottom: 15,
       letterSpacing: 1,
@@ -2652,7 +2716,7 @@ const styles = StyleSheet.create({
    timelineTextRow: { flexDirection: "row", alignItems: "center", gap: 8 },
    timelineTime: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "900",
    },
    timelineLabel: { color: "#FFF", fontSize: 13, fontWeight: "700" },

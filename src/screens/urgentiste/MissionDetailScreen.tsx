@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Mission, SosResponseItem } from '../../hooks/useActiveMission';
+import { formatIncidentType } from '../../utils/missionAddress';
 
 function formatDateTime(iso?: string | null): string {
   if (!iso) return '—';
@@ -168,7 +169,7 @@ export function MissionDetailScreen({ navigation, route }: any) {
             <Text style={styles.missionId}>{mission.reference || mission.id?.slice(0, 8)}</Text>
           </View>
 
-          <Text style={styles.typeText}>{mission.title || mission.type}</Text>
+          <Text style={styles.typeText}>{mission.title || formatIncidentType(mission.type)}</Text>
 
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>

@@ -48,6 +48,7 @@ const HISTORY_DATA = [
 ];
 
 import { useMissionHistory } from "../../hooks/useMissionHistory";
+import { formatIncidentType } from "../../utils/missionAddress";
 import { ActivityIndicator } from "react-native";
 
 export function HistoryTab({ navigation }: any) {
@@ -249,7 +250,7 @@ export function HistoryTab({ navigation }: any) {
                         </Text>
                       </View>
                       <View style={styles.etaContainer}>
-                        <Text style={styles.etaValue}>{mission.type}</Text>
+                        <Text style={styles.etaValue}>{formatIncidentType(mission.type)}</Text>
                       </View>
                     </View>
                   </View>
