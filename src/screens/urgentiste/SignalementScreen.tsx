@@ -2690,7 +2690,7 @@ const styles = StyleSheet.create({
    },
    timelineHeader: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 12,
+      fontSize: 16,
       fontWeight: "900",
       marginBottom: 15,
       letterSpacing: 1,
@@ -2715,10 +2715,10 @@ const styles = StyleSheet.create({
    timelineTextRow: { flexDirection: "row", alignItems: "center", gap: 8 },
    timelineTime: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 12,
+      fontSize: 14,
       fontWeight: "900",
    },
-   timelineLabel: { color: "#FFF", fontSize: 13, fontWeight: "700" },
+   timelineLabel: { color: "#FFF", fontSize: 15, fontWeight: "700" },
    itemStatusBadge: {
       backgroundColor: "rgba(255,255,255,0.05)",
       alignSelf: "flex-start",
@@ -2727,5 +2727,5 @@ const styles = StyleSheet.create({
       borderRadius: 6,
       marginTop: 4,
    },
-   itemStatusText: { color: colors.secondary, fontSize: 10, fontWeight: "900" },
+   itemStatusText: { color: colors.secondary, fontSize: 12, fontWeight: "900" },
 });
