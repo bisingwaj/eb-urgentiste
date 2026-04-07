@@ -14,7 +14,39 @@ import {
 import { useAuth } from "../../contexts/AuthContext";
 import { useAppLock } from "../../contexts/AppLockContext";
 import { colors } from "../../theme/colors";
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
+
+function SectionLabel({ children }: { children: string }) {
+  return <Text style={styles.sectionLabel}>{children}</Text>;
+}
+
+function Card({ children }: { children: React.ReactNode }) {
+  return <View style={styles.card}>{children}</View>;
+}
+
+type InfoRowProps = {
+  icon: keyof typeof MaterialIcons.glyphMap;
+  iconTint: string;
+  label: string;
+  value: string;
+  valueLines?: number;
+};
+
+function InfoRow({ icon, iconTint, label, value, valueLines = 3 }: InfoRowProps) {
+  return (
+    <View style={styles.infoRow}>
+      <View style={[styles.infoIconWrap, { backgroundColor: `${iconTint}14` }]}>
+        <MaterialIcons name={icon} color={iconTint} size={18} />
+      </View>
+      <View style={styles.infoRowBody}>
+        <Text style={styles.infoRowLabel}>{label}</Text>
+        <Text style={styles.infoRowValue} numberOfLines={valueLines}>
+          {value}
+        </Text>
+      </View>
+    </View>
+  );
+}
 
 export function ProfileTab({ navigation }: any) {
   const { profile, signOut } = useAuth();
@@ -52,24 +84,32 @@ export function ProfileTab({ navigation }: any) {
   const photoUri = profile?.photo_url?.trim();
   const showAvatarPhoto = Boolean(photoUri) && !avatarLoadError;
 
+  const roleLabel =
+    profile?.role === "secouriste" ? "Médecin urgentiste" : profile?.role || "—";
+  const matricule = profile?.agent_login_id || profile?.matricule || "—";
+  const grade = profile?.grade?.trim() || "Non renseigné";
+  const zone = profile?.zone?.trim() || "Non renseignée";
+  const phone = profile?.phone?.trim() || "Non renseigné";
+
+  const lockSubtitle = !nativeModuleLinked
+    ? "Recompilez l’app native pour activer la biométrie."
+    : biometricAvailable
+      ? "Empreinte, Face ID ou code du téléphone."
+      : "Activez un verrouillage dans les réglages du téléphone.";
+
+  const statusDotColor =
+    profile?.available === true ? colors.success : "rgba(255,255,255,0.28)";
+
   return (
     <TabScreenSafeArea style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      <View style={styles.topHeader}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.greetingText}>VOTRE COMPTE</Text>
-            <Text style={styles.hospitalName}>Profil Agent</Text>
-          </View>
-          <TouchableOpacity style={styles.notifBtn} onPress={handleLogout}>
-            <MaterialIcons name="logout" color={colors.primary} size={22} />
-          </TouchableOpacity>
-        </View>
-
-        {/* Profile Card Summary */}
-        <View style={styles.profileSummary}>
-          <View style={styles.avatarBox}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.hero}>
+          <View style={styles.avatarWrap}>
             <View style={styles.avatarCircle}>
               {showAvatarPhoto ? (
                 <Image
@@ -79,174 +119,81 @@ export function ProfileTab({ navigation }: any) {
                   onError={() => setAvatarLoadError(true)}
                 />
               ) : (
-                <MaterialIcons name="person" color={colors.secondary} size={40} />
+                <MaterialIcons name="person" color={colors.secondary} size={36} />
               )}
             </View>
-            <View style={styles.statusBadge} />
+            <View style={[styles.statusDot, { backgroundColor: statusDotColor }]} />
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.agentName}>
+
+          <View style={styles.heroText}>
+            <Text style={styles.name} numberOfLines={2}>
               {profile?.first_name} {profile?.last_name}
             </Text>
-            <Text style={styles.agentRank}>
-              {profile?.role === "secouriste"
-                ? "Médecin Urgentiste"
-                : profile?.role}
+            <Text style={styles.role} numberOfLines={1}>
+              {roleLabel}
             </Text>
-            <View style={styles.idBadge}>
-              <Text style={styles.idBadgeText}>
-                MATRICULE:{" "}
-                {profile?.agent_login_id || profile?.matricule || "XXX"}
-              </Text>
+            <View style={styles.matriculePill}>
+              <Text style={styles.matriculeText}>{matricule}</Text>
             </View>
           </View>
         </View>
-      </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scrollPad}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* <View style={styles.statsRow}>
-          <View style={styles.statBox}>
-             <View style={[styles.statIcon, { backgroundColor: colors.secondary + '15' }]}>
-                <MaterialCommunityIcons name="pulse" color={colors.secondary} size={20} />
-             </View>
-             <Text style={styles.statLabel}>Statut</Text>
-             <Text style={styles.statValue}>{profile?.status === 'online' ? 'Ligne' : 'Repos'}</Text>
-          </View>
-          <View style={styles.statBox}>
-             <View style={[styles.statIcon, { backgroundColor: '#FF980015' }]}>
-                <MaterialIcons name="security" color="#FF9800" size={20} />
-             </View>
-             <Text style={styles.statLabel}>Accès</Text>
-             <Text style={styles.statValue}>Niveau 2</Text>
-          </View>
-          <View style={styles.statBox}>
-             <View style={[styles.statIcon, { backgroundColor: colors.primary + '15' }]}>
-                <MaterialIcons name="card-membership" color={colors.primary} size={20} />
-             </View>
-             <Text style={styles.statLabel}>Groupe</Text>
-             <Text style={styles.statValue}>Non déf.</Text>
-          </View>
-        </View> */}
+        <SectionLabel>Identité</SectionLabel>
+        <Card>
+          <InfoRow icon="badge" iconTint="#90CAF9" label="Grade" value={grade} valueLines={2} />
+          <View style={styles.rowSep} />
+          <InfoRow
+            icon="my-location"
+            iconTint={colors.success}
+            label="Zone"
+            value={zone}
+            valueLines={4}
+          />
+          <View style={styles.rowSep} />
+          <InfoRow icon="phone" iconTint={colors.textMuted} label="Téléphone" value={phone} />
+        </Card>
 
-        {/* Informations agent */}
-        <Text style={styles.sectionTitle}>INFORMATIONS AGENT</Text>
-        <View style={styles.menuList}>
-          <View style={styles.menuItem}>
-            <View style={[styles.menuIcon, { backgroundColor: "#1A1A1A" }]}>
-              <MaterialIcons name="badge" color="#90CAF9" size={20} />
+        <SectionLabel>Sécurité</SectionLabel>
+        <Card>
+          <View style={styles.lockRow}>
+            <View style={[styles.infoIconWrap, { backgroundColor: `${colors.secondary}18` }]}>
+              <MaterialIcons name="fingerprint" color={colors.secondary} size={18} />
             </View>
-            <View style={styles.menuText}>
-              <Text style={styles.menuLabel}>Grade</Text>
-              <Text style={styles.menuValue}>
-                {profile?.grade?.trim() || "Non renseigné"}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.menuItem}>
-            <View style={[styles.menuIcon, { backgroundColor: "#1A1A1A" }]}>
-              <MaterialIcons name="my-location" color={colors.success} size={20} />
-            </View>
-            <View style={styles.menuText}>
-              <Text style={styles.menuLabel}>Zone</Text>
-              <Text style={styles.menuValue} numberOfLines={3}>
-                {profile?.zone?.trim() || "Non renseignée"}
-              </Text>
-            </View>
-          </View>
-
-          <TouchableOpacity style={styles.menuItem}>
-            <View style={[styles.menuIcon, { backgroundColor: "#1A1A1A" }]}>
-              <MaterialIcons name="phone" color={colors.textMuted} size={20} />
-            </View>
-            <View style={styles.menuText}>
-              <Text style={styles.menuLabel}>Téléphone</Text>
-              <Text style={styles.menuValue}>
-                {profile?.phone || "Non renseigné"}
-              </Text>
-            </View>
-            <MaterialIcons
-              name="chevron-right"
-              color="rgba(255,255,255,0.1)"
-              size={24}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.menuItem}>
-            <View style={[styles.menuIcon, { backgroundColor: "#1A1A1A" }]}>
-              <MaterialIcons
-                name="fingerprint"
-                color={colors.textMuted}
-                size={20}
-              />
-            </View>
-            <View style={styles.menuText}>
-              <Text style={styles.menuLabel}>Verrouillage appareil</Text>
-              <Text style={styles.menuValue}>
-                {!nativeModuleLinked
-                  ? "Recompilez l’app (expo run:android) pour activer la biométrie"
-                  : biometricAvailable
-                    ? "Face ID / empreinte / code du téléphone"
-                    : "Configurez le verrouillage dans les réglages du téléphone"}
-              </Text>
+            <View style={styles.lockBody}>
+              <Text style={styles.lockTitle}>Verrouillage à l’ouverture</Text>
+              <Text style={styles.lockHint}>{lockSubtitle}</Text>
             </View>
             <Switch
               value={appLockEnabled}
               disabled={!nativeModuleLinked}
               onValueChange={(v) => void setAppLockEnabled(v)}
-              trackColor={{ false: "#3A3A3A", true: colors.secondary + "99" }}
-              thumbColor={appLockEnabled ? colors.secondary : "#888"}
+              trackColor={{ false: "#2C2C2C", true: `${colors.secondary}88` }}
+              thumbColor={appLockEnabled ? colors.secondary : "#9E9E9E"}
             />
           </View>
-        </View>
+        </Card>
 
-        <Text style={styles.sectionTitle}>SYSTÈME</Text>
-        <View style={styles.menuList}>
+        <SectionLabel>Centrale</SectionLabel>
+        <Card>
           <TouchableOpacity
-            style={styles.menuItem}
+            style={styles.navRow}
+            activeOpacity={0.7}
             onPress={() => navigation.navigate("CallHistoryCalls")}
           >
-            <View
-              style={[
-                styles.menuIcon,
-                { backgroundColor: colors.secondary + "18" },
-              ]}
-            >
-              <MaterialIcons
-                name="phone-callback"
-                color={colors.secondary}
-                size={20}
-              />
+            <View style={[styles.infoIconWrap, { backgroundColor: `${colors.secondary}18` }]}>
+              <MaterialIcons name="phone-callback" color={colors.secondary} size={18} />
             </View>
-            <View style={styles.menuText}>
-              <Text style={styles.menuLabel}>
-                Historique des appels (centrale)
-              </Text>
-              <Text style={styles.menuValue}>Appels entrants et sortants</Text>
+            <View style={styles.navRowBody}>
+              <Text style={styles.navRowTitle}>Historique des appels</Text>
+              <Text style={styles.navRowSub}>Entrants et sortants</Text>
             </View>
-            <MaterialIcons
-              name="chevron-right"
-              color="rgba(255,255,255,0.1)"
-              size={24}
-            />
+            <MaterialIcons name="chevron-right" color={colors.textMuted} size={22} />
           </TouchableOpacity>
-          {/* <TouchableOpacity style={styles.menuItem}>
-              <View style={[styles.menuIcon, { backgroundColor: "#1A1A1A" }]}>
-                 <MaterialIcons name="settings" color={colors.textMuted} size={20} />
-              </View>
-              <View style={styles.menuText}>
-                 <Text style={styles.menuLabel}>Configuration Terminal</Text>
-              </View>
-              <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.1)" size={24} />
-           </TouchableOpacity> */}
-        </View>
+        </Card>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
-          <MaterialIcons name="logout" color={colors.primary} size={22} />
-          <Text style={styles.logoutText}>Se déconnecter de la session</Text>
+        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
+          <MaterialIcons name="logout" color={colors.primary} size={20} />
+          <Text style={styles.logoutText}>Se déconnecter</Text>
         </TouchableOpacity>
       </ScrollView>
     </TabScreenSafeArea>
@@ -254,198 +201,201 @@ export function ProfileTab({ navigation }: any) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.mainBackground },
-  topHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
-    backgroundColor: "#0A0A0A",
+  container: {
+    flex: 1,
+    backgroundColor: colors.mainBackground,
   },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 24,
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
   },
-  greetingText: {
-    color: "rgba(255,255,255,0.4)",
-    fontSize: 12,
-    fontWeight: "800",
-    letterSpacing: 1.5,
-    textTransform: "uppercase",
-  },
-  hospitalName: {
-    color: "#FFF",
-    fontSize: 24,
-    fontWeight: "700",
-    marginTop: 4,
-  },
-  notifBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: "#1A1A1A",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  profileSummary: {
+
+  hero: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 20,
-    backgroundColor: "#1A1A1A",
-    padding: 24,
-    borderRadius: 32,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
+    marginBottom: 22,
+    gap: 16,
   },
-  avatarBox: { position: "relative" },
+  avatarWrap: {
+    position: "relative",
+  },
   avatarCircle: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     overflow: "hidden",
-    backgroundColor: colors.secondary + "15",
+    backgroundColor: `${colors.secondary}18`,
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderHairline,
   },
   avatarImage: {
     width: "100%",
     height: "100%",
   },
-  statusBadge: {
+  statusDot: {
     position: "absolute",
-    bottom: 4,
-    right: 4,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: colors.success,
+    bottom: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
     borderWidth: 2,
-    borderColor: "#1A1A1A",
+    borderColor: colors.mainBackground,
   },
-  profileInfo: { flex: 1 },
-  agentName: {
+  heroText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  name: {
     fontSize: 22,
-    fontWeight: "900",
-    color: "#FFF",
-    marginBottom: 4,
+    fontWeight: "800",
+    color: colors.text,
+    letterSpacing: -0.3,
   },
-  agentRank: {
-    fontSize: 13,
+  role: {
+    marginTop: 4,
+    fontSize: 14,
+    fontWeight: "600",
+    color: colors.textMuted,
+  },
+  matriculePill: {
+    alignSelf: "flex-start",
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: colors.surface,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderHairline,
+  },
+  matriculeText: {
+    fontSize: 12,
     fontWeight: "700",
     color: colors.textMuted,
-    marginBottom: 12,
-  },
-  idBadge: {
-    backgroundColor: "rgba(255,255,255,0.05)",
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  idBadgeText: {
-    fontSize: 10,
-    fontWeight: "900",
-    color: colors.textMuted,
-    letterSpacing: 1,
   },
 
-  scrollPad: { paddingBottom: 24 },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginTop: 24,
+  sectionLabel: {
+    marginTop: 20,
+    marginBottom: 8,
+    marginLeft: 2,
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.textMuted,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+    opacity: 0.85,
   },
-  statBox: {
-    flex: 1,
-    backgroundColor: "#1A1A1A",
-    borderRadius: 24,
-    padding: 20,
-    marginHorizontal: 4,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-  },
-  statIcon: {
-    width: 44,
-    height: 44,
+
+  card: {
+    backgroundColor: colors.surface,
     borderRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderHairline,
+    overflow: "hidden",
+  },
+  rowSep: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderHairline,
+    marginLeft: 56,
+  },
+
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  infoIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 12,
   },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: "800",
+  infoRowBody: {
+    flex: 1,
+    minWidth: 0,
+    paddingTop: 1,
+  },
+  infoRowLabel: {
+    fontSize: 12,
+    fontWeight: "700",
     color: colors.textMuted,
     marginBottom: 4,
-    letterSpacing: 0.5,
   },
-  statValue: { fontSize: 15, fontWeight: "900", color: "#FFF" },
+  infoRowValue: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: colors.text,
+    lineHeight: 21,
+  },
 
-  sectionTitle: {
-    color: "#FFF",
-    fontSize: 13,
-    fontWeight: "800",
-    marginHorizontal: 30,
-    marginTop: 30,
-    marginBottom: 12,
-    letterSpacing: 1.5,
-    opacity: 0.4,
-  },
-  menuList: {
-    backgroundColor: "#1A1A1A",
-    marginHorizontal: 20,
-    borderRadius: 32,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.05)",
-  },
-  menuItem: {
+  lockRow: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.02)",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    gap: 12,
   },
-  menuIcon: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 20,
+  lockBody: {
+    flex: 1,
+    minWidth: 0,
   },
-  menuText: { flex: 1 },
-  menuLabel: { fontSize: 16, fontWeight: "700", color: "#FFF" },
-  menuValue: {
-    fontSize: 14,
+  lockTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  lockHint: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "500",
     color: colors.textMuted,
-    marginTop: 2,
-    fontWeight: "600",
+    lineHeight: 16,
+  },
+
+  navRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  navRowBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  navRowTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  navRowSub: {
+    marginTop: 3,
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.textMuted,
   },
 
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.primary + "10",
-    marginHorizontal: 20,
-    paddingVertical: 20,
-    borderRadius: 32,
-    marginTop: 30,
-    borderWidth: 1,
-    borderColor: colors.primary + "20",
+    marginTop: 28,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: `${colors.primary}12`,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: `${colors.primary}35`,
+    gap: 8,
   },
   logoutText: {
     color: colors.primary,
     fontSize: 15,
     fontWeight: "800",
-    marginLeft: 12,
-    letterSpacing: 0.5,
   },
 });
