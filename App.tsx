@@ -4,7 +4,7 @@ import * as SystemUI from 'expo-system-ui';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { navigationRef } from './src/navigation/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar, ActivityIndicator, View, Text, ScrollView, Appearance } from 'react-native';
+import { StatusBar, View, Text, ScrollView, Appearance } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 
@@ -21,6 +21,7 @@ import { AppLockProvider } from './src/contexts/AppLockContext';
 import { MissionProvider } from './src/contexts/MissionContext';
 import { CallSessionProvider } from './src/contexts/CallSessionContext';
 import { GlobalAlert } from './src/components/shared/GlobalAlert';
+import { BrandedSplashScreen } from './src/components/splash/BrandedSplashScreen';
 
 // Shared entry screens
 import { LoginPage } from './src/screens/LoginPage';
@@ -102,13 +103,9 @@ function ConfigErrorScreen() {
   );
 }
 
-// Écran de chargement pendant la vérification de session
+// Écran de chargement (polices / session) — identité Étoile Bleue
 function LoadingScreen() {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#050505' }}>
-      <ActivityIndicator size="large" color={colors.secondary} />
-    </View>
-  );
+  return <BrandedSplashScreen showSpinner />;
 }
 
 // Navigation interne basée sur l'état d'auth
