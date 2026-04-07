@@ -136,7 +136,7 @@ export function HomeTab({ navigation }: any) {
       <View style={styles.topHeader}>
         <View style={styles.headerRow}>
           <View style={styles.headerTextCol}>
-            <Text style={styles.hospitalName}>Bonjour, {profile?.first_name || ' '}</Text>
+            <Text style={styles.hospitalName}>Bonjour {profile?.first_name || ' '},</Text>
             <View style={styles.metaInfoColumn}>
               <View style={styles.metaRowWithIcon}>
                 <View style={styles.metaIconSlot}>
