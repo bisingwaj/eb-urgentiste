@@ -45,6 +45,7 @@ export function useMissionHistory() {
             province,
             caller_name,
             caller_phone,
+            citizen_id,
             caller_realtime_lat,
             caller_realtime_lng,
             caller_realtime_updated_at,
@@ -112,6 +113,7 @@ export function useMissionHistory() {
         return {
           id: dispatch.id,
           incident_id: incident.id,
+          citizen_id: incident.citizen_id != null ? String(incident.citizen_id) : null,
           reference: incident.reference,
           type: incident.type,
           title: incident.title,

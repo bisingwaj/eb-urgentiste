@@ -445,7 +445,12 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     }
   };
 
-  const joinIncomingCall = async (callId: string, channelName: string, isVideo: boolean) => {
+  const joinIncomingCall = async (
+    callId: string,
+    channelName: string,
+    isVideo: boolean,
+    prefetched?: { token?: string; appId?: string; uid?: number }
+  ) => {
     incomingJoinCallIdRef.current = callId;
     setCurrentCallId(callId);
     setCallType(isVideo ? 'video' : 'audio');
@@ -457,6 +462,9 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       await joinAgoraChannel({
         channelId: channelName,
         isVideo,
+        appIdOverride: prefetched?.appId,
+        rtcToken: prefetched?.token,
+        rtcUid: prefetched?.uid,
       });
     } catch (e) {
       console.error('[Call] incoming Agora:', e);
@@ -488,10 +496,20 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       typeof routeParams.channelName === 'string';
 
     if (incoming) {
+      const p = routeParams as CallCenterRouteParams;
+      const prefetched =
+        typeof p.prefetchedToken === 'string' && p.prefetchedToken.length > 0
+          ? {
+              token: p.prefetchedToken,
+              appId: p.prefetchedAppId,
+              uid: p.prefetchedRtcUid,
+            }
+          : undefined;
       void joinIncomingCall(
         routeParams.callId as string,
         routeParams.channelName as string,
-        routeParams.hasVideo === true
+        routeParams.hasVideo === true,
+        prefetched
       );
       return;
     }

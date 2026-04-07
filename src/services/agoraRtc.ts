@@ -92,20 +92,33 @@ export function setAgoraRtcCallbacks(cb: AgoraRtcCallbacks): void {
 
 /**
  * Rejoint le canal Agora avec token serveur (communication 1:1 / N:N).
+ * Si `rtcToken` est fourni (ex. retour Edge `rescuer-call-citizen`), aucun appel à `agora-token`.
  */
 export async function joinAgoraChannel(params: {
   channelId: string;
   isVideo: boolean;
   appIdOverride?: string;
+  rtcToken?: string;
+  rtcUid?: number;
 }): Promise<void> {
-  const { channelId, isVideo, appIdOverride } = params;
+  const { channelId, isVideo, appIdOverride, rtcToken, rtcUid } = params;
   await ensureCallPermissions(isVideo);
 
-  const { token, appId: tokenAppId } = await fetchAgoraToken({
-    channelName: channelId,
-    uid: 0,
-    role: 'publisher',
-  });
+  let token: string;
+  let tokenAppId: string | undefined;
+
+  if (rtcToken && rtcToken.length > 0) {
+    token = rtcToken;
+    tokenAppId = appIdOverride?.trim() || undefined;
+  } else {
+    const fetched = await fetchAgoraToken({
+      channelName: channelId,
+      uid: rtcUid ?? 0,
+      role: 'publisher',
+    });
+    token = fetched.token;
+    tokenAppId = fetched.appId;
+  }
 
   const appId = appIdOverride?.trim() || tokenAppId?.trim() || getAgoraAppIdFromEnv();
   const eng = ensureEngineInitialized(appId);
@@ -133,7 +146,8 @@ export async function joinAgoraChannel(params: {
   options.autoSubscribeAudio = true;
   options.autoSubscribeVideo = isVideo;
 
-  const code = eng.joinChannel(token, channelId, 0, options);
+  const joinUid = rtcUid ?? 0;
+  const code = eng.joinChannel(token, channelId, joinUid, options);
   if (code !== 0) {
     throw new Error(`joinChannel a échoué (code ${code})`);
   }

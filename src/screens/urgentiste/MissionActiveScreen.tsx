@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, StatusBar, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, StatusBar, Alert, Linking, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -10,6 +10,8 @@ import { getRoute, buildRouteFeature, geometryToCameraBounds } from '../../lib/m
 import { MapboxMapView } from '../../components/map/MapboxMapView';
 import { openExternalDirections } from '../../utils/navigation';
 import { formatMissionAddress, formatDescriptionLines } from '../../utils/missionAddress';
+import { alertVoipError, startRescuerToCitizenVoipCall } from '../../lib/rescuerCallCitizen';
+import { canOfferVictimContactCalls } from '../../lib/missionVictimCall';
 
 const STATUS_STEPS = [
   { key: 'dispatched', label: 'Dispatché', icon: 'assignment', color: '#FF9500' },
@@ -27,6 +29,7 @@ export function MissionActiveScreen({ navigation }: any) {
   const [notes, setNotes] = useState<{ text: string; time: string }[]>([]);
   const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [voipLoading, setVoipLoading] = useState(false);
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
@@ -207,6 +210,26 @@ export function MissionActiveScreen({ navigation }: any) {
     }
   };
 
+  const callVictimVoip = async () => {
+    if (!activeMission.citizen_id || !activeMission.incident_id || voipLoading) {
+      return;
+    }
+    setVoipLoading(true);
+    try {
+      await startRescuerToCitizenVoipCall({
+        incidentId: activeMission.incident_id,
+        citizenId: activeMission.citizen_id,
+        callType: 'audio',
+      });
+    } catch (e) {
+      alertVoipError(e);
+    } finally {
+      setVoipLoading(false);
+    }
+  };
+
+  const canCallVictim = canOfferVictimContactCalls(activeMission?.dispatch_status);
+
   const nextStatusLabel: Record<string, string> = {
     dispatched: '🚗  DÉPART EN ROUTE',
     en_route: '📍  ARRIVÉ SUR ZONE',
@@ -278,7 +301,9 @@ export function MissionActiveScreen({ navigation }: any) {
             <View style={styles.hudLeft}>
                <Text style={styles.victimLabel}>{activeMission.caller?.name !== 'Anonyme' ? 'VICTIME IDENTIFIÉE' : 'VICTIME ANONYME'}</Text>
                <Text style={styles.victimName}>{activeMission.caller?.name || 'Inconnu'}</Text>
-               {activeMission.caller?.phone && activeMission.caller.phone !== '-' && (
+               {canCallVictim &&
+                 activeMission.caller?.phone &&
+                 activeMission.caller.phone !== '-' && (
                  <TouchableOpacity onPress={callVictim} style={styles.phoneChip}>
                    <MaterialIcons name="phone" color="#30D158" size={12} />
                    <Text style={styles.phoneText}>{activeMission.caller.phone}</Text>
@@ -371,10 +396,12 @@ export function MissionActiveScreen({ navigation }: any) {
 
           {/* Action Buttons */}
           <View style={styles.actionGrid}>
+            {canCallVictim && (
             <TouchableOpacity style={styles.roundActionBtn} onPress={callVictim}>
                <MaterialIcons name="phone" color="#30D158" size={24} />
                <Text style={styles.actionLabel}>Appeler</Text>
             </TouchableOpacity>
+            )}
 
             <TouchableOpacity style={styles.roundActionBtn} onPress={openNavigation}>
                <MaterialIcons name="navigation" color={colors.secondary} size={24} />
@@ -393,6 +420,27 @@ export function MissionActiveScreen({ navigation }: any) {
               </TouchableOpacity>
             )}
           </View>
+
+          {canCallVictim && activeMission.citizen_id ? (
+            <View style={styles.voipBlock}>
+              <Text style={styles.voipTitle}>Appel vers l’app victime (audio — vidéo depuis l’écran d’appel)</Text>
+              <TouchableOpacity
+                style={[styles.voipBtnFull, voipLoading && { opacity: 0.6 }]}
+                onPress={() => void callVictimVoip()}
+                disabled={voipLoading}
+              >
+                {voipLoading ? (
+                  <ActivityIndicator color={colors.secondary} size="small" />
+                ) : (
+                  <>
+                    <MaterialIcons name="phone-in-talk" color={colors.secondary} size={22} />
+                    <Text style={styles.voipBtnText}>App audio</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           </ScrollView>
         </View>
       </View>
@@ -507,6 +555,22 @@ const styles = StyleSheet.create({
   inputBox: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   textInput: { flex: 1, backgroundColor: '#1A1A1A', borderRadius: 16, paddingHorizontal: 16, height: 44, color: '#FFF', fontSize: 13, fontWeight: '600' },
   sendBtn: { width: 44, height: 44, borderRadius: 16, backgroundColor: colors.secondary, justifyContent: 'center', alignItems: 'center' },
+
+  voipBlock: { marginBottom: 16 },
+  voipTitle: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginBottom: 10 },
+  voipBtnFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  voipBtnText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
 
   actionGrid: { flexDirection: 'row', gap: 10, paddingBottom: 20, alignItems: 'center' },
   roundActionBtn: { 
