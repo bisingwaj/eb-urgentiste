@@ -24,6 +24,7 @@ import * as Location from "expo-location";
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from "../../lib/mapbox";
 import { MapboxMapView } from "../../components/map/MapboxMapView";
 import { openExternalDirections } from "../../utils/navigation";
+import { formatMissionAddress } from "../../utils/missionAddress";
 
 // Helper for ETA and distance
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -112,16 +113,6 @@ const HOSPITALS = [
       coords: { latitude: -4.32, longitude: 15.3 },
    },
 ];
-
-function joinIncidentLocationLines(m: { location?: { address?: string | null; commune?: string | null; ville?: string | null; province?: string | null } } | null): string | null {
-   if (!m?.location) return null;
-   const addr = typeof m.location.address === "string" ? m.location.address.trim() : "";
-   if (addr) return addr;
-   const parts = [m.location.commune, m.location.ville, m.location.province]
-      .map((p) => (typeof p === "string" ? p.trim() : ""))
-      .filter(Boolean);
-   return parts.length ? parts.join(" · ") : null;
-}
 
 export function SignalementScreen({ navigation, route }: any) {
    const insets = useSafeAreaInsets();
@@ -237,76 +228,59 @@ export function SignalementScreen({ navigation, route }: any) {
    const [resolvedAddress, setResolvedAddress] = useState<string | null>(null);
 
    useEffect(() => {
-      setResolvedAddress(null);
-   }, [selectedMission?.id, selectedMission?.location?.lat, selectedMission?.location?.lng]);
-
-   useEffect(() => {
       const fetchAddress = async () => {
-         if (!selectedMission) return;
-         const rawAddr = selectedMission.location?.address;
-         const hasUsableAddress = typeof rawAddr === "string" && rawAddr.trim().length > 0;
-         const hasStructured = Boolean(joinIncidentLocationLines(selectedMission));
-         if (hasUsableAddress || hasStructured) return;
+         if (selectedMission && !selectedMission.location?.address) {
+            const lat = selectedMission.location?.lat;
+            const lng = selectedMission.location?.lng;
+            if (lat && lng) {
+               try {
+                  const geocodeData = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
+                  console.log("🏠 [GEOCODE COMPLET] :", JSON.stringify(geocodeData, null, 2));
+                  if (geocodeData && geocodeData.length > 0) {
+                     const a = geocodeData[0];
+                     const streetPart = [a.streetNumber, a.street].filter(Boolean).join(" ");
+                     const namePart = a.name && a.name !== a.street ? a.name : "";
+                     const districtPart = a.district || "";
+                     const cityPart = a.city || "";
+                     const subregionPart = a.subregion && a.subregion !== a.city ? a.subregion : "";
+                     const regionPart = a.region && a.region !== a.city && a.region !== a.subregion ? a.region : "";
+                     const postalPart = a.postalCode || "";
 
-         const lat = selectedMission.location?.lat;
-         const lng = selectedMission.location?.lng;
-         if (lat != null && lng != null) {
-            try {
-               const geocodeData = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-               console.log("🏠 [GEOCODE COMPLET] :", JSON.stringify(geocodeData, null, 2));
-               if (geocodeData && geocodeData.length > 0) {
-                  const a = geocodeData[0];
-                  const streetPart = [a.streetNumber, a.street].filter(Boolean).join(" ");
-                  const namePart = a.name && a.name !== a.street ? a.name : "";
-                  const districtPart = a.district || "";
-                  const cityPart = a.city || "";
-                  const subregionPart = a.subregion && a.subregion !== a.city ? a.subregion : "";
-                  const regionPart = a.region && a.region !== a.city && a.region !== a.subregion ? a.region : "";
-                  const postalPart = a.postalCode || "";
+                     const parts = [
+                        namePart,
+                        streetPart,
+                        districtPart,
+                        cityPart,
+                        subregionPart,
+                        regionPart,
+                        postalPart,
+                     ].filter(Boolean);
 
-                  const parts = [
-                     namePart,
-                     streetPart,
-                     districtPart,
-                     cityPart,
-                     subregionPart,
-                     regionPart,
-                     postalPart,
-                  ].filter(Boolean);
+                     // Supprimer les doublons (ex: "Kinshasa" répété)
+                     const uniqueParts = parts.filter((part, index) => 
+                        parts.indexOf(part) === index
+                     );
 
-                  const uniqueParts = parts.filter((part, index) => parts.indexOf(part) === index);
-
-                  const formattedAddress = uniqueParts.join(", ");
-                  setResolvedAddress(formattedAddress || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+                     const formattedAddress = uniqueParts.join(", ");
+                     setResolvedAddress(formattedAddress || `${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+                  }
+               } catch (e) {
+                  console.log("Erreur de reverse geocoding:", e);
+                  setResolvedAddress(`GPS: ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
                }
-            } catch (e) {
-               console.log("Erreur de reverse geocoding:", e);
-               setResolvedAddress(`GPS : ${lat.toFixed(5)}, ${lng.toFixed(5)}`);
             }
          }
       };
-      void fetchAddress();
-   }, [selectedMission?.id, selectedMission?.location?.lat, selectedMission?.location?.lng, selectedMission?.location?.address, selectedMission?.location?.commune, selectedMission?.location?.ville, selectedMission?.location?.province]);
+      fetchAddress();
+   }, [selectedMission?.location?.lat, selectedMission?.location?.lng]);
 
-   const displayAddress = useMemo(() => {
-      if (!selectedMission) return "Adresse inconnue";
-      const fromDb = joinIncidentLocationLines(selectedMission);
-      if (fromDb) return fromDb;
-      if (resolvedAddress) return resolvedAddress;
-      const lat = selectedMission.location?.lat;
-      const lng = selectedMission.location?.lng;
-      if (lat != null && lng != null) return `Recherche de l'adresse… (${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)})`;
-      return "Adresse indisponible";
-   }, [
-      selectedMission?.id,
-      selectedMission?.location?.address,
-      selectedMission?.location?.commune,
-      selectedMission?.location?.ville,
-      selectedMission?.location?.province,
-      selectedMission?.location?.lat,
-      selectedMission?.location?.lng,
-      resolvedAddress,
-   ]);
+   const displayAddress = useMemo(
+      () =>
+         selectedMission
+            ? formatMissionAddress(selectedMission.location, resolvedAddress)
+            : "Adresse inconnue",
+      [selectedMission, resolvedAddress]
+   );
 
    const distanceInfo = useMemo(() => {
       if (!urgentisteLoc || !selectedMission) return { dist: "Calcul...", eta: "--" };
@@ -839,7 +813,7 @@ export function SignalementScreen({ navigation, route }: any) {
    return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
          <StatusBar barStyle="light-content" />
-         {step !== "reception" && (
+         {step !== "reception" && step !== "arrival" && (
             <View style={styles.topHeader}>
                <View style={styles.headerRow}>
                   <TouchableOpacity
@@ -942,15 +916,15 @@ export function SignalementScreen({ navigation, route }: any) {
                )}
 
                {step === "reception" && selectedMission && (
-                  <View style={styles.receptionView}>
-                     <View style={styles.receptionMapSection}>
+                  <View style={[styles.receptionView, { padding: 0 }]}>
+                     <View style={styles.receptionMapWrapper}>
                         <TouchableOpacity
                            onPress={() => navigation.goBack()}
-                           style={[styles.receptionMapBackBtn, { top: insets.top + 8 }]}
+                           style={[styles.floatingBackSignalement, { top: insets.top + 10 }]}
                            accessibilityRole="button"
                            accessibilityLabel="Retour"
                         >
-                           <MaterialIcons name="arrow-back" color="#FFF" size={22} />
+                           <MaterialIcons name="arrow-back" color="#FFF" size={24} />
                         </TouchableOpacity>
                         <MapboxMapView style={styles.receptionMap} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
                            {receptionCameraBounds ? (
@@ -992,7 +966,7 @@ export function SignalementScreen({ navigation, route }: any) {
                        </View>
                     </View>
 
-                     <View style={styles.receptionCardSection}>
+                     <View style={styles.receptionBottomPanel}>
                         <ScrollView
                            showsVerticalScrollIndicator={false}
                            contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
@@ -1001,24 +975,24 @@ export function SignalementScreen({ navigation, route }: any) {
                               <View style={styles.receptionHeaderStrip}>
                                  <MaterialIcons
                                     name={
-                                       selectedMission.priority === "CRITIQUE" || selectedMission.priority === "critical"
+                                       selectedMission.priority === "CRITIQUE"
                                           ? "priority-high"
                                           : "info"
                                     }
                                     color={
-                                       selectedMission.priority === "CRITIQUE" || selectedMission.priority === "critical"
+                                       selectedMission.priority === "CRITIQUE"
                                           ? colors.primary
                                           : colors.secondary
                                     }
                                     size={32}
                                  />
                                  <View style={{ flex: 1, minWidth: 0 }}>
-                                    <Text style={styles.receptionMissionTitle} numberOfLines={2}>
-                                       {selectedMission.title || selectedMission.type || "Mission"}
+                                    <Text style={styles.detailMissionType} numberOfLines={2}>
+                                       {selectedMission.type || "Mission"}
                                     </Text>
                                     <Text style={styles.priorityStatusText}>
-                                       {String(selectedMission.priority ?? "").toUpperCase()}
-                                       {selectedMission.time ? ` • ${selectedMission.time} d'attente` : ""}
+                                       {selectedMission.priority} • {selectedMission.time}{" "}
+                                       d'attente
                                     </Text>
                                  </View>
                               </View>
@@ -1079,6 +1053,14 @@ export function SignalementScreen({ navigation, route }: any) {
                             { flex: 1, borderRadius: 0, borderWidth: 0 },
                          ]}
                       >
+                         <TouchableOpacity
+                            onPress={() => navigation.goBack()}
+                            style={[styles.floatingBackSignalement, { top: insets.top + 10 }]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Retour"
+                         >
+                            <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+                         </TouchableOpacity>
                          <MapboxMapView style={styles.trackingMap} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
                             {receptionCameraBounds ? (
                                <Mapbox.Camera
@@ -1119,9 +1101,12 @@ export function SignalementScreen({ navigation, route }: any) {
                               size={14}
                               color="rgba(255,255,255,0.6)"
                            />
-                            <Text style={styles.smallAddressText}>
-                               {displayAddress}
-                            </Text>
+                           <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text style={styles.mapAddressOverlayLabel}>Site d'affectation</Text>
+                              <Text style={styles.smallAddressText} numberOfLines={4}>
+                                 {displayAddress}
+                              </Text>
+                           </View>
                         </View>
                      </View>
                      <View style={styles.arrivalFooter}>
@@ -2067,45 +2052,22 @@ const styles = StyleSheet.create({
       borderRadius: 15,
    },
    assignActionText: { color: "#FFF", fontSize: 14, fontWeight: "900" },
-   receptionView: {
-      flex: 1,
-      padding: 0,
-      flexDirection: "column",
-   },
-   receptionMapSection: {
-      flex: 2,
-      minHeight: 240,
-      width: "100%",
-      backgroundColor: "#1A1A1A",
-      overflow: "hidden",
-      position: "relative",
-      borderBottomWidth: 1,
-      borderColor: "rgba(255,255,255,0.05)",
-   },
-   receptionMapBackBtn: {
+   receptionView: { flex: 1, flexDirection: "column", padding: 0 },
+   receptionBottomPanel: { flex: 1, minHeight: 180 },
+   floatingBackSignalement: {
       position: "absolute",
-      left: 16,
+      left: 12,
       zIndex: 20,
       width: 44,
       height: 44,
-      borderRadius: 22,
+      borderRadius: 16,
       backgroundColor: "rgba(0,0,0,0.55)",
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 1,
       borderColor: "rgba(255,255,255,0.12)",
    },
-   receptionCardSection: {
-      flex: 1,
-      minHeight: 220,
-      position: "relative",
-   },
-   receptionMissionTitle: {
-      color: "#FFF",
-      fontSize: 18,
-      fontWeight: "800",
-      marginBottom: 4,
-   },
+   detailMissionType: { color: "#FFF", fontSize: 18, fontWeight: "800" },
    detailBox: {
       flex: 1,
       backgroundColor: "#111",
@@ -2131,7 +2093,16 @@ const styles = StyleSheet.create({
    detailDesc: { color: "rgba(255,255,255,0.7)", fontSize: 15, lineHeight: 24 },
    priorityStatusText: { color: "#FFF", fontSize: 14, fontWeight: "700" },
 
-   // Reception map : styles principaux dans receptionMapSection
+   // New Reception Map Styles
+   receptionMapWrapper: {
+      flex: 1,
+      minHeight: 220,
+      width: "100%",
+      backgroundColor: "#1A1A1A",
+      overflow: "hidden",
+      borderBottomWidth: 1,
+      borderColor: "rgba(255,255,255,0.05)",
+   },
    receptionMap: {
       flex: 1,
    },
@@ -2329,13 +2300,22 @@ const styles = StyleSheet.create({
       backgroundColor: "rgba(0,0,0,0.8)",
       padding: 12,
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       gap: 8,
    },
+   mapAddressOverlayLabel: {
+      fontSize: 10,
+      fontWeight: "800",
+      color: "rgba(255,255,255,0.45)",
+      letterSpacing: 1,
+      marginBottom: 4,
+      textTransform: "uppercase",
+   },
    smallAddressText: {
-      color: "rgba(255,255,255,0.8)",
+      color: "rgba(255,255,255,0.9)",
       fontSize: 13,
       fontWeight: "600",
+      lineHeight: 18,
    },
    arrivalFooter: {
       flexDirection: "row",

@@ -119,8 +119,6 @@ export function MissionProvider({ children }: { children: ReactNode }) {
             caller_realtime_lng,
             caller_realtime_updated_at,
             commune,
-            ville,
-            province,
             caller_name,
             caller_phone,
             recommended_facility,
@@ -164,8 +162,6 @@ export function MissionProvider({ children }: { children: ReactNode }) {
             lng,
             address: incident.location_address,
             commune: incident.commune,
-            ville: incident.ville ?? null,
-            province: incident.province ?? null,
           },
           caller: {
             name: incident.caller_name || 'Anonyme',
@@ -337,8 +333,6 @@ export function MissionProvider({ children }: { children: ReactNode }) {
                      lng: newLng,
                      address: newData.location_address ?? prev.location.address,
                      commune: newData.commune ?? prev.location.commune,
-                     ville: newData.ville ?? prev.location.ville,
-                     province: newData.province ?? prev.location.province,
                   },
                 }
               : null
