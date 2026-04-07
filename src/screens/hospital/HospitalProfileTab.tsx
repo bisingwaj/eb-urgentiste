@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 13,
     letterSpacing: 0.3,
   },
   infoValue: {

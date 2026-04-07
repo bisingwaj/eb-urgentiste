@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
   },
   priorityDot: { width: 6, height: 6, borderRadius: 3 },
-  priorityChipText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5, flexShrink: 1 },
+  priorityChipText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5, flexShrink: 1 },
 
   mapContainer: { flex: 1, minHeight: 200 },
   map: { width: '100%', height: '100%' },
@@ -459,12 +459,12 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
   hudLeft: { flex: 1 },
-  victimLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginBottom: 4 },
+  victimLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 4 },
   victimName: { color: '#FFF', fontWeight: '900', fontSize: 17 },
   phoneChip: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
   phoneText: { color: '#30D158', fontSize: 12, fontWeight: '700' },
   hudDistanceText: { color: colors.secondary, fontSize: 30, fontWeight: '900' },
-  hudDistanceLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '800', marginTop: 2 },
+  hudDistanceLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: '800', marginTop: 2 },
 
   bottomControls: { 
     flexShrink: 0,
@@ -479,13 +479,13 @@ const styles = StyleSheet.create({
   statusProgress: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
   stepItem: { alignItems: 'center', flex: 1, position: 'relative' },
   stepDot: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  stepLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  stepLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   stepLine: { position: 'absolute', top: 14, left: '60%', right: '-40%', height: 2 },
 
   locationInfo: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 12, paddingHorizontal: 4 },
   siteAffectationLabel: {
     color: 'rgba(255,255,255,0.35)',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1,
     marginBottom: 4,
@@ -497,9 +497,9 @@ const styles = StyleSheet.create({
   descriptionText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '500', lineHeight: 19 },
 
   journalContainer: { backgroundColor: '#1A1A1A', borderRadius: 16, padding: 14, marginBottom: 12 },
-  journalHeader: { color: 'rgba(255,255,255,0.3)', fontSize: 9, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
+  journalHeader: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
   noteItem: { flexDirection: 'row', gap: 10, marginBottom: 6 },
-  noteTime: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '700', width: 42 },
+  noteTime: { color: 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: '700', width: 42 },
   noteBody: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '500', flex: 1 },
 
   inputBox: { flexDirection: 'row', gap: 8, marginBottom: 12 },
@@ -511,7 +511,7 @@ const styles = StyleSheet.create({
     width: 64, height: 64, borderRadius: 20, backgroundColor: '#1A1A1A',
     justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
-  actionLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700', marginTop: 4 },
+  actionLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', marginTop: 4 },
   mainActionBtn: {
     flex: 1, height: 56, borderRadius: 20, backgroundColor: colors.secondary,
     justifyContent: 'center', alignItems: 'center',

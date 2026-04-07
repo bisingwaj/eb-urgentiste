@@ -132,7 +132,7 @@ export function SignalerProblemeScreen({ navigation }: any) {
                   </View>
                   <Text style={[styles.sevText, isActive && { color: "#FFF", fontWeight: '800' }]}>{sev.label.toUpperCase()}</Text>
                   {isActive && <View style={[styles.sevTag, { backgroundColor: sev.color + '15' }]}>
-                    <Text style={{ color: sev.color, fontSize: 10, fontWeight: '900', letterSpacing: 1 }}>ACTIF</Text>
+                    <Text style={{ color: sev.color, fontSize: 12, fontWeight: '900', letterSpacing: 1 }}>ACTIF</Text>
                   </View>}
                 </TouchableOpacity>
              )
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   },
 
   scrollPad: { paddingHorizontal: 20, paddingBottom: 100 },
-  sectionTitle: { color: colors.textMuted, fontSize: 11, fontWeight: '800', marginLeft: 16, marginBottom: 15, marginTop: 25, letterSpacing: 1.5 },
+  sectionTitle: { color: colors.textMuted, fontSize: 13, fontWeight: '800', marginLeft: 16, marginBottom: 15, marginTop: 25, letterSpacing: 1.5 },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
   catCard: { width: '48%', backgroundColor: "#1A1A1A", borderRadius: 32, padding: 24, alignItems: 'center', marginBottom: 15, borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },

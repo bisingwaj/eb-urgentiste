@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
   },
   locationLabel: {
     color: 'rgba(255,255,255,0.4)',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -453,7 +453,7 @@ const styles = StyleSheet.create({
   },
   notifBadgeText: {
     color: "#FFF",
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "900",
   },
   headerAvatarBtn: {
@@ -499,7 +499,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   statusTitle: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '900',
     color: colors.textMuted,
     letterSpacing: 1.5,
@@ -551,7 +551,7 @@ const styles = StyleSheet.create({
   },
   alertTime: {
     color: 'rgba(255,255,255,0.3)',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
   },
   alertType: {

@@ -25,6 +25,7 @@ import { getRoute, buildRouteFeature, geometryToCameraBounds } from "../../lib/m
 import { MapboxMapView } from "../../components/map/MapboxMapView";
 import { openExternalDirections } from "../../utils/navigation";
 import { formatMissionAddress, formatIncidentType } from "../../utils/missionAddress";
+import { HeartPulse, Ambulance, Hospital as HospitalIcon } from "lucide-react-native";
 
 // Helper for ETA and distance
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -786,7 +787,8 @@ export function SignalementScreen({ navigation, route }: any) {
           <FlatList
              data={timeline}
              keyExtractor={(item) => item.id}
-             scrollEnabled={false}
+             nestedScrollEnabled
+             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
                <View style={styles.timelineItem}>
                   <View style={styles.timelinePointRow}>
@@ -965,14 +967,14 @@ export function SignalementScreen({ navigation, route }: any) {
 
                            <Mapbox.PointAnnotation id="victim-reception" coordinate={[selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447]}>
                              <View style={styles.victimMarker}>
-                                <View style={styles.victimMarkerDot} />
+                                <HeartPulse size={16} color="#FFF" strokeWidth={2.5} />
                              </View>
                            </Mapbox.PointAnnotation>
 
                            {urgentisteLoc && (
                               <Mapbox.PointAnnotation id="my-unit-reception" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
                                  <View style={styles.urgentisteMarker}>
-                                    <View style={styles.urgentisteMarkerDot} />
+                                    <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
                                  </View>
                               </Mapbox.PointAnnotation>
                            )}
@@ -1100,14 +1102,14 @@ export function SignalementScreen({ navigation, route }: any) {
 
                             <Mapbox.PointAnnotation id="victim-arrival" coordinate={[selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447]}>
                               <View style={styles.victimMarker}>
-                                 <View style={styles.victimMarkerDot} />
+                                 <HeartPulse size={16} color="#FFF" strokeWidth={2.5} />
                               </View>
                             </Mapbox.PointAnnotation>
 
                             {urgentisteLoc && (
                                <Mapbox.PointAnnotation id="my-unit-arrival" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
                                   <View style={styles.urgentisteMarker}>
-                                     <View style={styles.urgentisteMarkerDot} />
+                                     <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
                                   </View>
                                </Mapbox.PointAnnotation>
                             )}
@@ -1568,14 +1570,14 @@ export function SignalementScreen({ navigation, route }: any) {
 
                                  <Mapbox.PointAnnotation id="hospital-assign" coordinate={[targetHospital.coords.longitude, targetHospital.coords.latitude]}>
                                     <View style={styles.hospitalMarker}>
-                                       <View style={styles.hospitalMarkerDot} />
+                                       <HospitalIcon size={16} color="#FFF" strokeWidth={2.5} />
                                     </View>
                                  </Mapbox.PointAnnotation>
 
                                  {urgentisteLoc && (
                                     <Mapbox.PointAnnotation id="my-unit-assign" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
                                        <View style={styles.urgentisteMarker}>
-                                          <View style={styles.urgentisteMarkerDot} />
+                                          <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
                                        </View>
                                     </Mapbox.PointAnnotation>
                                  )}
@@ -1810,14 +1812,14 @@ export function SignalementScreen({ navigation, route }: any) {
 
                            <Mapbox.PointAnnotation id="hospital-dest" coordinate={[targetHospital.coords.longitude, targetHospital.coords.latitude]}>
                               <View style={styles.hospitalMarker}>
-                                 <View style={styles.hospitalMarkerDot} />
+                                 <HospitalIcon size={16} color="#FFF" strokeWidth={2.5} />
                               </View>
                            </Mapbox.PointAnnotation>
 
                            {urgentisteLoc && (
                               <Mapbox.PointAnnotation id="my-unit-transport" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
                                  <View style={styles.urgentisteMarker}>
-                                    <View style={styles.urgentisteMarkerDot} />
+                                    <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
                                  </View>
                               </Mapbox.PointAnnotation>
                            )}
@@ -2247,52 +2249,49 @@ const styles = StyleSheet.create({
       borderColor: colors.primary,
    },
    victimMarker: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: "rgba(255,59,48,0.25)",
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 2,
-      borderColor: colors.primary,
-   },
-   victimMarkerDot: {
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: colors.primary,
+      borderColor: "#FFFFFF",
+      shadowColor: colors.primary,
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 6,
    },
    urgentisteMarker: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: "rgba(21,100,191,0.25)",
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.secondary,
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 2,
-      borderColor: "#1564bf",
-   },
-   urgentisteMarkerDot: {
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: "#1564bf",
+      borderColor: "#FFFFFF",
+      shadowColor: colors.secondary,
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 6,
    },
    hospitalMarker: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: "rgba(52,199,89,0.25)",
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "#2E7D32",
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 2,
-      borderColor: colors.success || "#34C759",
-   },
-   hospitalMarkerDot: {
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: colors.success || "#34C759",
+      borderColor: "#FFFFFF",
+      shadowColor: "#2E7D32",
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 6,
    },
    assignmentBottomPanel: {
       backgroundColor: colors.mainBackground,
@@ -2395,7 +2394,7 @@ const styles = StyleSheet.create({
    footerTimerVal: { color: "#FFF", fontSize: 24, fontWeight: "900" },
    footerTimerLab: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 8,
+      fontSize: 10,
       fontWeight: "900",
       marginTop: 2,
    },
@@ -2728,5 +2727,5 @@ const styles = StyleSheet.create({
       borderRadius: 6,
       marginTop: 4,
    },
-   itemStatusText: { color: colors.secondary, fontSize: 8, fontWeight: "900" },
+   itemStatusText: { color: colors.secondary, fontSize: 10, fontWeight: "900" },
 });

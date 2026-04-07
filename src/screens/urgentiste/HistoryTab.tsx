@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: "rgba(255,255,255,0.6)",
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.5,
   },
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
   },
-  statusBadgeText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
+  statusBadgeText: { fontSize: 13, fontWeight: "800", letterSpacing: 0.5 },
   etaContainer: { flexDirection: "row", alignItems: "center" },
   etaValue: { color: "rgba(255,255,255,0.3)", fontSize: 13, fontWeight: "800" },
   arrowContainer: { marginLeft: 16 },

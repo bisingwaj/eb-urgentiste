@@ -1280,7 +1280,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.success,
     marginRight: 6,
   },
-  liveText: { color: colors.success, fontSize: 11, fontWeight: "800" },
+  liveText: { color: colors.success, fontSize: 13, fontWeight: "800" },
   statusChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -1292,7 +1292,7 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderHairline,
   },
-  statusChipText: { color: "#FFF", fontSize: 11, fontWeight: "700" },
+  statusChipText: { color: "#FFF", fontSize: 13, fontWeight: "700" },
   filterBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -1309,7 +1309,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
     borderColor: colors.secondary,
   },
-  filterBtnText: { color: colors.secondary, fontSize: 11, fontWeight: "800" },
+  filterBtnText: { color: colors.secondary, fontSize: 13, fontWeight: "800" },
 
   /* ── Filter dropdown ── */
   filterDropdown: {
@@ -1331,7 +1331,7 @@ const styles = StyleSheet.create({
     borderColor: colors.secondary + "55",
     backgroundColor: colors.secondary + "18",
   },
-  filterDropdownChipAllText: { color: colors.secondary, fontSize: 11, fontWeight: "800" },
+  filterDropdownChipAllText: { color: colors.secondary, fontSize: 13, fontWeight: "800" },
   filterDropdownItem: {
     flexDirection: "row",
     alignItems: "center",
@@ -1349,7 +1349,7 @@ const styles = StyleSheet.create({
   },
   filterDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.2)" },
   filterDotOn: { backgroundColor: colors.secondary },
-  filterDropdownText: { color: "rgba(255,255,255,0.45)", fontSize: 11, fontWeight: "700" },
+  filterDropdownText: { color: "rgba(255,255,255,0.45)", fontSize: 13, fontWeight: "700" },
   filterDropdownTextOn: { color: "#FFF" },
 
   /* ── Collapsible HUDs ── */
@@ -1410,7 +1410,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   telValue: { color: "#FFF", fontSize: 14, fontWeight: "800" },
-  telUnit: { fontSize: 11, fontWeight: "600", color: "rgba(255,255,255,0.5)" },
+  telUnit: { fontSize: 13, fontWeight: "600", color: "rgba(255,255,255,0.5)" },
 
   legendRow: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
   legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
@@ -1505,7 +1505,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  routeChipMetaSmall: { ...typography.bodyMuted, fontSize: 10, marginTop: 2 },
+  routeChipMetaSmall: { ...typography.bodyMuted, fontSize: 12, marginTop: 2 },
   criterionRow: {
     flexDirection: "row",
     gap: spacing.sm,

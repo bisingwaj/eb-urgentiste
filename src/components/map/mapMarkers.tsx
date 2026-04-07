@@ -97,7 +97,7 @@ export const UnitMarker = memo(function UnitMarker({
   status: string;
   onPress?: () => void;
 }) {
-  const border =
+  const bg =
     status === 'en_route'
       ? colors.markerUnitEnRoute
       : status === 'on_scene' || status === 'en_intervention'
@@ -105,8 +105,8 @@ export const UnitMarker = memo(function UnitMarker({
         : colors.markerUnit;
   return (
     <MarkerHost>
-      <Pressable onPress={onPress} style={[styles.unit, { borderColor: border }]}>
-        <Ambulance size={19} color={border} strokeWidth={2.5} />
+      <Pressable onPress={onPress} style={[styles.unit, { backgroundColor: bg, shadowColor: bg }]}>
+        <Ambulance size={19} color="#FFFFFF" strokeWidth={2.5} />
       </Pressable>
     </MarkerHost>
   );
@@ -128,32 +128,35 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   incident: {
-    width: 38,
-    height: 38,
-    borderRadius: 11,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: colors.markerIncident,
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    elevation: 6,
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 7,
   },
   hospital: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: colors.markerHospital,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: radius.sm,
     maxWidth: 140,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.3)',
+    shadowColor: colors.markerHospital,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 6,
   },
-  hospitalText: { color: '#FFF', fontSize: 10, fontWeight: '700', marginLeft: 4 },
+  hospitalText: { color: '#FFF', fontSize: 12, fontWeight: '700', marginLeft: 4 },
   bedsBadge: {
     backgroundColor: colors.success,
     borderRadius: 6,
@@ -161,18 +164,18 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     marginLeft: 4,
   },
-  bedsText: { color: '#FFF', fontSize: 9, fontWeight: '800' },
+  bedsText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
   unit: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.surface,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     borderWidth: 2,
+    borderColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 5,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 6,
   },
 });
