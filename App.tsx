@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { useFonts } from 'expo-font';
 import * as SystemUI from 'expo-system-ui';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { navigationRef } from './src/navigation/navigationRef';
@@ -13,6 +14,7 @@ if (mapboxToken) {
 }
 
 import { colors } from './src/theme/colors';
+import { applyMarianneDefaultTextStyle, fonts as marianneFonts } from './src/theme/fonts';
 import { isSupabaseConfigured } from './src/lib/supabase';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { AppLockProvider } from './src/contexts/AppLockContext';
@@ -65,6 +67,12 @@ const navTheme = {
     text: '#FFF',
     border: 'transparent',
     notification: colors.primary,
+  },
+  fonts: {
+    regular: { fontFamily: marianneFonts.regular, fontWeight: '400' as const },
+    medium: { fontFamily: marianneFonts.medium, fontWeight: '500' as const },
+    bold: { fontFamily: marianneFonts.bold, fontWeight: '600' as const },
+    heavy: { fontFamily: marianneFonts.bold, fontWeight: '700' as const },
   },
 };
 
@@ -171,11 +179,33 @@ function RootNavigator() {
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    'Marianne-Regular': require('./assets/fonts/Marianne-Regular.otf'),
+    'Marianne-Medium': require('./assets/fonts/Marianne-Medium.otf'),
+    'Marianne-Bold': require('./assets/fonts/Marianne-Bold.otf'),
+    'Marianne-Light': require('./assets/fonts/Marianne-Light.otf'),
+  });
+
   useEffect(() => {
     /** Toujours sombre : barres système / contrôles comme en mode dark, même si le téléphone est en mode clair. */
     Appearance.setColorScheme('dark');
     void SystemUI.setBackgroundColorAsync('#000000');
   }, []);
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      applyMarianneDefaultTextStyle();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <LoadingScreen />
+      </SafeAreaProvider>
+    );
+  }
 
   if (!isSupabaseConfigured()) {
     return (
