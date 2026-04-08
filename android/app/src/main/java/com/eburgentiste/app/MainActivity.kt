@@ -1,9 +1,7 @@
 package com.eburgentiste.app
 
-import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
-import androidx.core.view.WindowInsetsControllerCompat
 
 import com.facebook.react.ReactActivity
 import com.facebook.react.ReactActivityDelegate
@@ -19,22 +17,6 @@ class MainActivity : ReactActivity() {
     // This is required for expo-splash-screen.
     setTheme(R.style.AppTheme);
     super.onCreate(null)
-    applySystemBarsDarkControls()
-  }
-
-  /**
-   * Barre de navigation / statut : fond noir, icônes claires (style « mode dark »),
-   * même si l’appareil est en mode clair — aligné sur la capture de référence.
-   */
-  private fun applySystemBarsDarkControls() {
-    window.statusBarColor = Color.BLACK
-    window.navigationBarColor = Color.BLACK
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-      window.isNavigationBarContrastEnforced = false
-    }
-    val controller = WindowInsetsControllerCompat(window, window.decorView)
-    controller.isAppearanceLightStatusBars = false
-    controller.isAppearanceLightNavigationBars = false
   }
 
   /**

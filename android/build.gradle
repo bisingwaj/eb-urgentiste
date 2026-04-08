@@ -1,4 +1,4 @@
-// Top-level build file where you add configuration options common to all sub-projects/modules.
+// Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
   repositories {
@@ -17,27 +17,7 @@ allprojects {
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
-    maven { url "$rootDir/../node_modules/@react-native-async-storage/async-storage/android/local_repo" }
-    // @rnmapbox/maps — artefacts Mapbox (ex. mapbox-sdk-turf)
-    maven {
-      url 'https://api.mapbox.com/downloads/v2/releases/maven'
-      def token = project.properties['MAPBOX_DOWNLOADS_TOKEN'] ?: System.getenv('RNMAPBOX_MAPS_DOWNLOAD_TOKEN')
-      if (token) {
-        authentication { basic(BasicAuthentication) }
-        credentials {
-          username = 'mapbox'
-          password = token
-        }
-      }
-    }
   }
-}
-
-// Windows + New Architecture : NDK 27 provoque souvent des erreurs ld.lld (symboles
-// libc++ / __cxa_* / std::* non résolus). NDK 26 est stable ici. Expo n’écrase pas
-// ext.ndkVersion s’il est déjà défini (ExpoRootProjectPlugin#setIfNotExist).
-if (System.getProperty("os.name", "").toLowerCase().contains("windows")) {
-  ext.ndkVersion = "26.1.10909125"
 }
 
 apply plugin: "expo-root-project"
