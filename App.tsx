@@ -21,6 +21,7 @@ import { AppLockProvider } from './src/contexts/AppLockContext';
 import { MissionProvider } from './src/contexts/MissionContext';
 import { CallSessionProvider } from './src/contexts/CallSessionContext';
 import { GlobalAlert } from './src/components/shared/GlobalAlert';
+import { AlertAlarmManager } from './src/components/alerts/AlertAlarmManager';
 import { BrandedSplashScreen } from './src/components/splash/BrandedSplashScreen';
 
 // Shared entry screens
@@ -225,6 +226,7 @@ export default function App() {
                 <FloatingCallBar />
                 <IncomingCallSubscriber />
                 <GlobalAlert />
+                <AlertAlarmManager />
               </CallSessionProvider>
             </NavigationContainer>
           </SafeAreaProvider>
