@@ -1,3 +1,4 @@
+import type { Notification as NotifeeNotification } from '@notifee/react-native';
 import type { Notification, NotificationContent, NotificationTaskPayload } from 'expo-notifications';
 
 export type IncomingCallPayload = {
@@ -105,6 +106,18 @@ export function parseIncomingCallFromNotification(
   notification: Notification
 ): IncomingCallPayload | null {
   return parseIncomingCallFromContent(notification.request.content);
+}
+
+/** Payload attaché par Notifee (`displayNotification` → `data`). */
+export function parseIncomingCallFromNotifeeNotification(
+  notification: NotifeeNotification | null | undefined
+): IncomingCallPayload | null {
+  if (!notification?.data) {
+    return null;
+  }
+  const flat: Record<string, string> = {};
+  mergeStringRecord(flat, notification.data as Record<string, unknown>);
+  return parseIncomingCallFromFlatData(flat);
 }
 
 export const INCOMING_CALL_CATEGORY_ID = 'incoming_call';

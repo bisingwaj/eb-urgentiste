@@ -38,7 +38,7 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>MBXAccessToken</key>
-    <string></string>
+    <string>REMOVED_SECRET</string>
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>
@@ -60,6 +60,12 @@
     <string>L'application utilise le micro pour les appels avec la centrale de régulation.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
+    <key>UIBackgroundModes</key>
+    <array>
+      <string>audio</string>
+      <string>remote-notification</string>
+      <string>fetch</string>
+    </array>
     <key>UILaunchStoryboardName</key>
     <string>SplashScreen</string>
     <key>UIRequiredDeviceCapabilities</key>
