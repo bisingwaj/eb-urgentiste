@@ -1,3 +1,4 @@
+import './src/push/incomingCallBackgroundTask';
 import { registerRootComponent } from 'expo';
 
 import App from './App';

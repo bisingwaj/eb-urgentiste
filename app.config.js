@@ -4,6 +4,10 @@ loadLocalEnv(__dirname);
 
 /**
  * Config Expo dynamique : secrets dans `.local.env` (EXPO_PUBLIC_*), non versionné.
+ *
+ * FCM (send-call-push) : placer `google-services.json` (Firebase) à la racine du repo
+ * ou renseigner `android.googleServicesFile` dans app.json, puis `eas build` — requis pour
+ * `getDevicePushTokenAsync` / enregistrement `users_directory.fcm_token`.
  */
 const appJson = require('./app.json');
 

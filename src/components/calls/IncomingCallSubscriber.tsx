@@ -7,12 +7,19 @@ import {
   TouchableOpacity,
   Vibration,
   Platform,
+  AppState,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors } from '../../theme/colors';
 import { navigationRef } from '../../navigation/navigationRef';
+import {
+  markIncomingCallRealtimeModal,
+  releaseIncomingCallUi,
+  shouldSkipModalForIncomingCall,
+} from '../../lib/incomingCallUiCoordinator';
+import { NotificationService } from '../../services/NotificationService';
 
 type PendingIncoming = {
   id: string;
@@ -82,6 +89,13 @@ export function IncomingCallSubscriber() {
           if (!typed.id || !isIncomingFromCenter(typed)) {
             return;
           }
+          if (AppState.currentState !== 'active') {
+            return;
+          }
+          if (shouldSkipModalForIncomingCall(typed.id)) {
+            return;
+          }
+          markIncomingCallRealtimeModal(typed.id);
           if (Platform.OS === 'android') {
             Vibration.vibrate([0, 400, 200, 400]);
           } else {
@@ -110,6 +124,8 @@ export function IncomingCallSubscriber() {
     }
     const id = pending.id;
     setPending(null);
+    releaseIncomingCallUi(id);
+    void NotificationService.dismissIncomingCallNotification(id);
     try {
       await supabase
         .from('call_history')
@@ -135,6 +151,8 @@ export function IncomingCallSubscriber() {
       return;
     }
     setPending(null);
+    releaseIncomingCallUi(id);
+    void NotificationService.dismissIncomingCallNotification(id);
     if (navigationRef.isReady()) {
       navigationRef.navigate('CallCenter', {
         incoming: true,

@@ -49,6 +49,8 @@ import { HospitalAdmissionsListScreen } from './src/screens/hospital/HospitalAdm
 import { CallCenterScreen } from './src/screens/urgentiste/CallCenterScreen';
 import { CallHistoryCallsScreen } from './src/screens/urgentiste/CallHistoryCallsScreen';
 import { IncomingCallSubscriber } from './src/components/calls/IncomingCallSubscriber';
+import { IncomingCallNotificationHandler } from './src/components/calls/IncomingCallNotificationHandler';
+import { usePushTokenRegistration } from './src/hooks/usePushTokenRegistration';
 import { FloatingCallBar } from './src/components/calls/FloatingCallBar';
 import { SignalementScreen } from './src/screens/urgentiste/SignalementScreen';
 import { ProtocolesScreen } from './src/screens/urgentiste/ProtocolesScreen';
@@ -107,6 +109,13 @@ function ConfigErrorScreen() {
 // Écran de chargement (polices / session) — identité Étoile Bleue
 function LoadingScreen() {
   return <BrandedSplashScreen showSpinner />;
+}
+
+/** Enregistre le token FCM natif pour `send-call-push` (Edge Supabase). */
+function PushTokenRegistration() {
+  const { isAuthenticated, session } = useAuth();
+  usePushTokenRegistration(isAuthenticated && !!session?.user?.id, session?.user?.id);
+  return null;
 }
 
 // Navigation interne basée sur l'état d'auth
@@ -222,9 +231,11 @@ export default function App() {
             <StatusBar barStyle="light-content" backgroundColor="#000000" />
             <NavigationContainer ref={navigationRef} theme={navTheme}>
               <CallSessionProvider>
+                <PushTokenRegistration />
                 <RootNavigator />
                 <FloatingCallBar />
                 <IncomingCallSubscriber />
+                <IncomingCallNotificationHandler />
                 <GlobalAlert />
                 <AlertAlarmManager />
               </CallSessionProvider>

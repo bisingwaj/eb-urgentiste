@@ -16,7 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.eburgentiste.app",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"],
+        "UIBackgroundModes": ["audio", "remote-notification"],
         "NSMicrophoneUsageDescription": "L'application utilise le micro pour les appels avec la centrale de régulation.",
         "NSCameraUsageDescription": "La caméra est utilisée pour les appels vidéo avec la centrale.",
         "NSFaceIDUsageDescription": "L'application utilise Face ID pour déverrouiller l'accès après connexion."

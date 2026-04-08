@@ -1,6 +1,12 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { Platform } from 'react-native';
+import {
+  INCOMING_CALL_ACTION_ACCEPT,
+  INCOMING_CALL_ACTION_DECLINE,
+  INCOMING_CALL_CATEGORY_ID,
+} from '../lib/parseIncomingCallPayload';
+import { shouldSkipDuplicateLocalPushNotification } from '../lib/incomingCallUiCoordinator';
 
 /**
  * NotificationService — Gère les notifications locales du système (barre de notification).
@@ -26,6 +32,47 @@ Notifications.setNotificationHandler({
 class NotificationServiceClass {
   private isInitialized = false;
 
+  private async setupAndroidChannels(): Promise<void> {
+    if (Platform.OS !== 'android') return;
+
+    await Notifications.setNotificationChannelAsync('urgences', {
+      name: 'Alertes Urgentes',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 500, 200, 500],
+      lightColor: '#FF0000',
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      bypassDnd: true,
+      sound: 'alarm_alert.wav',
+      enableVibrate: true,
+      enableLights: true,
+    });
+
+    await Notifications.setNotificationChannelAsync('incoming_calls', {
+      name: 'Appels entrants',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 400, 200, 400, 200, 400],
+      lightColor: '#1564bf',
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      bypassDnd: true,
+      sound: 'default',
+      enableVibrate: true,
+      enableLights: true,
+    });
+  }
+
+  /**
+   * Canaux Android + catégories iOS — sans prompt permissions.
+   * Appelé depuis la tâche FCM en tête (avant `presentIncomingCallNotification`).
+   */
+  async ensurePushInfrastructure(): Promise<void> {
+    try {
+      await this.setupAndroidChannels();
+      await this.ensureIncomingCallCategories();
+    } catch (e) {
+      console.warn('[NotificationService] ensurePushInfrastructure:', e);
+    }
+  }
+
   /**
    * Initialise les permissions et le canal Android.
    * Doit être appelé une seule fois au démarrage de l'app.
@@ -34,21 +81,10 @@ class NotificationServiceClass {
     if (this.isInitialized) return;
 
     try {
-      // Créer le canal Android pour les alertes urgentes
-      if (Platform.OS === 'android') {
-        await Notifications.setNotificationChannelAsync('urgences', {
-          name: 'Alertes Urgentes',
-          importance: Notifications.AndroidImportance.MAX,
-          vibrationPattern: [0, 500, 200, 500],
-          lightColor: '#FF0000',
-          lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-          bypassDnd: true,
-          sound: 'alarm_alert.wav',
-          enableVibrate: true,
-          enableLights: true,
-        });
-        console.log('[NotificationService] ✅ Canal Android "urgences" créé');
-      }
+      await this.setupAndroidChannels();
+      console.log('[NotificationService] ✅ Canaux Android créés');
+
+      await this.ensureIncomingCallCategories();
 
       // Demander les permissions
       await this.requestPermissions();
@@ -133,6 +169,84 @@ class NotificationServiceClass {
   async dismissAll(): Promise<void> {
     await Notifications.dismissAllNotificationsAsync();
     await Notifications.setBadgeCountAsync(0);
+  }
+
+  /** Catégories iOS (actions Accepter / Refuser). */
+  async ensureIncomingCallCategories(): Promise<void> {
+    try {
+      await Notifications.setNotificationCategoryAsync(INCOMING_CALL_CATEGORY_ID, [
+        {
+          identifier: INCOMING_CALL_ACTION_DECLINE,
+          buttonTitle: 'Refuser',
+          options: {
+            isDestructive: true,
+            opensAppToForeground: true,
+          },
+        },
+        {
+          identifier: INCOMING_CALL_ACTION_ACCEPT,
+          buttonTitle: 'Accepter',
+          options: { opensAppToForeground: true },
+        },
+      ]);
+    } catch (e) {
+      console.warn('[NotificationService] ensureIncomingCallCategories:', e);
+    }
+  }
+
+  /**
+   * Notification locale « appel entrant » (barre système, heads-up Android).
+   * Utilisé après FCM data-only ou pour garantir l’affichage dans le tiroir.
+   */
+  async presentIncomingCallNotification(params: {
+    callId: string;
+    channelName: string;
+    callerName: string;
+    hasVideo: boolean;
+  }): Promise<void> {
+    const { callId, channelName, callerName, hasVideo } = params;
+
+    if (shouldSkipDuplicateLocalPushNotification(callId)) {
+      console.log('[NotificationService] Skip notif locale (Modal Realtime déjà affiché)', callId);
+      return;
+    }
+
+    const title = 'Appel entrant';
+    const body = `${callerName.trim() || 'Centrale'} · ${hasVideo ? 'Vidéo' : 'Audio'}`;
+
+    try {
+      await Notifications.scheduleNotificationAsync({
+        identifier: `incoming-call-${callId}`,
+        content: {
+          title,
+          body,
+          data: {
+            type: 'incoming_call',
+            callId,
+            channelName,
+            callerName,
+            hasVideo: hasVideo ? 'true' : 'false',
+          },
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          sticky: true,
+          ...(Platform.OS === 'android' && { channelId: 'incoming_calls' }),
+          categoryIdentifier: INCOMING_CALL_CATEGORY_ID,
+        },
+        trigger: null,
+      });
+      console.log('[NotificationService] ✅ Notification appel entrant planifiée', callId);
+    } catch (err) {
+      console.error('[NotificationService] ❌ Erreur notif appel entrant:', err);
+    }
+  }
+
+  async dismissIncomingCallNotification(callId: string): Promise<void> {
+    try {
+      await Notifications.dismissNotificationAsync(`incoming-call-${callId}`);
+    } catch {
+      /* ignore */
+    }
   }
 }
 
