@@ -17,6 +17,9 @@ allprojects {
     google()
     mavenCentral()
     maven { url 'https://www.jitpack.io' }
+    // Notifee: app.notifee:core is vendored under node_modules; must be declared here so
+    // :app resolves before :notifee_react-native adds repositories via subproject script.
+    maven { url = uri("$rootDir/../node_modules/@notifee/react-native/android/libs") }
   }
 }
 

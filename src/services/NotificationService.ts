@@ -7,6 +7,11 @@ import {
   INCOMING_CALL_CATEGORY_ID,
 } from '../lib/parseIncomingCallPayload';
 import { shouldSkipDuplicateLocalPushNotification } from '../lib/incomingCallUiCoordinator';
+import {
+  cancelIncomingCallNotifee,
+  displayIncomingCallWithNotifee,
+  ensureNotifeeIncomingChannel,
+} from './notifeeIncomingCall';
 
 /**
  * NotificationService — Gère les notifications locales du système (barre de notification).
@@ -67,6 +72,9 @@ class NotificationServiceClass {
   async ensurePushInfrastructure(): Promise<void> {
     try {
       await this.setupAndroidChannels();
+      if (Platform.OS === 'android') {
+        await ensureNotifeeIncomingChannel();
+      }
       await this.ensureIncomingCallCategories();
     } catch (e) {
       console.warn('[NotificationService] ensurePushInfrastructure:', e);
@@ -211,8 +219,23 @@ class NotificationServiceClass {
       return;
     }
 
-    const title = 'Appel entrant';
-    const body = `${callerName.trim() || 'Centrale'} · ${hasVideo ? 'Vidéo' : 'Audio'}`;
+    if (Platform.OS === 'android') {
+      try {
+        await displayIncomingCallWithNotifee({
+          callId,
+          channelName,
+          callerName,
+          hasVideo,
+        });
+        console.log('[NotificationService] ✅ Notifee appel entrant affiché', callId);
+      } catch (err) {
+        console.error('[NotificationService] ❌ Erreur Notifee appel entrant:', err);
+      }
+      return;
+    }
+
+    const title = 'Appel entrant — Centrale';
+    const body = `${callerName.trim() || 'Opérateur'} · ${hasVideo ? 'Vidéo' : 'Audio'} — Touchez pour répondre`;
 
     try {
       await Notifications.scheduleNotificationAsync({
@@ -220,6 +243,7 @@ class NotificationServiceClass {
         content: {
           title,
           body,
+          subtitle: 'Appuyez pour ouvrir l’appel',
           data: {
             type: 'incoming_call',
             callId,
@@ -230,7 +254,7 @@ class NotificationServiceClass {
           sound: true,
           priority: Notifications.AndroidNotificationPriority.MAX,
           sticky: true,
-          ...(Platform.OS === 'android' && { channelId: 'incoming_calls' }),
+          interruptionLevel: 'timeSensitive',
           categoryIdentifier: INCOMING_CALL_CATEGORY_ID,
         },
         trigger: null,
@@ -242,6 +266,10 @@ class NotificationServiceClass {
   }
 
   async dismissIncomingCallNotification(callId: string): Promise<void> {
+    if (Platform.OS === 'android') {
+      await cancelIncomingCallNotifee(callId);
+      return;
+    }
     try {
       await Notifications.dismissNotificationAsync(`incoming-call-${callId}`);
     } catch {
