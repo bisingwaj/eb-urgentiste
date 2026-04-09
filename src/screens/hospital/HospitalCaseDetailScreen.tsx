@@ -86,8 +86,8 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
 
   const handleAcceptCase = async () => {
     try {
-      await updateCaseStatus(caseData.id, { status: 'en_cours' });
-      setCaseData(prev => ({ ...prev, status: 'en_cours' }));
+      await updateCaseStatus(caseData.id, { hospitalStatus: 'accepted' });
+      setCaseData(prev => ({ ...prev, hospitalStatus: 'accepted' }));
     } catch (err) {
       Alert.alert('Erreur', 'Impossible d\'accepter le cas actuellement.');
     }
@@ -101,9 +101,9 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     }
 
     try {
-      await updateCaseStatus(caseData.id, { 
-        status: 'termine', 
-        data: { outcome: 'refuse', refusalReason: finalReason } 
+      await updateCaseStatus(caseData.id, {
+        hospitalStatus: 'refused',
+        hospitalNotes: finalReason
       });
       setShowRefusalModal(false);
       navigation.goBack();
@@ -210,9 +210,27 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                   <View style={[styles.avatar, { backgroundColor: levelCfg.bg }]}><Text style={[styles.avatarText, { color: levelCfg.color }]}>{caseData.victimName.charAt(0)}</Text></View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.patientName}>{caseData.victimName}</Text>
-                    <View style={styles.metaRow}><Text style={styles.metaText}>{caseData.sex} · {caseData.age} ans</Text></View>
+                    <View style={styles.metaRow}><Text style={styles.metaText}>{caseData.sex} · {caseData.age || '?'} ans</Text></View>
                   </View>
                 </View>
+                {caseData.patientProfile && (
+                  <>
+                    <View style={styles.divider} />
+                    <View style={{ gap: 8 }}>
+                      <View style={styles.descSection}>
+                        <Text style={styles.descText}><Text style={{ color: '#FFF' }}>Sang:</Text> {caseData.patientProfile.bloodType || 'Inconnu'}</Text>
+                        <Text style={styles.descText}><Text style={{ color: '#FFF' }}>Allergies:</Text> {caseData.patientProfile.allergies?.join(', ') || 'Aucune / Inconnu'}</Text>
+                        <Text style={styles.descText}><Text style={{ color: '#FFF' }}>Antécédents:</Text> {caseData.patientProfile.medicalHistory?.join(', ') || 'Aucun / Inconnu'}</Text>
+                        {(caseData.patientProfile.emergencyContactName || caseData.patientProfile.emergencyContactPhone) && (
+                          <Text style={styles.descText}>
+                            <Text style={{ color: '#FFF' }}>Contact Urgence:</Text> {caseData.patientProfile.emergencyContactName} ({caseData.patientProfile.emergencyContactPhone})
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  </>
+                )}
+
                 <View style={styles.divider} />
                 <View style={styles.descSection}>
                   <Text style={styles.label}>Motif / Description</Text>
@@ -242,12 +260,68 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 </View>
               </View>
             </View>
+
+            {(caseData.sosResponses && caseData.sosResponses.length > 0) && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Triage Terrain (SOS)</Text>
+                <View style={[styles.infoCard, { padding: 20, gap: 12 }]}>
+                  {caseData.sosResponses.map((r, idx) => (
+                    <Text key={idx} style={styles.descText}>
+                      ✓ <Text style={{ color: '#FFF' }}>{r.questionText}</Text> → {r.answer}
+                    </Text>
+                  ))}
+                  {caseData.gravityScore !== undefined && (
+                    <Text style={[styles.label, { marginTop: 8, color: colors.error }]}>
+                      Score gravité : {caseData.gravityScore}/20
+                    </Text>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {(caseData.vitals || caseData.symptoms || (caseData.interventions && caseData.interventions.length > 0) || caseData.description) && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Actions Terrain</Text>
+                <View style={[styles.infoCard, { padding: 20, gap: 16 }]}>
+                  {(caseData.description || caseData.symptoms) && (
+                    <View>
+                      <Text style={styles.label}>Notes secouriste / Symptômes</Text>
+                      <Text style={styles.descText}>{caseData.description} {caseData.symptoms}</Text>
+                    </View>
+                  )}
+                  {caseData.vitals && (
+                    <>
+                      <View style={styles.divider} />
+                      <View>
+                        <Text style={styles.label}>Signes Vitaux Monitorés</Text>
+                        <Text style={styles.descText}>
+                          Tension: {caseData.vitals.tension || '-'} mmHg{'\n'}
+                          FC: {caseData.vitals.heartRate || '-'} bpm  ·  Sat O2: {caseData.vitals.satO2 || '-'} %{'\n'}
+                          Temp: {caseData.vitals.temperature || '-'} °C
+                        </Text>
+                      </View>
+                    </>
+                  )}
+                  {caseData.interventions && caseData.interventions.length > 0 && (
+                    <>
+                      <View style={styles.divider} />
+                      <View>
+                        <Text style={styles.label}>Soins Prescrits / Appliqués</Text>
+                        {caseData.interventions.map((int: any, idx: number) => (
+                          <Text key={idx} style={styles.descText}>• {int.description || int.label || int}</Text>
+                        ))}
+                      </View>
+                    </>
+                  )}
+                </View>
+              </View>
+            )}
           </>
         )}
       </ScrollView>
 
       {/* FOOTER ACTIONS */}
-      {!isAccepted ? (
+      {(!isAccepted && !caseData.hospitalStatus || caseData.hospitalStatus === 'pending') ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <View style={styles.swipeContainer}>
             <View style={styles.swipeBackground}><Text style={styles.swipeText}>Glisser pour accepter</Text><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.3)" size={24} /></View>

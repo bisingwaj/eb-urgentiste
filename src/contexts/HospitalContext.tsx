@@ -18,12 +18,23 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   // We map the raw dispatch/incident to EmergencyCase
-  const mapRowToCase = (d: any): EmergencyCase => {
+  const mapRowToCase = (d: any, profileMap: Record<string, any>, responsesMap: Record<string, any[]>): EmergencyCase => {
     const inc = d.incidents || {};
-    
-    // Parse admission and triage data stored in JSON columns on dispatches (or incidents if applicable)
-    // For now, we assume we might store them in a column called `hospital_data` on `dispatches`
     const hData = d.hospital_data || {};
+    
+    const patientProfileRaw = inc.citizen_id ? profileMap[inc.citizen_id] : undefined;
+    const patientProfile = patientProfileRaw ? {
+      bloodType: patientProfileRaw.blood_type,
+      allergies: patientProfileRaw.allergies,
+      medicalHistory: patientProfileRaw.medical_history,
+      medications: patientProfileRaw.medications,
+      emergencyContactName: patientProfileRaw.emergency_contact_name,
+      emergencyContactPhone: patientProfileRaw.emergency_contact_phone,
+      dateOfBirth: patientProfileRaw.date_of_birth,
+    } : undefined;
+
+    const sosResponsesRaw = responsesMap[inc.id] || [];
+    const gravityScore = sosResponsesRaw.reduce((acc: number, curr: any) => acc + (curr.gravity_score || 0), 0) || undefined;
 
     return {
       id: d.id, // using dispatch ID as the main case ID
@@ -43,6 +54,19 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       timestamp: new Date(inc.created_at || d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       typeUrgence: inc.type || 'Inconnu',
       
+      // Hospital spec mapping
+      hospitalStatus: d.hospital_status || 'pending',
+      hospitalNotes: d.hospital_notes,
+      hospitalRespondedAt: d.hospital_responded_at,
+      patientProfile,
+      sosResponses: sosResponsesRaw.length > 0 ? sosResponsesRaw.map((r: any) => ({
+        questionText: r.question_text,
+        answer: r.answer,
+        gravityScore: r.gravity_score,
+        gravityLevel: r.gravity_level,
+      })) : undefined,
+      gravityScore,
+
       // Clinical data
       arrivalTime: hData.arrivalTime,
       arrivalMode: hData.arrivalMode,
@@ -86,7 +110,39 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       if (error) throw error;
 
       if (data) {
-        const mappedCases = data.map(mapRowToCase);
+        const incidentIds = data.map(d => d.incident_id).filter(Boolean);
+        const citizenIds = data.map(d => d.incidents?.citizen_id).filter(Boolean);
+        
+        let responsesMap: Record<string, any[]> = {};
+        if (incidentIds.length > 0) {
+          const { data: sosData } = await supabase
+            .from('sos_responses')
+            .select('*')
+            .in('incident_id', incidentIds);
+            
+          if (sosData) {
+            sosData.forEach(r => {
+              if (!responsesMap[r.incident_id]) responsesMap[r.incident_id] = [];
+              responsesMap[r.incident_id].push(r);
+            });
+          }
+        }
+
+        let profileMap: Record<string, any> = {};
+        if (citizenIds.length > 0) {
+          const { data: cData } = await supabase
+            .from('users_directory')
+            .select('auth_user_id, blood_type, allergies, medical_history, medications, emergency_contact_name, emergency_contact_phone, date_of_birth')
+            .in('auth_user_id', citizenIds);
+            
+          if (cData) {
+            cData.forEach(u => {
+              profileMap[u.auth_user_id] = u;
+            });
+          }
+        }
+
+        const mappedCases = data.map(d => mapRowToCase(d, profileMap, responsesMap));
         // Maybe sort active cases first
         setActiveCases(mappedCases);
       }
@@ -123,38 +179,69 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchCases, profile?.health_structure_id, profile?.assigned_unit_id, profile?.role]);
 
-  const updateCaseStatus = async (caseId: string, transition: { status: CaseStatus; data?: any }) => {
+  const updateCaseStatus = async (caseId: string, transition: { status?: CaseStatus; data?: any; hospitalStatus?: HospitalStatus; hospitalNotes?: string }) => {
     try {
       // We store the status in hospital_data JSON column and update dispatch status if applicable
       const { data: currentDispatch, error: fetchError } = await supabase
         .from('dispatches')
-        .select('hospital_data, status')
+        .select('*')
         .eq('id', caseId)
         .single();
         
       if (fetchError) throw fetchError;
       
-      const newHospitalData = {
-        ...(currentDispatch.hospital_data || {}),
-        status: transition.status,
-        ...(transition.data || {})
+      let updateObj: any = {};
+
+      if (transition.status) {
+        const newHospitalData = {
+          ...(currentDispatch.hospital_data || {}),
+          status: transition.status,
+          ...(transition.data || {})
+        };
+
+        let newStatus = currentDispatch.status;
+        // Map back to dispatch status if needed
+        if (transition.status === 'en_cours') newStatus = 'en_route_hospital';
+        if (transition.status === 'admis') newStatus = 'arrived_hospital';
+        if (transition.status === 'termine') newStatus = 'completed';
+        
+        updateObj.hospital_data = newHospitalData;
+        updateObj.status = newStatus;
+      }
+
+      // Explicit Hospital Status fields
+      if (transition.hospitalStatus) {
+        updateObj.hospital_status = transition.hospitalStatus;
+        updateObj.hospital_responded_at = new Date().toISOString();
+      }
+      if (transition.hospitalNotes) {
+        updateObj.hospital_notes = transition.hospitalNotes;
+      }
+
+      const performFullUpdate = async () => {
+        const { error } = await supabase
+          .from('dispatches')
+          .update(updateObj)
+          .eq('id', caseId);
+        return error;
       };
 
-      let newStatus = currentDispatch.status;
-      // Map back to dispatch status if needed
-      if (transition.status === 'en_cours') newStatus = 'en_route_hospital';
-      if (transition.status === 'admis') newStatus = 'arrived_hospital';
-      if (transition.status === 'termine') newStatus = 'completed';
+      let updateError = await performFullUpdate();
 
-      const { error } = await supabase
-        .from('dispatches')
-        .update({ 
-          hospital_data: newHospitalData,
-          status: newStatus 
-        })
-        .eq('id', caseId);
-
-      if (error) throw error;
+      // If the column hospital_data hasn't been created yet on Supabase, fallback to updating just the status
+      if (updateError && updateError.code === '42703') {
+        console.warn('[HospitalContext] The column hospital_data does not exist yet. Only updating status.');
+        // Fallback for hospital_data missing: strip it and ensure status is updated
+        delete updateObj.hospital_data;
+        const { error: fallbackError } = await supabase
+          .from('dispatches')
+          .update(updateObj)
+          .eq('id', caseId);
+        
+        if (fallbackError) throw fallbackError;
+      } else if (updateError) {
+        throw updateError;
+      }
 
       // Optimistic update
       fetchCases();

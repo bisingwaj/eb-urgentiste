@@ -26,6 +26,11 @@ export type CaseStatus =
   | "prise_en_charge"
   | "termine";
 
+export type HospitalStatus = 
+  | "pending"
+  | "accepted"
+  | "refused";
+
 export interface EmergencyCase {
   id: string;
   victimName: string;
@@ -39,8 +44,34 @@ export interface EmergencyCase {
   status: CaseStatus;
   address: string;
   timestamp: string;
-  typeUrgence: string;
-  // Admission fields
+  typeUrgence: string; // Ex: Traumatisme, Cardiaque, Obstétrique
+  
+  // Hospital Assignment fields
+  hospitalStatus?: HospitalStatus;
+  hospitalNotes?: string;
+  hospitalRespondedAt?: string;
+
+  // Patient Profile Extended details
+  patientProfile?: {
+    bloodType?: string;
+    allergies?: string[];
+    medicalHistory?: string[];
+    medications?: string[];
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+    dateOfBirth?: string;
+  };
+
+  // SOS Questionnaire responses
+  sosResponses?: Array<{
+    questionText: string;
+    answer: string;
+    gravityScore: number;
+    gravityLevel: string;
+  }>;
+  gravityScore?: number;
+  
+  // Clinical data (hData)fields
   arrivalTime?: string;
   arrivalMode?: "ambulance" | "transport_prive" | "";
   arrivalState?: "stable" | "critique" | "inconscient" | "";
