@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Platform,
   Alert,
-  Dimensions,
   StatusBar,
   ScrollView,
 } from 'react-native';
@@ -14,13 +13,12 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import type { EmergencyCase } from './HospitalDashboardTab';
-
-const { width } = Dimensions.get('window');
-
-const ARRIVAL_MODES = [
-  { key: 'ambulance', label: 'Ambulance', icon: 'local-shipping' as const, color: colors.primary },
-  { key: 'transport_prive', label: 'Transport privé', icon: 'directions-car' as const, color: colors.secondary },
-];
+import {
+  TRANSPORT_MODE_OPTIONS,
+  normalizeLegacyTransportMode,
+  transportModeAccentColor,
+  type TransportModeCode,
+} from '../../lib/transportMode';
 
 const ARRIVAL_STATES = [
   { key: 'stable', label: 'Stable', icon: 'check-circle-outline' as const, color: '#69F0AE' },
@@ -46,7 +44,9 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
 
   const [step, setStep] = useState(1);
   const [arrivalTime] = useState(caseData.arrivalTime || timeStr);
-  const [arrivalMode, setArrivalMode] = useState(caseData.arrivalMode || '');
+  const [arrivalMode, setArrivalMode] = useState<TransportModeCode | ''>(() =>
+    normalizeLegacyTransportMode(caseData.arrivalMode),
+  );
   const [arrivalState, setArrivalState] = useState(caseData.arrivalState || '');
   const [admissionService, setAdmissionService] = useState(caseData.admissionService || '');
 
@@ -113,25 +113,52 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
         return (
           <View style={styles.stepContent}>
             <Text style={styles.stepTitle}>Mode d'arrivée</Text>
-            <Text style={styles.stepSubtitle}>Comment le patient est-il arrivé à l'hôpital ?</Text>
-            <View style={styles.optionGrid}>
-              {ARRIVAL_MODES.map((mode) => {
+            <Text style={styles.stepSubtitle}>
+              Même codification que le mode de transport côté urgentiste (mission).
+            </Text>
+            <View style={styles.transportModeGrid}>
+              {TRANSPORT_MODE_OPTIONS.map((mode) => {
                 const isSelected = arrivalMode === mode.key;
+                const accent = transportModeAccentColor(mode.accent);
                 return (
                   <TouchableOpacity
                     key={mode.key}
-                    style={[styles.premiumCard, isSelected && { borderColor: mode.color, backgroundColor: mode.color + '10' }]}
+                    style={[
+                      styles.transportModeCard,
+                      mode.emphasizeBorder && { borderColor: colors.primary + '40' },
+                      isSelected && { borderColor: accent, backgroundColor: accent + '12' },
+                    ]}
                     onPress={() => {
                       setArrivalMode(mode.key);
                       setTimeout(() => setStep(2), 350);
                     }}
                     activeOpacity={0.8}
                   >
-                    <View style={[styles.cardIconBox, { backgroundColor: mode.color + '15' }]}>
-                      <MaterialCommunityIcons name={mode.icon as any} color={isSelected ? mode.color : "rgba(255,255,255,0.3)"} size={32} />
+                    <View
+                      style={[
+                        styles.transportModeIconWrap,
+                        { backgroundColor: accent + '18' },
+                      ]}
+                    >
+                      <MaterialCommunityIcons
+                        name={mode.icon as any}
+                        color={isSelected ? accent : 'rgba(255,255,255,0.35)'}
+                        size={26}
+                      />
                     </View>
-                    <Text style={[styles.cardLabel, isSelected && { color: '#FFF' }]}>{mode.label}</Text>
-                    {isSelected && <MaterialIcons name="check-circle" color={mode.color} size={22} style={styles.cardCheck} />}
+                    <Text
+                      style={[
+                        styles.transportModeLabel,
+                        mode.accent === 'primary' && { color: colors.primary },
+                        isSelected && { color: '#FFF' },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {mode.label}
+                    </Text>
+                    {isSelected && (
+                      <MaterialIcons name="check-circle" color={accent} size={20} style={styles.cardCheck} />
+                    )}
                   </TouchableOpacity>
                 );
               })}
@@ -293,11 +320,39 @@ const styles = StyleSheet.create({
   stepTitle: { color: '#FFF', fontSize: 24, fontWeight: '900', marginBottom: 6 },
   stepSubtitle: { color: 'rgba(255,255,255,0.4)', fontSize: 14, marginBottom: 32, lineHeight: 20 },
 
-  optionGrid: { flexDirection: 'row', gap: 12 },
-  premiumCard: { flex: 1, backgroundColor: '#1A1A1A', borderRadius: 32, padding: 24, paddingVertical: 32, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  cardIconBox: { width: 68, height: 68, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginBottom: 16 },
-  cardLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '800', textAlign: 'center' },
-  cardCheck: { position: 'absolute', top: 16, right: 16 },
+  transportModeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+  },
+  transportModeCard: {
+    width: '48%',
+    backgroundColor: '#161616',
+    borderRadius: 20,
+    paddingVertical: 18,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+    minHeight: 128,
+  },
+  transportModeIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  transportModeLabel: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  cardCheck: { position: 'absolute', top: 10, right: 10 },
 
   verticalList: { gap: 12 },
   premiumRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', padding: 20, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', gap: 16 },

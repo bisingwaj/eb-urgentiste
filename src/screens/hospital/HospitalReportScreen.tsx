@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import { getTransportModeLabel } from '../../lib/transportMode';
 import type { EmergencyCase } from './HospitalDashboardTab';
 
 export function HospitalReportScreen({ route, navigation }: any) {
@@ -69,7 +70,7 @@ export function HospitalReportScreen({ route, navigation }: any) {
             <SummaryItem label="Âge / Sexe" value={`${caseData.age} ans · ${caseData.sex}`} icon="info" />
             <SummaryItem label="Type d'urgence" value={caseData.typeUrgence} icon="medical-services" color={colors.primary} />
             <SummaryItem label="Heure d'arrivée" value={caseData.arrivalTime} icon="schedule" />
-            <SummaryItem label="Mode d'arrivée" value={caseData.arrivalMode} icon="local-shipping" />
+            <SummaryItem label="Mode d'arrivée" value={getTransportModeLabel(caseData.arrivalMode)} icon="local-shipping" />
           </View>
         </View>
 

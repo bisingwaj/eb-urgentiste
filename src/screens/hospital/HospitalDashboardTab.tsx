@@ -12,6 +12,7 @@ import {
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
+import type { TransportModeCode } from "../../lib/transportMode";
 import { useAuth } from "../../contexts/AuthContext";
 import { useHospital } from "../../contexts/HospitalContext";
 
@@ -92,7 +93,8 @@ export interface EmergencyCase {
   
   // Clinical data (hData)fields
   arrivalTime?: string;
-  arrivalMode?: "ambulance" | "transport_prive" | "";
+  /** Aligné sur les codes « mode de transport » urgentiste (`AMBULANCE` | `SMUR` | `MOTO` | `PERSONNEL`) */
+  arrivalMode?: TransportModeCode | "";
   arrivalState?: "stable" | "critique" | "inconscient" | "";
   admissionService?: "urgence_generale" | "trauma" | "pediatrie" | "";
   // Triage fields
@@ -231,7 +233,7 @@ export const MOCK_CASES: EmergencyCase[] = [
     timestamp: "11:05",
     typeUrgence: "Inconscience",
     arrivalTime: "11:15",
-    arrivalMode: "ambulance",
+    arrivalMode: "AMBULANCE",
     vitals: { tension: "90/60", heartRate: "120", temperature: "36.2", satO2: "88" },
     interventions: [
       { id: "i5", type: "acte_medical", category: "Urgence", detail: "Intubation et Ventilation Assistée", time: "11:20", by: "Dr. Lelo" },
@@ -252,7 +254,7 @@ export const MOCK_CASES: EmergencyCase[] = [
     timestamp: "23:15",
     typeUrgence: "Brûlure",
     arrivalTime: "23:25",
-    arrivalMode: "ambulance",
+    arrivalMode: "AMBULANCE",
     arrivalState: "stable",
     admissionService: "trauma",
     interventions: [
@@ -289,7 +291,7 @@ export const MOCK_CASES: EmergencyCase[] = [
     timestamp: "11:30",
     typeUrgence: "Traumatisme",
     arrivalTime: "11:45",
-    arrivalMode: "ambulance",
+    arrivalMode: "AMBULANCE",
     interventions: [
       { id: "i6", type: "examen", category: "Imagerie", detail: "Scanner Corps Entier demandé", time: "11:55", by: "Dr. Zola" },
     ],
