@@ -1,13 +1,38 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
-import { EmergencyCase, CaseStatus, UrgencyLevel, Intervention } from '../screens/hospital/HospitalDashboardTab';
+import { EmergencyCase, CaseStatus, UrgencyLevel, Intervention, HospitalStatus } from '../screens/hospital/HospitalDashboardTab';
+
+function toNullableNumber(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(String(v).trim());
+  return Number.isFinite(n) ? n : null;
+}
+
+function ageFromDateOfBirth(dob: string | undefined): number | null {
+  if (!dob || typeof dob !== 'string') return null;
+  const d = new Date(dob.trim());
+  if (Number.isNaN(d.getTime())) return null;
+  const t = new Date();
+  let age = t.getFullYear() - d.getFullYear();
+  const m = t.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && t.getDate() < d.getDate())) age -= 1;
+  return age >= 0 && age < 130 ? age : null;
+}
 
 interface HospitalContextType {
   activeCases: EmergencyCase[];
   isLoading: boolean;
   refresh: () => Promise<void>;
-  updateCaseStatus: (caseId: string, transition: { status: CaseStatus; data?: any }) => Promise<void>;
+  updateCaseStatus: (
+    caseId: string,
+    transition: {
+      status?: CaseStatus;
+      data?: any;
+      hospitalStatus?: HospitalStatus;
+      hospitalNotes?: string;
+    }
+  ) => Promise<void>;
 }
 
 const HospitalContext = createContext<HospitalContextType | undefined>(undefined);
@@ -17,7 +42,9 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   const [activeCases, setActiveCases] = useState<EmergencyCase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // We map the raw dispatch/incident to EmergencyCase
+  // We map the raw dispatch/incident to EmergencyCase.
+  // Lovable: quand `dispatches.status` passe à `en_route_hospital`, le backend peut aussi
+  // poser `hospital_status = accepted`. Ici `en_route_hospital` est reflété en `status` UI `en_cours` (suivi ambulance).
   const mapRowToCase = (d: any, profileMap: Record<string, any>, responsesMap: Record<string, any[]>): EmergencyCase => {
     const inc = d.incidents || {};
     const hData = d.hospital_data || {};
@@ -33,18 +60,34 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       dateOfBirth: patientProfileRaw.date_of_birth,
     } : undefined;
 
+    const hDataAge = typeof hData.age === 'number' && hData.age > 0 ? hData.age : 0;
+    const dobAge = patientProfile?.dateOfBirth ? ageFromDateOfBirth(patientProfile.dateOfBirth) : null;
+    const resolvedAge = hDataAge > 0 ? hDataAge : dobAge ?? 0;
+
+    const u = d.units || {};
+    const unitCallsign = typeof u.callsign === 'string' && u.callsign.trim() ? u.callsign.trim() : 'Unité mobile';
+    const unitPhoneRaw = u.phone != null && String(u.phone).trim() ? String(u.phone).trim() : '';
+    const unitPhone = unitPhoneRaw || undefined;
+
     const sosResponsesRaw = responsesMap[inc.id] || [];
     const gravityScore = sosResponsesRaw.reduce((acc: number, curr: any) => acc + (curr.gravity_score || 0), 0) || undefined;
 
     return {
       id: d.id, // using dispatch ID as the main case ID
+      dispatchStatus: typeof d.status === 'string' ? d.status : undefined,
       victimName: inc.caller_name || 'Inconnu',
-      age: hData.age || 0, // Fallback as age isn't strictly captured in the current SOS
+      age: resolvedAge,
       sex: hData.sex || 'Inconnu',
       description: inc.description || '',
       level: (inc.priority === 'critical' ? 'critique' : inc.priority === 'high' ? 'urgent' : 'stable') as UrgencyLevel,
-      urgentisteName: d.units?.callsign || 'Unité mobile', // Assuming unit name could be returned if joined
-      urgentistePhone: d.units?.phone || '-', 
+      urgentisteName: unitCallsign,
+      urgentistePhone: unitPhoneRaw || '-',
+      incidentReference: typeof inc.reference === 'string' ? inc.reference : undefined,
+      callerPhone: inc.caller_phone != null && String(inc.caller_phone).trim() ? String(inc.caller_phone).trim() : undefined,
+      unitPhone,
+      unitVehicleType: typeof u.vehicle_type === 'string' ? u.vehicle_type : undefined,
+      unitVehiclePlate: typeof u.vehicle_plate === 'string' ? u.vehicle_plate : undefined,
+      unitAgentName: typeof u.agent_name === 'string' && u.agent_name.trim() ? u.agent_name.trim() : undefined,
       eta: '5 min', // To be calculated or drawn from dispatches if available
       status: (d.status === 'dispatched' || d.status === 'en_route' || d.status === 'on_scene' ? 'en_attente' : 
               d.status === 'en_route_hospital' ? 'en_cours' : 
@@ -53,7 +96,10 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       address: inc.location_address || '',
       timestamp: new Date(inc.created_at || d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       typeUrgence: inc.type || 'Inconnu',
-      
+      unitId: d.unit_id,
+      assignedStructureLat: toNullableNumber(d.assigned_structure_lat) ?? undefined,
+      assignedStructureLng: toNullableNumber(d.assigned_structure_lng) ?? undefined,
+
       // Hospital spec mapping
       hospitalStatus: d.hospital_status || 'pending',
       hospitalNotes: d.hospital_notes,
@@ -102,7 +148,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         .select(`
           *,
           incidents (*),
-          units (callsign)
+          units (callsign, phone, vehicle_type, vehicle_plate, agent_name)
         `)
         .eq('assigned_structure_id', structureId)
         .order('created_at', { ascending: false });

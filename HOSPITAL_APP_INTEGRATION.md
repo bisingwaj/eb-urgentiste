@@ -432,3 +432,153 @@ date_of_birth             TEXT      -- Date de naissance
 ---
 
 *Document généré pour intégration mobile — Adapter les noms de variables au style Dart/Flutter du projet.*
+
+---
+
+## 8. Suivi GPS en temps réel de l'unité / ambulance
+
+Lorsque la structure accepte l'alerte, elle doit pouvoir suivre le déplacement de l'unité (ambulance) qui transporte le patient vers l'hôpital. Deux sources de données sont disponibles :
+
+### 8.1 Position de l'unité (table `units`)
+
+La table `units` contient la dernière position connue de l'unité assignée au dispatch :
+
+```dart
+// Récupérer la position de l'unité assignée
+final unit = await supabase
+  .from('units')
+  .select('''
+    id,
+    callsign,
+    type,
+    vehicle_type,
+    vehicle_plate,
+    location_lat,
+    location_lng,
+    heading,
+    battery,
+    status,
+    last_location_update,
+    agent_name
+  ''')
+  .eq('id', dispatch['unit_id'])
+  .single();
+```
+
+### 8.2 Position GPS temps réel du secouriste (table `active_rescuers`)
+
+La table `active_rescuers` est mise à jour toutes les quelques secondes par l'app urgentiste et contient la position la plus précise :
+
+```dart
+// Récupérer la position temps réel du secouriste rattaché à l'unité
+final rescuers = await supabase
+  .from('active_rescuers')
+  .select('''
+    id,
+    user_id,
+    lat,
+    lng,
+    accuracy,
+    heading,
+    speed,
+    battery,
+    status,
+    updated_at
+  ''')
+  .in_('user_id', rescuerAuthUserIds) // IDs des secouristes de l'unité
+  .gte('updated_at', DateTime.now().subtract(Duration(minutes: 5)).toUtc().toIso8601String());
+```
+
+**Pour obtenir les `rescuerAuthUserIds` :**
+
+```dart
+// Trouver les secouristes rattachés à cette unité
+final rescuerProfiles = await supabase
+  .from('users_directory')
+  .select('auth_user_id')
+  .eq('assigned_unit_id', dispatch['unit_id']);
+
+final rescuerAuthUserIds = rescuerProfiles
+  .map((r) => r['auth_user_id'] as String)
+  .toList();
+```
+
+### 8.3 Écouter les mises à jour GPS en temps réel
+
+```dart
+// Suivi temps réel de la position de l'unité
+final gpsChannel = supabase.channel('hospital-unit-tracking')
+  .onPostgresChanges(
+    event: PostgresChangeEvent.update,
+    schema: 'public',
+    table: 'active_rescuers',
+    callback: (payload) {
+      final newData = payload.newRecord;
+      // Vérifier que c'est bien un secouriste de notre unité
+      if (rescuerAuthUserIds.contains(newData['user_id'])) {
+        final lat = newData['lat'] as double;
+        final lng = newData['lng'] as double;
+        final heading = newData['heading'] as double?;
+        final speed = newData['speed'] as double?;
+        
+        // Mettre à jour le marqueur sur la carte
+        _updateAmbulanceMarker(lat, lng, heading, speed);
+        
+        // Calculer l'ETA estimé vers l'hôpital
+        _recalculateETA(lat, lng);
+      }
+    },
+  )
+  .subscribe();
+```
+
+> **Note :** La table `active_rescuers` doit être dans la publication realtime :
+> ```sql
+> ALTER PUBLICATION supabase_realtime ADD TABLE public.active_rescuers;
+> ```
+
+### 8.4 Affichage recommandé — Carte de suivi
+
+```
+┌─────────────────────────────────────────────┐
+│  🗺️ SUIVI AMBULANCE EN TEMPS RÉEL           │
+│  ─────────────────────────────────────────  │
+│                                             │
+│     ┌──────────────────────────────────┐    │
+│     │                                  │    │
+│     │    🚑 ← position ambulance       │    │
+│     │     \                            │    │
+│     │      \  route estimée            │    │
+│     │       \                          │    │
+│     │        ▼                         │    │
+│     │       🏥 ← votre structure       │    │
+│     │                                  │    │
+│     └──────────────────────────────────┘    │
+│                                             │
+│  Unité : AMB-KIN-001 (Toyota Hiace)         │
+│  Agent : Jean Kabongo                       │
+│  Vitesse : 45 km/h                          │
+│  Direction : Nord-Est (bearing 42°)         │
+│  Batterie tablette : 72%                    │
+│  Dernière MàJ : il y a 3 secondes          │
+│  ETA estimé : ~8 minutes                    │
+│                                             │
+│  Statut dispatch : 🟢 En route hôpital      │
+│                                             │
+└─────────────────────────────────────────────┘
+```
+
+### 8.5 Sécurité & Accès
+
+Les politiques RLS garantissent que la structure ne voit **que** les unités et secouristes assignés à ses propres dispatches actifs. Dès que le dispatch passe en statut `completed` ou `cancelled`, l'accès est automatiquement révoqué.
+
+| Table | Accès hôpital |
+|-------|--------------|
+| `dispatches` | Lecture de tous les dispatches assignés à sa structure + mise à jour `hospital_status` |
+| `incidents` | Lecture des incidents liés à ses dispatches |
+| `sos_responses` | Lecture des réponses SOS liées à ses incidents |
+| `call_history` | Lecture de l'historique d'appels de ses incidents |
+| `units` | Lecture des unités assignées à ses dispatches actifs |
+| `active_rescuers` | Lecture GPS temps réel des secouristes de ses unités |
+| `users_directory` | Lecture du profil patient (via `citizen_id`) |
+

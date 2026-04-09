@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -20,9 +20,20 @@ import Mapbox from '@rnmapbox/maps';
 import { MapboxMapView } from '../../components/map/MapboxMapView';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import { supabase } from '../../lib/supabase';
+import {
+  getRoute,
+  buildRouteFeature,
+  geometryToCameraBounds,
+  formatDurationSeconds,
+  formatDistanceMeters,
+  haversineMeters,
+} from '../../lib/mapbox';
 import type { EmergencyCase, UrgencyLevel, CaseStatus } from './HospitalDashboardTab';
 
 const { width, height } = Dimensions.get('window');
+/** Hauteur zone carte suivi : ratio écran, bornée pour petits / grands écrans */
+const MAP_TRACK_HEIGHT = Math.min(500, Math.max(300, Math.round(height * 1.0)));
 const SWIPE_WIDTH = width - 40;
 const BUTTON_SIZE = 56;
 
@@ -51,12 +62,35 @@ import { useHospital } from '../../contexts/HospitalContext';
 export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const { caseData: initialCaseData } = route.params as { caseData: EmergencyCase };
   const [caseData, setCaseData] = useState(initialCaseData);
-  const { updateCaseStatus } = useHospital();
+  const { updateCaseStatus, activeCases } = useHospital();
   const levelCfg = getLevelConfig(caseData.level);
   const insets = useSafeAreaInsets();
 
-  const isAccepted = caseData.status !== 'en_attente';
-  const isEnRoute = caseData.status === 'en_cours';
+  /** Suivi ambulance : `en_route_hospital` (dispatch) ↔ `en_cours` (EmergencyCase.status) via HospitalContext */
+  const isEnRoute =
+    caseData.dispatchStatus === 'en_route_hospital' || caseData.status === 'en_cours';
+  /** Réponse hôpital : accepté / refusé */
+  const hasHospitalAccepted = caseData.hospitalStatus === 'accepted';
+  const isPendingHospitalResponse =
+    !caseData.hospitalStatus || caseData.hospitalStatus === 'pending';
+  /** Pas de swipe Accepter/Refuser tant que l’unité est déjà en route vers la structure */
+  const needsHospitalSwipe = isPendingHospitalResponse && !isEnRoute;
+  /** Carte + GPS dès acceptation (avec unité assignée), pas seulement en `en_route_hospital` */
+  const showAmbulanceTracking = hasHospitalAccepted && !!caseData.unitId;
+
+  const hospitalCoord = useMemo((): [number, number] | null => {
+    const lat = caseData.assignedStructureLat;
+    const lng = caseData.assignedStructureLng;
+    if (lat == null || lng == null || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+    return [lng, lat];
+  }, [caseData.assignedStructureLat, caseData.assignedStructureLng]);
+
+  // Realtime / liste : garder le détail aligné sur Supabase (hospital_status, status dispatch…)
+  useEffect(() => {
+    const updated = activeCases.find((c) => c.id === caseData.id);
+    if (!updated) return;
+    setCaseData((prev) => ({ ...prev, ...updated }));
+  }, [activeCases, caseData.id]);
 
   const [showRefusalModal, setShowRefusalModal] = useState(false);
   const [selectedReason, setSelectedReason] = useState("");
@@ -113,30 +147,191 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     }
   };
 
+  const unitDialNumber =
+    caseData.urgentistePhone && caseData.urgentistePhone !== '-' ? caseData.urgentistePhone : '';
+
   const handleCall = () => {
-    const url = `tel:${caseData.urgentistePhone}`;
-    Linking.canOpenURL(url).then(supported => supported && Linking.openURL(url));
+    if (!unitDialNumber) {
+      Alert.alert('Contact indisponible', 'Aucun numéro de téléphone n’est renseigné pour cette unité.');
+      return;
+    }
+    const url = `tel:${unitDialNumber}`;
+    Linking.canOpenURL(url).then((supported) => supported && Linking.openURL(url));
   };
 
   const handleMessage = () => {
-    const url = `sms:${caseData.urgentistePhone}`;
-    Linking.canOpenURL(url).then(supported => supported && Linking.openURL(url));
+    if (!unitDialNumber) {
+      Alert.alert('Contact indisponible', 'Aucun numéro de téléphone n’est renseigné pour cette unité.');
+      return;
+    }
+    const url = `sms:${unitDialNumber}`;
+    Linking.canOpenURL(url).then((supported) => supported && Linking.openURL(url));
   };
 
   const handleGoToAdmission = () => {
     navigation.navigate('HospitalAdmission', { caseData });
   };
 
-  // Mocking movement
-  const [ambLat, setAmbLat] = useState(-4.4450);
+  // Realtime GPS Tracking State (pas de position par défaut : évite un faux tracé avant la 1re MàJ)
+  const [ambulanceLat, setAmbulanceLat] = useState<number | null>(null);
+  const [ambulanceLng, setAmbulanceLng] = useState<number | null>(null);
+  const [ambulanceSpeed, setAmbulanceSpeed] = useState<number | null>(null);
+  const [ambulanceBattery, setAmbulanceBattery] = useState<number | null>(null);
+  const [ambulanceHeading, setAmbulanceHeading] = useState<number | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [rescuerName, setRescuerName] = useState<string>('Unité');
+  const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [routeDurationSec, setRouteDurationSec] = useState<number | null>(null);
+  const [routeDistanceM, setRouteDistanceM] = useState<number | null>(null);
+  const lastRouteFetch = useRef(0);
+
+  const hasAmbulancePosition = ambulanceLat != null && ambulanceLng != null;
+
   useEffect(() => {
-    if (isEnRoute) {
-      const interval = setInterval(() => {
-        setAmbLat(prev => prev + 0.0001);
-      }, 2000);
-      return () => clearInterval(interval);
+    if (!hospitalCoord) {
+      setRouteGeoJSON(null);
+      setRouteDurationSec(null);
+      setRouteDistanceM(null);
     }
-  }, [isEnRoute]);
+  }, [hospitalCoord]);
+
+  /** Recalcul itinéraire (throttle ~15 s comme MissionActive) : driving-traffic puis repli côté getRoute */
+  useEffect(() => {
+    if (!showAmbulanceTracking || !hospitalCoord) return;
+    if (ambulanceLat == null || ambulanceLng == null) return;
+    const now = Date.now();
+    if (now - lastRouteFetch.current < 15000 && routeGeoJSON) return;
+    lastRouteFetch.current = now;
+    const origin: [number, number] = [ambulanceLng, ambulanceLat];
+    getRoute(origin, hospitalCoord, { profile: 'driving-traffic' }).then((result) => {
+      if (result) {
+        setRouteGeoJSON(buildRouteFeature(result.geometry));
+        setRouteDurationSec(result.duration);
+        setRouteDistanceM(result.distance);
+      } else {
+        const straight: GeoJSON.LineString = {
+          type: 'LineString',
+          coordinates: [origin, hospitalCoord],
+        };
+        setRouteGeoJSON(buildRouteFeature(straight));
+        setRouteDurationSec(null);
+        setRouteDistanceM(haversineMeters(origin, hospitalCoord));
+      }
+    });
+  }, [ambulanceLat, ambulanceLng, hospitalCoord, showAmbulanceTracking, routeGeoJSON]);
+
+  const mapCameraBounds = useMemo(() => {
+    if (routeGeoJSON?.features[0]?.geometry) {
+      return geometryToCameraBounds(routeGeoJSON.features[0].geometry as GeoJSON.LineString, 80);
+    }
+    if (hospitalCoord && hasAmbulancePosition) {
+      const padding = 80;
+      return {
+        ne: [Math.max(hospitalCoord[0], ambulanceLng!), Math.max(hospitalCoord[1], ambulanceLat!)] as [number, number],
+        sw: [Math.min(hospitalCoord[0], ambulanceLng!), Math.min(hospitalCoord[1], ambulanceLat!)] as [number, number],
+        paddingTop: padding,
+        paddingBottom: padding,
+        paddingLeft: padding,
+        paddingRight: padding,
+      };
+    }
+    return null;
+  }, [routeGeoJSON, hospitalCoord, ambulanceLat, ambulanceLng, hasAmbulancePosition]);
+
+  const mapFallbackCenter = useMemo((): [number, number] => {
+    if (hospitalCoord) return [hospitalCoord[0], hospitalCoord[1]];
+    if (hasAmbulancePosition) return [ambulanceLng!, ambulanceLat!];
+    return [15.2663, -4.4419];
+  }, [hospitalCoord, hasAmbulancePosition, ambulanceLng, ambulanceLat]);
+
+  useEffect(() => {
+    if (!showAmbulanceTracking || !caseData.unitId) return;
+
+    let channel: any;
+    let isMounted = true;
+
+    async function initTracking() {
+      // Find rescuers assigned to this unit
+      const { data: rescuers } = await supabase
+        .from('users_directory')
+        .select('auth_user_id, first_name, last_name')
+        .eq('assigned_unit_id', caseData.unitId);
+
+      if (!rescuers || rescuers.length === 0) return;
+      
+      const rescuerIds = rescuers.map((r: any) => r.auth_user_id);
+      if (rescuers[0]?.first_name) {
+        setRescuerName(`${rescuers[0].first_name} ${rescuers[0].last_name || ''}`.trim());
+      }
+
+      // Fetch initial position
+      const { data: activeRescuers } = await supabase
+        .from('active_rescuers')
+        .select('lat, lng, speed, battery, heading, updated_at')
+        .in('user_id', rescuerIds)
+        .order('updated_at', { ascending: false })
+        .limit(1);
+
+      if (activeRescuers && activeRescuers.length > 0 && isMounted) {
+        setAmbulanceLat(Number(activeRescuers[0].lat));
+        setAmbulanceLng(Number(activeRescuers[0].lng));
+        setAmbulanceSpeed(activeRescuers[0].speed);
+        setAmbulanceBattery(activeRescuers[0].battery);
+        setAmbulanceHeading(activeRescuers[0].heading);
+        setLastUpdate(new Date(activeRescuers[0].updated_at));
+      } else {
+        // Fallback to unit position if no active_rescuer found
+        const { data: unitData } = await supabase
+          .from('units')
+          .select('location_lat, location_lng, agent_name')
+          .eq('id', caseData.unitId)
+          .single();
+        if (unitData && isMounted) {
+          if (unitData.location_lat != null) setAmbulanceLat(Number(unitData.location_lat));
+          if (unitData.location_lng != null) setAmbulanceLng(Number(unitData.location_lng));
+          if (unitData.agent_name) setRescuerName(unitData.agent_name);
+        }
+      }
+
+      channel = supabase.channel(`hospital-unit-tracking-${caseData.unitId}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'active_rescuers' },
+          (payload: any) => {
+            const data = payload.new || payload.old;
+            if (data && rescuerIds.includes(data.user_id)) {
+              if (isMounted) {
+                setAmbulanceLat(Number(data.lat));
+                setAmbulanceLng(Number(data.lng));
+                setAmbulanceSpeed(data.speed);
+                setAmbulanceBattery(data.battery);
+                setAmbulanceHeading(data.heading);
+                setLastUpdate(new Date(data.updated_at));
+              }
+            }
+          }
+        )
+        .subscribe();
+    }
+
+    initTracking();
+
+    return () => {
+      isMounted = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [showAmbulanceTracking, caseData.unitId]);
+
+  const isSignalLost = lastUpdate 
+    ? new Date().getTime() - lastUpdate.getTime() > 2 * 60 * 1000 
+    : false;
+
+  const etaMainDisplay =
+    routeDurationSec != null
+      ? formatDurationSeconds(routeDurationSec)
+      : caseData.eta && String(caseData.eta).trim()
+        ? caseData.eta
+        : '—';
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -145,9 +340,14 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>
-          {isEnRoute ? "Suivi de l'ambulance" : "Détails du cas"}
-        </Text>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <Text style={styles.headerTitle}>
+            {showAmbulanceTracking ? "Suivi de l'ambulance" : 'Détails du cas'}
+          </Text>
+          {caseData.incidentReference ? (
+            <Text style={styles.headerRef} numberOfLines={1}>{caseData.incidentReference}</Text>
+          ) : null}
+        </View>
         <View style={{ width: 40 }} />
       </View>
 
@@ -156,53 +356,125 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: insets.bottom + 120 }}
       >
-        {isEnRoute ? (
+        {showAmbulanceTracking && (
           <View style={styles.trackingContainer}>
-            <View style={styles.etaCard}>
-              <Text style={styles.etaLabel}>ARRIVÉE ESTIMÉE DANS</Text>
-              <Text style={styles.etaValue}>{caseData.eta}</Text>
-              <View style={styles.etaProgress}>
-                <View style={styles.etaProgressFill} />
+            <View style={[styles.mapFullBleed, { height: MAP_TRACK_HEIGHT }]}>
+              <MapboxMapView style={styles.liveMap} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
+                {mapCameraBounds ? (
+                  <Mapbox.Camera
+                    bounds={mapCameraBounds}
+                    animationMode="flyTo"
+                    animationDuration={1000}
+                  />
+                ) : (
+                  <Mapbox.Camera
+                    centerCoordinate={mapFallbackCenter}
+                    zoomLevel={14}
+                    animationMode="flyTo"
+                    animationDuration={800}
+                  />
+                )}
+                {hospitalCoord && (
+                  <Mapbox.PointAnnotation id="hospital-structure" coordinate={hospitalCoord}>
+                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.secondary, justifyContent: 'center', alignItems: 'center' }}>
+                      <MaterialIcons name="local-hospital" color="#FFF" size={14} />
+                    </View>
+                  </Mapbox.PointAnnotation>
+                )}
+                {hasAmbulancePosition && (
+                  <Mapbox.PointAnnotation id="ambulance" coordinate={[ambulanceLng!, ambulanceLat!]}>
+                    <View style={[
+                      styles.ambulanceMarker,
+                      ambulanceHeading !== null ? { transform: [{ rotate: `${ambulanceHeading}deg` }] } : {},
+                    ]}>
+                      <MaterialCommunityIcons name="navigation" color="#FFF" size={20} />
+                    </View>
+                  </Mapbox.PointAnnotation>
+                )}
+                {routeGeoJSON && (
+                  <Mapbox.ShapeSource id="hospital-route" shape={routeGeoJSON}>
+                    <Mapbox.LineLayer
+                      id="hospital-route-line"
+                      style={{ lineColor: '#4A90D9', lineWidth: 4, lineOpacity: 0.85 }}
+                    />
+                  </Mapbox.ShapeSource>
+                )}
+              </MapboxMapView>
+              {!hospitalCoord && (
+                <View style={styles.coordsMissingBanner}>
+                  <MaterialIcons name="info-outline" size={16} color="#FFF" />
+                  <Text style={styles.coordsMissingText}>Coordonnées de la structure indisponibles</Text>
+                </View>
+              )}
+              <View style={[styles.mapStatusBadge, isSignalLost ? { backgroundColor: 'rgba(255, 82, 82, 0.9)' } : {}]}>
+                <View style={[styles.liveDot, isSignalLost ? { backgroundColor: '#FFF' } : {}]} />
+                <Text style={styles.liveText}>{isSignalLost ? 'SIGNAL PERDU' : 'GPS EN DIRECT'}</Text>
               </View>
             </View>
 
-            <View style={styles.liveMapContainer}>
-              <MapboxMapView style={styles.liveMap} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
-                <Mapbox.Camera centerCoordinate={[15.2663, -4.4419]} zoomLevel={15} />
-                <Mapbox.PointAnnotation id="hospital" coordinate={[15.2663, -4.4419]}>
-                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: colors.secondary, justifyContent: 'center', alignItems: 'center' }}>
-                    <MaterialIcons name="local-hospital" color="#FFF" size={12} />
-                  </View>
-                </Mapbox.PointAnnotation>
-                <Mapbox.PointAnnotation id="ambulance" coordinate={[15.2663, ambLat]}>
-                  <View style={styles.ambulanceMarker}>
-                    <MaterialIcons name="local-shipping" color="#FFF" size={20} />
-                  </View>
-                </Mapbox.PointAnnotation>
-                <Mapbox.ShapeSource
-                  id="amb-route"
-                  shape={{
-                    type: 'FeatureCollection',
-                    features: [{
-                      type: 'Feature',
-                      properties: {},
-                      geometry: { type: 'LineString', coordinates: [[15.2663, ambLat], [15.2663, -4.4419]] },
-                    }],
-                  }}
-                >
-                  <Mapbox.LineLayer id="amb-route-line" style={{ lineColor: colors.secondary, lineWidth: 3, lineDasharray: [2, 2] }} />
-                </Mapbox.ShapeSource>
-              </MapboxMapView>
-              <View style={styles.mapStatusBadge}><View style={styles.liveDot} /><Text style={styles.liveText}>GPS EN DIRECT</Text></View>
-            </View>
-
-            <View style={styles.horizontalScroll}>
-              <View style={styles.miniCard}><MaterialIcons name="person" color={colors.secondary} size={20} /><View><Text style={styles.miniLabel}>PATIENT</Text><Text style={styles.miniValue}>{caseData.victimName}</Text></View></View>
-              <View style={styles.miniCard}><MaterialIcons name="medical-services" color={colors.success} size={20} /><View><Text style={styles.miniLabel}>UNITÉ</Text><Text style={styles.miniValue}>{caseData.urgentisteName}</Text></View></View>
+            <View style={styles.trackingInfoLite}>
+              <View style={styles.infoLine}>
+                <Text style={styles.infoLineLabel}>Arrivée estimée</Text>
+                <Text style={styles.infoLineValueEta}>{etaMainDisplay}</Text>
+              </View>
+              <Text style={styles.infoLineHint}>
+                {isEnRoute ? 'En route vers votre structure' : 'En attente de départ — suivi GPS actif'}
+              </Text>
+              {routeDistanceM != null ? (
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>Distance restante</Text>
+                  <Text style={styles.infoLineValue}>{formatDistanceMeters(routeDistanceM)}</Text>
+                </View>
+              ) : null}
+              <View style={styles.infoHairline} />
+              <View style={styles.infoLine}>
+                <Text style={styles.infoLineLabel}>Unité</Text>
+                <Text style={styles.infoLineValue} numberOfLines={1}>
+                  {caseData.urgentisteName}
+                </Text>
+              </View>
+              <View style={styles.infoLine}>
+                <Text style={styles.infoLineLabel}>Agent</Text>
+                <Text style={styles.infoLineValue} numberOfLines={1}>
+                  {rescuerName}
+                </Text>
+              </View>
+              {ambulanceSpeed !== null ? (
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>Vitesse</Text>
+                  <Text style={styles.infoLineValue}>{Math.round(ambulanceSpeed * 3.6)} km/h</Text>
+                </View>
+              ) : null}
+              {ambulanceBattery !== null ? (
+                <View style={styles.infoLine}>
+                  <Text style={styles.infoLineLabel}>Batterie</Text>
+                  <Text
+                    style={[
+                      styles.infoLineValue,
+                      ambulanceBattery <= 20 && { color: colors.error },
+                    ]}
+                  >
+                    {ambulanceBattery}%
+                  </Text>
+                </View>
+              ) : null}
+              <View style={styles.infoLine}>
+                <Text style={styles.infoLineLabel}>Dernière MàJ</Text>
+                <Text style={styles.infoLineValue}>
+                  {lastUpdate
+                    ? lastUpdate.toLocaleTimeString([], {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        second: '2-digit',
+                      })
+                    : '—'}
+                </Text>
+              </View>
             </View>
           </View>
-        ) : (
-          <>
+        )}
+
+        <>
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Informations patient</Text>
               <View style={styles.infoCard}>
@@ -211,6 +483,9 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.patientName}>{caseData.victimName}</Text>
                     <View style={styles.metaRow}><Text style={styles.metaText}>{caseData.sex} · {caseData.age || '?'} ans</Text></View>
+                    {caseData.callerPhone ? (
+                      <Text style={styles.metaText}>Tél. signalement : {caseData.callerPhone}</Text>
+                    ) : null}
                   </View>
                 </View>
                 {caseData.patientProfile && (
@@ -240,18 +515,35 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
             </View>
 
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Localisation & Unité</Text>
+              <Text style={styles.sectionTitle}>Localisation & unité terrain</Text>
               <View style={[styles.infoCard, { padding: 16, gap: 16 }]}>
                 <View style={styles.unitInfoRow}>
                   <MaterialIcons name="place" color={colors.secondary} size={20} />
                   <Text style={styles.addressText}>{caseData.address}</Text>
                 </View>
                 <View style={styles.divider} />
+                <Text style={styles.unitBlockLabel}>Équipe / unité mobile</Text>
+                <View style={styles.unitInfoRow}>
+                  <MaterialIcons name="local-shipping" color={colors.secondary} size={20} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.unitName}>Indicatif : {caseData.urgentisteName}</Text>
+                    {(caseData.unitVehicleType || caseData.unitVehiclePlate) ? (
+                      <Text style={styles.unitDetailLine}>
+                        {[caseData.unitVehicleType, caseData.unitVehiclePlate].filter(Boolean).join(' · ')}
+                      </Text>
+                    ) : null}
+                    {caseData.unitAgentName ? (
+                      <Text style={styles.unitDetailLine}>Agent : {caseData.unitAgentName}</Text>
+                    ) : null}
+                    <Text style={styles.unitPhone}>
+                      Contact unité : {caseData.urgentistePhone !== '-' ? caseData.urgentistePhone : 'Non renseigné'}
+                    </Text>
+                  </View>
+                </View>
                 <View style={styles.unitInfoRow}>
                   <MaterialIcons name="medical-services" color={colors.secondary} size={20} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.unitName}>{caseData.urgentisteName}</Text>
-                    <Text style={styles.unitPhone}>{caseData.urgentistePhone}</Text>
+                    <Text style={styles.unitHint}>Appeler ou SMS l’équipe terrain (numéro unité)</Text>
                   </View>
                   <View style={styles.unitActions}>
                     <TouchableOpacity style={styles.unitBtn} onPress={handleCall}><MaterialIcons name="phone" color={colors.success} size={20} /></TouchableOpacity>
@@ -317,11 +609,10 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
               </View>
             )}
           </>
-        )}
       </ScrollView>
 
       {/* FOOTER ACTIONS */}
-      {(!isAccepted && !caseData.hospitalStatus || caseData.hospitalStatus === 'pending') ? (
+      {needsHospitalSwipe ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <View style={styles.swipeContainer}>
             <View style={styles.swipeBackground}><Text style={styles.swipeText}>Glisser pour accepter</Text><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.3)" size={24} /></View>
@@ -331,14 +622,26 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
             <Text style={styles.refuseText}>Refuser le cas</Text>
           </TouchableOpacity>
         </View>
-      ) : isEnRoute && (
+      ) : isEnRoute ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToAdmission}>
             <MaterialIcons name="local-hospital" color="#000" size={24} />
             <Text style={styles.admissionBtnText}>Patient arrivé - Admettre</Text>
           </TouchableOpacity>
         </View>
-      )}
+      ) : hasHospitalAccepted ? (
+        <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <Text style={styles.postAcceptHint}>
+            {caseData.unitId
+              ? 'Cas accepté. Le suivi ambulance et l’itinéraire vers votre structure sont affichés ci-dessus. Vous pourrez admettre le patient à l’arrivée.'
+              : 'Cas accepté. Le suivi GPS s’affichera lorsqu’une unité sera assignée au dispatch.'}
+          </Text>
+          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToAdmission}>
+            <MaterialIcons name="arrow-forward" color="#000" size={24} />
+            <Text style={styles.admissionBtnText}>Continuer vers l’admission</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {/* 🔴 REFUSAL MODAL */}
       <Modal visible={showRefusalModal} transparent animationType="slide" onRequestClose={() => setShowRefusalModal(false)}>
@@ -386,6 +689,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, height: 60 },
   backBtn: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
   headerTitle: { color: '#FFF', fontSize: 18, fontWeight: '800' },
+  headerRef: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '700', marginTop: 2 },
   scroll: { flex: 1 },
   section: { marginHorizontal: 20, marginTop: 24 },
   sectionTitle: { color: 'rgba(255,255,255,0.4)', fontSize: 13, fontWeight: '800', marginBottom: 12, letterSpacing: 1 },
@@ -403,25 +707,85 @@ const styles = StyleSheet.create({
   addressText: { color: '#FFF', fontSize: 14, fontWeight: '600', flex: 1 },
   unitInfoRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   unitName: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  unitBlockLabel: { color: 'rgba(255,255,255,0.45)', fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
+  unitDetailLine: { color: colors.textMuted, fontSize: 13, marginTop: 4 },
+  unitHint: { color: colors.textMuted, fontSize: 12 },
   unitPhone: { color: colors.textMuted, fontSize: 13 },
   unitActions: { flexDirection: 'row', gap: 8 },
   unitBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.03)', justifyContent: 'center', alignItems: 'center' },
-  trackingContainer: { paddingVertical: 20 },
-  etaCard: { alignItems: 'center', marginBottom: 24 },
-  etaLabel: { color: colors.secondary, fontSize: 12, fontWeight: '900', letterSpacing: 2, marginBottom: 8 },
-  etaValue: { color: '#FFF', fontSize: 56, fontWeight: '900' },
-  etaProgress: { width: 240, height: 6, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 3, marginTop: 16, overflow: 'hidden' },
-  etaProgressFill: { width: '40%', height: '100%', backgroundColor: colors.secondary },
-  liveMapContainer: { height: 350, marginHorizontal: 20, borderRadius: 30, overflow: 'hidden', borderWidth: 2, borderColor: 'rgba(68,138,255,0.2)' },
+  trackingContainer: { marginBottom: 8 },
+  mapFullBleed: {
+    width: '100%',
+    alignSelf: 'stretch',
+    overflow: 'hidden',
+    backgroundColor: '#111',
+  },
   liveMap: { flex: 1 },
+  /** Bloc sous la carte : infos légères, pas de « carte » UI */
+  trackingInfoLite: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 0,
+    paddingVertical: 4,
+    gap: 6,
+  },
+  infoLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 4,
+  },
+  infoLineLabel: {
+    color: 'rgba(255,255,255,0.45)',
+    fontSize: 12,
+    fontWeight: '600',
+    flexShrink: 0,
+  },
+  infoLineValue: {
+    color: 'rgba(255,255,255,0.88)',
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
+    textAlign: 'right',
+  },
+  infoLineValueEta: {
+    color: '#FFF',
+    fontSize: 22,
+    fontWeight: '800',
+    flex: 1,
+    textAlign: 'right',
+  },
+  infoLineHint: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
+    marginBottom: 4,
+    marginTop: -2,
+  },
+  infoHairline: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    marginVertical: 8,
+  },
+  coordsMissingBanner: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  coordsMissingText: { color: '#FFF', fontSize: 12, fontWeight: '700', flex: 1 },
   ambulanceMarker: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#FFF' },
   mapStatusBadge: { position: 'absolute', top: 16, left: 16, backgroundColor: 'rgba(0,0,0,0.7)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 8 },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF5252' },
   liveText: { color: '#FFF', fontSize: 13, fontWeight: '900' },
-  horizontalScroll: { flexDirection: 'row', gap: 12, paddingHorizontal: 20, marginTop: 24 },
-  miniCard: { flex: 1, backgroundColor: '#1A1A1A', borderRadius: 18, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  miniLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '800' },
-  miniValue: { color: '#FFF', fontSize: 14, fontWeight: '700' },
   stickyFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 16, backgroundColor: colors.mainBackground },
   swipeContainer: { height: 64, width: SWIPE_WIDTH, backgroundColor: '#1A1A1A', borderRadius: 32, padding: 4, justifyContent: 'center', overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   swipeBackground: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
@@ -431,6 +795,14 @@ const styles = StyleSheet.create({
   refuseText: { color: colors.primary, fontWeight: '800', fontSize: 13, textTransform: 'uppercase', letterSpacing: 0.5 },
   admissionBtn: { height: 64, borderRadius: 32, backgroundColor: colors.success, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 },
   admissionBtnText: { color: '#000', fontSize: 17, fontWeight: '800' },
+  postAcceptHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 20,
+    marginBottom: 14,
+    paddingHorizontal: 4,
+    textAlign: 'center',
+  },
 
   // Modal Style
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },

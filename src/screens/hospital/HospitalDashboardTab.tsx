@@ -45,7 +45,24 @@ export interface EmergencyCase {
   address: string;
   timestamp: string;
   typeUrgence: string; // Ex: Traumatisme, Cardiaque, Obstétrique
-  
+  unitId?: string;
+  /** Valeur brute `dispatches.status` (ex. `en_route_hospital`) — utile pour l’UI et le debug */
+  dispatchStatus?: string;
+  /** Coordonnées de la structure assignée (`dispatches.assigned_structure_*`) — destination carte / itinéraire */
+  assignedStructureLat?: number;
+  assignedStructureLng?: number;
+
+  /** Référence métier (`incidents.reference`) */
+  incidentReference?: string;
+  /** Téléphone laissé au signalement (`incidents.caller_phone`) */
+  callerPhone?: string;
+  /** Contact radio / GSM unité (`units.phone`) — peut différer du téléphone patient */
+  unitPhone?: string;
+  unitVehicleType?: string;
+  unitVehiclePlate?: string;
+  /** Agent principal renseigné sur l’unité (`units.agent_name`) */
+  unitAgentName?: string;
+
   // Hospital Assignment fields
   hospitalStatus?: HospitalStatus;
   hospitalNotes?: string;
@@ -376,13 +393,18 @@ export function HospitalDashboardTab({ navigation }: any) {
     "all" | "en_attente" | "en_cours" | "termine"
   >("all");
 
+  const isCaseClosed = (c: EmergencyCase) =>
+    c.status === "termine" ||
+    c.dispatchStatus === "completed" ||
+    c.dispatchStatus === "cancelled";
+
   const filteredCases = activeCases.filter((c) => {
-    if (filter === "all") return c.status !== "termine" && c.status !== "completed";
+    if (filter === "all") return !isCaseClosed(c);
     return c.status === filter;
   });
 
   const criticalCount = activeCases.filter(
-    (c) => c.level === "critique" && c.status !== "termine" && c.status !== "completed"
+    (c) => c.level === "critique" && !isCaseClosed(c)
   ).length;
   const activeCount = activeCases.filter((c) =>
     ["en_cours", "triage", "prise_en_charge"].includes(c.status)
