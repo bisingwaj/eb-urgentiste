@@ -16,6 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.eburgentiste.app",
       "infoPlist": {
+        "UIBackgroundModes": ["audio", "remote-notification"],
         "NSMicrophoneUsageDescription": "L'application utilise le micro pour les appels avec la centrale de régulation.",
         "NSCameraUsageDescription": "La caméra est utilisée pour les appels vidéo avec la centrale.",
         "NSFaceIDUsageDescription": "L'application utilise Face ID pour déverrouiller l'accès après connexion."
@@ -25,7 +26,11 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.VIBRATE",
+        "android.permission.USE_FULL_SCREEN_INTENT",
+        "android.permission.WAKE_LOCK"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -40,6 +45,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-build-properties",
       "@rnmapbox/maps",
       "expo-secure-store",
       [
@@ -47,11 +53,22 @@
         {
           "faceIDPermission": "L'application utilise Face ID pour déverrouiller l'accès après connexion."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "sounds": [
+            "./assets/sounds/alarm_alert.wav",
+            "./assets/sounds/incoming_call_ring.wav"
+          ],
+          "defaultChannel": "incoming_calls",
+          "enableBackgroundRemoteNotifications": true
+        }
       ]
     ],
     "extra": {
       "eas": {
-        "projectId": "7e38def9-f974-422a-a713-053e2138c7e2"
+        "projectId": "f8b5d6a4-d96d-44cf-9c3d-1c9c4d225377"
       }
     }
   }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { Alert, Vibration } from 'react-native';
+import { Alert, Vibration, DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { Mission } from '../hooks/useActiveMission';
@@ -231,7 +231,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         },
         (payload: any) => {
           console.log('[Mission] 🚨 NOUVELLE MISSION REÇUE !', payload.new?.id);
-          Vibration.vibrate([0, 500, 200, 500, 200, 500]);
+          // Déclencher l'alarme sonore continue (gérée par AlertAlarmManager)
+          DeviceEventEmitter.emit('NEW_MISSION_ALERT');
           fetchActiveMission({ silent: true }).then(() => {
             Alert.alert(
               '🚨 NOUVELLE MISSION',
