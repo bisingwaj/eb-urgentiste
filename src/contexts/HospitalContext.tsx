@@ -32,7 +32,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       sex: hData.sex || 'Inconnu',
       description: inc.description || '',
       level: (inc.priority === 'critical' ? 'critique' : inc.priority === 'high' ? 'urgent' : 'stable') as UrgencyLevel,
-      urgentisteName: d.units?.name || 'Unité mobile', // Assuming unit name could be returned if joined
+      urgentisteName: d.units?.callsign || 'Unité mobile', // Assuming unit name could be returned if joined
       urgentistePhone: d.units?.phone || '-', 
       eta: '5 min', // To be calculated or drawn from dispatches if available
       status: (d.status === 'dispatched' || d.status === 'en_route' || d.status === 'on_scene' ? 'en_attente' : 
@@ -78,7 +78,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         .select(`
           *,
           incidents (*),
-          units (name, phone)
+          units (callsign)
         `)
         .eq('assigned_structure_id', structureId)
         .order('created_at', { ascending: false });
