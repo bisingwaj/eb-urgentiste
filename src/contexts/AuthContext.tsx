@@ -20,6 +20,7 @@ export interface UserProfile {
   zone: string | null;
   address: string | null;
   assigned_unit_id: string | null;
+  health_structure_id: string | null;
   must_change_password: boolean;
   agent_login_id: string | null;
 }
@@ -76,9 +77,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('[Auth] Erreur fallback profil:', fallbackError.message);
           return null;
         }
-        return fallbackData as UserProfile | null;
+        
+        const profile = fallbackData as UserProfile;
+        if (profile && profile.role === 'hopital') {
+          const { data: st } = await supabase.from('health_structures').select('id').eq('linked_user_id', profile.id).maybeSingle();
+          profile.health_structure_id = st?.id || null;
+        }
+        return profile;
       }
-      return data as UserProfile | null;
+      
+      const profile = data as UserProfile;
+      if (profile && profile.role === 'hopital') {
+        const { data: st } = await supabase.from('health_structures').select('id').eq('linked_user_id', profile.id).maybeSingle();
+        profile.health_structure_id = st?.id || null;
+      }
+      return profile;
     } catch (err) {
       console.error('[Auth] Exception chargement profil:', err);
       return null;

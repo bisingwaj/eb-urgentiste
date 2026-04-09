@@ -19,6 +19,7 @@ import { isSupabaseConfigured } from './src/lib/supabase';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { AppLockProvider } from './src/contexts/AppLockContext';
 import { MissionProvider } from './src/contexts/MissionContext';
+import { HospitalProvider } from './src/contexts/HospitalContext';
 import { CallSessionProvider } from './src/contexts/CallSessionContext';
 import { GlobalAlert } from './src/components/shared/GlobalAlert';
 import { AlertAlarmManager } from './src/components/alerts/AlertAlarmManager';
@@ -226,22 +227,24 @@ export default function App() {
   return (
     <AuthProvider>
       <MissionProvider>
-        <AppLockProvider>
-          <SafeAreaProvider>
-            <StatusBar barStyle="light-content" backgroundColor="#000000" />
-            <NavigationContainer ref={navigationRef} theme={navTheme}>
-              <CallSessionProvider>
-                <PushTokenRegistration />
-                <RootNavigator />
-                <FloatingCallBar />
-                <IncomingCallSubscriber />
-                <IncomingCallNotificationHandler />
-                <GlobalAlert />
-                <AlertAlarmManager />
-              </CallSessionProvider>
-            </NavigationContainer>
-          </SafeAreaProvider>
-        </AppLockProvider>
+        <HospitalProvider>
+          <AppLockProvider>
+            <SafeAreaProvider>
+              <StatusBar barStyle="light-content" backgroundColor="#000000" />
+              <NavigationContainer ref={navigationRef} theme={navTheme}>
+                <CallSessionProvider>
+                  <PushTokenRegistration />
+                  <RootNavigator />
+                  <FloatingCallBar />
+                  <IncomingCallSubscriber />
+                  <IncomingCallNotificationHandler />
+                  <GlobalAlert />
+                  <AlertAlarmManager />
+                </CallSessionProvider>
+              </NavigationContainer>
+            </SafeAreaProvider>
+          </AppLockProvider>
+        </HospitalProvider>
       </MissionProvider>
     </AuthProvider>
   );

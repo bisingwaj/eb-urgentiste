@@ -46,9 +46,12 @@ const REFUSAL_REASONS = [
   "Autre raison"
 ];
 
+import { useHospital } from '../../contexts/HospitalContext';
+
 export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const { caseData: initialCaseData } = route.params as { caseData: EmergencyCase };
   const [caseData, setCaseData] = useState(initialCaseData);
+  const { updateCaseStatus } = useHospital();
   const levelCfg = getLevelConfig(caseData.level);
   const insets = useSafeAreaInsets();
 
@@ -81,21 +84,33 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     })
   ).current;
 
-  const handleAcceptCase = () => {
-    setCaseData(prev => ({ ...prev, status: 'en_cours' }));
+  const handleAcceptCase = async () => {
+    try {
+      await updateCaseStatus(caseData.id, { status: 'en_cours' });
+      setCaseData(prev => ({ ...prev, status: 'en_cours' }));
+    } catch (err) {
+      Alert.alert('Erreur', 'Impossible d\'accepter le cas actuellement.');
+    }
   };
 
-  const handleRefuseCase = () => {
+  const handleRefuseCase = async () => {
     const finalReason = selectedReason === "Autre raison" ? otherReason : selectedReason;
     if (!finalReason) {
       Alert.alert("Action requise", "Veuillez sélectionner ou saisir une raison.");
       return;
     }
 
-    // logic to update DB would go here
-    setShowRefusalModal(false);
-    navigation.goBack();
-    Alert.alert("Cas refusé", "Le signalement a été refusé. L'unité mobile est notifiée.");
+    try {
+      await updateCaseStatus(caseData.id, { 
+        status: 'termine', 
+        data: { outcome: 'refuse', refusalReason: finalReason } 
+      });
+      setShowRefusalModal(false);
+      navigation.goBack();
+      Alert.alert("Cas refusé", "Le signalement a été refusé. L'unité mobile est notifiée.");
+    } catch (err) {
+      Alert.alert('Erreur', 'Impossible de refuser ce cas.');
+    }
   };
 
   const handleCall = () => {

@@ -53,8 +53,11 @@ interface Treatment {
 type TabType = "PC" | "EXAMENS" | "TIMELINE";
 type ModalType = "note" | "exam_add" | "exam_edit" | "treatment_add";
 
+import { useHospital } from '../../contexts/HospitalContext';
+
 export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
   const { caseData } = route.params;
+  const { updateCaseStatus } = useHospital();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -68,24 +71,24 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
   const [noteStatus, setNoteStatus] = useState<"Amélioration" | "Stable" | "Aggravation">("Stable");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
 
-  const [observations, setObservations] = useState<Observation[]>([
+  const [observations, setObservations] = useState<Observation[]>(caseData.observations || [
     { id: "1", time: "11:20", text: "Reprise d'une conscience partielle, répond aux ordres simples.", status: "Amélioration" },
     { id: "2", time: "11:05", text: "Paramètres stables sous monitoring.", status: "Stable" },
     { id: "3", time: "10:50", text: "Détresse respiratoire augmentée, tirage sus-sternal.", status: "Aggravation" },
   ]);
 
-  const [treatments, setTreatments] = useState<Treatment[]>([
+  const [treatments, setTreatments] = useState<Treatment[]>(caseData.treatments || [
     { id: "t1", name: "Morphine 5mg IVD", time: "11:05", user: "Dr. Kabamba" },
     { id: "t2", name: "NaCl 0.9% 500ml", time: "10:50", user: "Inf. Sarah" },
   ]);
 
-  const [exams, setExams] = useState<Exam[]>([
+  const [exams, setExams] = useState<Exam[]>(caseData.exams || [
     { id: "e1", label: "NFS, Iono, Glycémie", status: "Fait", result: "Hb: 12.4, Gluc: 1.1g/l", time: "10:45" },
     { id: "e2", label: "Scanner Cérébral sans injection", status: "En cours", time: "11:05" },
     { id: "e3", label: "ECG 12 dérivations", status: "Fait", result: "Tachycardie Sinusale", time: "10:55" },
   ]);
 
-  const [timeline, setTimeline] = useState<TimelineEntry[]>([
+  const [timeline, setTimeline] = useState<TimelineEntry[]>(caseData.timeline || [
     { id: "4", time: "11:15", action: "Ringer Lactate 500ml IV", user: "Inf. Sarah", type: "medication" },
     { id: "3", time: "11:05", action: "Scanner Cérébral demandé", user: "Dr. Kabamba", type: "test" },
     { id: "2", time: "10:55", action: "VVP 18G posée", user: "Inf. Sarah", type: "action" },
@@ -109,35 +112,61 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
     return `${min}:${sec < 10 ? "0" : ""}${sec}`;
   };
 
+  const syncDataToDB = async (newData: any) => {
+      try {
+          setIsSyncing(true);
+          await updateCaseStatus(caseData.id, {
+              status: 'prise_en_charge',
+              data: newData
+          });
+      } catch (err) {
+          console.error('Erreur synchronisation', err);
+      } finally {
+          setIsSyncing(false);
+      }
+  };
+
   const addTimelineEntry = (action: string, type: TimelineEntry["type"], isTreatment = false) => {
     const now = new Date();
     const timeStr = `${now.getHours()}:${now.getMinutes() < 10 ? "0" : ""}${now.getMinutes()}`;
-    setTimeline([{ id: Math.random().toString(), time: timeStr, action, user: "Dr. Kabamba", type, isTreatment }, ...timeline]);
-    setIsSyncing(true);
-    setTimeout(() => setIsSyncing(false), 600);
+    const newEntry = { id: Math.random().toString(), time: timeStr, action, user: "Dr. Kabamba", type, isTreatment };
+    const newTimeline = [newEntry, ...timeline];
+    setTimeline(newTimeline);
+    syncDataToDB({ timeline: newTimeline });
   };
 
   const handleSave = () => {
     if (!newText.trim() && modalType !== "exam_edit") return;
     const now = new Date();
     const timeStr = `${now.getHours()}:${now.getMinutes() < 10 ? "0" : ""}${now.getMinutes()}`;
+    let updatePayload: any = {};
 
     if (modalType === "note") {
       const newObs: Observation = { id: Math.random().toString(), time: timeStr, text: newText, status: noteStatus };
-      setObservations([newObs, ...observations]);
+      const updatedObs = [newObs, ...observations];
+      setObservations(updatedObs);
+      updatePayload.observations = updatedObs;
       addTimelineEntry(`Note: ${noteStatus}`, "status");
     } else if (modalType === "exam_add") {
       const newE: Exam = { id: Math.random().toString(), label: newText, status: examStatus, time: timeStr };
-      setExams([newE, ...exams]);
+      const updatedExams = [newE, ...exams];
+      setExams(updatedExams);
+      updatePayload.exams = updatedExams;
       addTimelineEntry(`Exam demandé: ${newText}`, "test");
     } else if (modalType === "exam_edit" && selectedExam) {
-      setExams(exams.map(e => e.id === selectedExam.id ? { ...e, status: examStatus, result: newText || e.result } : e));
+      const updatedExams = exams.map(e => e.id === selectedExam.id ? { ...e, status: examStatus, result: newText || e.result } : e);
+      setExams(updatedExams);
+      updatePayload.exams = updatedExams;
       addTimelineEntry(`Exam mis à jour: ${selectedExam.label}`, "test");
     } else if (modalType === "treatment_add") {
       const newT: Treatment = { id: Math.random().toString(), name: newText, time: timeStr, user: "Dr. Kabamba" };
-      setTreatments([newT, ...treatments]);
+      const updatedT = [newT, ...treatments];
+      setTreatments(updatedT);
+      updatePayload.treatments = updatedT;
       addTimelineEntry(`Traitement: ${newText}`, "medication", true);
     }
+
+    syncDataToDB(updatePayload);
 
     setNewText("");
     setModalType(null);

@@ -13,6 +13,7 @@ import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import { useAuth } from "../../contexts/AuthContext";
+import { useHospital } from "../../contexts/HospitalContext";
 
 const { width } = Dimensions.get("window");
 
@@ -320,6 +321,7 @@ export const getStatusConfig = (status: CaseStatus) => {
 
 export function HospitalDashboardTab({ navigation }: any) {
   const { profile } = useAuth();
+  const { activeCases, isLoading } = useHospital();
 
   const { displayName, displayIdLine } = useMemo(() => {
     const name =
@@ -343,16 +345,16 @@ export function HospitalDashboardTab({ navigation }: any) {
     "all" | "en_attente" | "en_cours" | "termine"
   >("all");
 
-  const filteredCases = MOCK_CASES.filter((c) => {
-    if (filter === "all") return c.status !== "termine";
+  const filteredCases = activeCases.filter((c) => {
+    if (filter === "all") return c.status !== "termine" && c.status !== "completed";
     return c.status === filter;
   });
 
-  const criticalCount = MOCK_CASES.filter(
-    (c) => c.level === "critique" && c.status !== "termine",
+  const criticalCount = activeCases.filter(
+    (c) => c.level === "critique" && c.status !== "termine" && c.status !== "completed"
   ).length;
-  const activeCount = MOCK_CASES.filter((c) =>
-    ["en_cours", "triage", "prise_en_charge"].includes(c.status),
+  const activeCount = activeCases.filter((c) =>
+    ["en_cours", "triage", "prise_en_charge"].includes(c.status)
   ).length;
 
   return (
@@ -446,29 +448,38 @@ export function HospitalDashboardTab({ navigation }: any) {
           </View>
         </View>
 
-        {filteredCases.map((caseItem) => {
-          const lCfg = getLevelConfig(caseItem.level);
-          const sCfg = getStatusConfig(caseItem.status);
-          return (
-            <TouchableOpacity key={caseItem.id} style={styles.alertCard} onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })} activeOpacity={0.9}>
-              <View style={styles.cardInfo}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.timePill}><MaterialCommunityIcons name="clock-outline" color="rgba(255,255,255,0.4)" size={14} /><Text style={styles.timeText}>{caseItem.timestamp}</Text></View>
-                  <View style={[styles.levelTag, { borderColor: lCfg.color }]}><Text style={[styles.levelLabelText, { color: lCfg.color }]}>{lCfg.label}</Text></View>
+        {isLoading ? (
+          <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
+        ) : filteredCases.length === 0 ? (
+          <View style={{ alignItems: 'center', marginTop: 40 }}>
+            <MaterialIcons name="inbox" size={48} color="rgba(255,255,255,0.2)" />
+            <Text style={{ color: "rgba(255,255,255,0.4)", marginTop: 16 }}>Aucun cas à afficher</Text>
+          </View>
+        ) : (
+          filteredCases.map((caseItem) => {
+            const lCfg = getLevelConfig(caseItem.level);
+            const sCfg = getStatusConfig(caseItem.status);
+            return (
+              <TouchableOpacity key={caseItem.id} style={styles.alertCard} onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })} activeOpacity={0.9}>
+                <View style={styles.cardInfo}>
+                  <View style={styles.cardHeaderRow}>
+                    <View style={styles.timePill}><MaterialCommunityIcons name="clock-outline" color="rgba(255,255,255,0.4)" size={14} /><Text style={styles.timeText}>{caseItem.timestamp}</Text></View>
+                    <View style={[styles.levelTag, { borderColor: lCfg?.color }]}><Text style={[styles.levelLabelText, { color: lCfg?.color }]}>{lCfg?.label}</Text></View>
+                  </View>
+                  <Text style={styles.victimName}>{caseItem.victimName}</Text>
+                  <Text style={styles.urgencyType}>{caseItem.typeUrgence?.toUpperCase()}</Text>
+                  <View style={styles.locationInfo}><MaterialIcons name="location-on" color={colors.secondary} size={16} /><Text style={styles.addressText} numberOfLines={1}>{caseItem.address}</Text></View>
+                  <View style={styles.cardDivider} />
+                  <View style={styles.cardFooterRow}>
+                    {sCfg && <View style={[styles.statusBadge, { backgroundColor: sCfg.bg }]}><MaterialIcons name={sCfg.icon} color={sCfg.color} size={14} /><Text style={[styles.statusBadgeText, { color: sCfg.color }]}>{sCfg.label}</Text></View>}
+                    <View style={styles.etaContainer}><Text style={styles.etaLabel}>Arrivée : </Text><Text style={styles.etaValue}>{caseItem.eta}</Text></View>
+                  </View>
                 </View>
-                <Text style={styles.victimName}>{caseItem.victimName}</Text>
-                <Text style={styles.urgencyType}>{caseItem.typeUrgence.toUpperCase()}</Text>
-                <View style={styles.locationInfo}><MaterialIcons name="location-on" color={colors.secondary} size={16} /><Text style={styles.addressText} numberOfLines={1}>{caseItem.address}</Text></View>
-                <View style={styles.cardDivider} />
-                <View style={styles.cardFooterRow}>
-                  <View style={[styles.statusBadge, { backgroundColor: sCfg.bg }]}><MaterialIcons name={sCfg.icon} color={sCfg.color} size={14} /><Text style={[styles.statusBadgeText, { color: sCfg.color }]}>{sCfg.label}</Text></View>
-                  <View style={styles.etaContainer}><Text style={styles.etaLabel}>Arrivée : </Text><Text style={styles.etaValue}>{caseItem.eta}</Text></View>
-                </View>
-              </View>
-              <View style={styles.arrowContainer}><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={24} /></View>
-            </TouchableOpacity>
-          );
-        })}
+                <View style={styles.arrowContainer}><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={24} /></View>
+              </TouchableOpacity>
+            );
+          })
+        )}
       </ScrollView>
     </TabScreenSafeArea>
   );

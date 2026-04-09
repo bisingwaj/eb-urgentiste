@@ -22,8 +22,11 @@ const TRIAGE_LEVELS = [
   { key: 'vert', label: 'Vert', sublabel: 'Non urgent', color: '#69F0AE', icon: 'check-circle' as const },
 ];
 
+import { useHospital } from '../../contexts/HospitalContext';
+
 export function HospitalTriageScreen({ route, navigation }: any) {
   const { caseData } = route.params as { caseData: EmergencyCase };
+  const { updateCaseStatus } = useHospital();
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState(1);
@@ -67,17 +70,31 @@ export function HospitalTriageScreen({ route, navigation }: any) {
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Valider',
-          onPress: () => {
-            navigation.navigate('HospitalPriseEnCharge', {
-              caseData: {
-                ...caseData,
-                status: 'triage' as const,
-                triageLevel,
-                vitals,
-                symptoms,
-                provisionalDiagnosis: diagnosis,
-              }
-            });
+          onPress: async () => {
+            try {
+              await updateCaseStatus(caseData.id, {
+                status: 'triage',
+                data: {
+                  triageLevel,
+                  vitals,
+                  symptoms,
+                  provisionalDiagnosis: diagnosis,
+                }
+              });
+
+              navigation.navigate('HospitalPriseEnCharge', {
+                caseData: {
+                  ...caseData,
+                  status: 'triage' as const,
+                  triageLevel,
+                  vitals,
+                  symptoms,
+                  provisionalDiagnosis: diagnosis,
+                }
+              });
+            } catch (err) {
+              Alert.alert('Erreur', 'Impossible de sauvegarder le triage.');
+            }
           },
         },
       ]

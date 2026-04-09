@@ -12,15 +12,17 @@ import {
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { MOCK_CASES, getLevelConfig, getStatusConfig } from './HospitalDashboardTab';
+import { useHospital } from '../../contexts/HospitalContext';
+import { getLevelConfig, getStatusConfig } from './HospitalDashboardTab';
 
 const { width } = Dimensions.get('window');
 
 export function HospitalAdmissionsListScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState('');
+  const { activeCases } = useHospital();
 
   // Filter only admitted cases (in route, triage, or actively being treated)
-  const admittedCases = MOCK_CASES.filter(c =>
+  const admittedCases = activeCases.filter(c =>
     ['admis', 'triage', 'prise_en_charge', 'en_cours'].includes(c.status) &&
     (c.victimName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.id.toLowerCase().includes(searchQuery.toLowerCase()))

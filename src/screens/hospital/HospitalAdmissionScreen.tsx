@@ -34,8 +34,11 @@ const SERVICES = [
   { key: 'pediatrie', label: 'Pédiatrie', icon: 'baby-face-outline' as const, color: '#AB47BC' },
 ];
 
+import { useHospital } from '../../contexts/HospitalContext';
+
 export function HospitalAdmissionScreen({ route, navigation }: any) {
   const { caseData } = route.params as { caseData: EmergencyCase };
+  const { updateCaseStatus } = useHospital();
   const insets = useSafeAreaInsets();
 
   const now = new Date();
@@ -73,17 +76,31 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'CONFIRMER',
-          onPress: () => {
-            navigation.navigate('HospitalTriage', {
-              caseData: {
-                ...caseData,
+          onPress: async () => {
+            try {
+              await updateCaseStatus(caseData.id, {
                 status: 'admis',
-                arrivalTime,
-                arrivalMode,
-                arrivalState,
-                admissionService,
-              }
-            });
+                data: {
+                  arrivalTime,
+                  arrivalMode,
+                  arrivalState,
+                  admissionService,
+                }
+              });
+
+              navigation.navigate('HospitalTriage', {
+                caseData: {
+                  ...caseData,
+                  status: 'admis',
+                  arrivalTime,
+                  arrivalMode,
+                  arrivalState,
+                  admissionService,
+                }
+              });
+            } catch (err) {
+              Alert.alert('Erreur', 'Impossible d\'enregistrer l\'admission.');
+            }
           },
         },
       ]
