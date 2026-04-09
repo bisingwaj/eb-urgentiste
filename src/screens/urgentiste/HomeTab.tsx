@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, StatusBar, Animated, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, StatusBar, Animated, Dimensions, Alert, ActivityIndicator } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -35,6 +35,43 @@ export function HomeTab({ navigation }: any) {
   const [fadeAnim] = useState(new Animated.Value(0));
   const radarAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  /** Libellé affiché : `units.callsign` (indicatif), sinon véhicule / type. */
+  const [unitName, setUnitName] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUnitName() {
+      if (!profile?.assigned_unit_id) {
+        setUnitName('Non assignée');
+        return;
+      }
+      setUnitName(null);
+      const { data, error } = await supabase
+        .from('units')
+        .select('callsign, vehicle_type, type')
+        .eq('id', profile.assigned_unit_id)
+        .maybeSingle();
+
+      if (cancelled) return;
+      if (error || !data) {
+        setUnitName('Non assignée');
+        return;
+      }
+      const label =
+        (data.callsign && String(data.callsign).trim()) ||
+        (data.vehicle_type && String(data.vehicle_type).trim()) ||
+        (data.type && String(data.type).trim()) ||
+        'Unité';
+      setUnitName(label);
+    }
+
+    void loadUnitName();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.assigned_unit_id]);
 
   // Synchroniser le statut local avec le profil
   useEffect(() => {
@@ -98,14 +135,61 @@ export function HomeTab({ navigation }: any) {
       {/* Harmonized Header */}
       <View style={styles.topHeader}>
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.hospitalName}>Bonjour, {profile?.first_name || 'Emmanuel'},</Text>
-            <View style={styles.locationContainer}>
-              <MaterialIcons name="place" size={14} color={colors.secondary} style={{ marginTop: 2 }} />
-              <View>
-                <Text style={styles.locationLabel}>Unité {profile?.grade || 'Mobile Delta'} • {isDutyActive ? 'En service' : 'Hors service'}</Text>
-                <Text style={styles.userMetaText}>{profile?.zone || 'Zone non définie'}</Text>
+          <View style={styles.headerTextCol}>
+            <Text style={styles.hospitalName}>Bonjour {profile?.first_name || ' '},</Text>
+            <View style={styles.metaInfoColumn}>
+              <View style={styles.metaRowWithIcon}>
+                <View style={styles.metaIconSlot}>
+                  <MaterialIcons
+                    name="local-shipping"
+                    size={16}
+                    color={colors.secondary}
+                  />
+                </View>
+                <View style={styles.metaRowText}>
+                  <Text style={styles.locationLabel}>Unité</Text>
+                  {unitName === null ? (
+                    <ActivityIndicator
+                      color={colors.secondary}
+                      style={{ marginTop: 8, alignSelf: 'flex-start' }}
+                    />
+                  ) : (
+                    <Text style={styles.userMetaText} numberOfLines={2}>
+                      {unitName}
+                    </Text>
+                  )}
+                </View>
               </View>
+              {/* <View style={[styles.metaRowWithIcon, styles.metaBlockSpacing]}>
+                <View style={styles.metaIconSlot}>
+                  <MaterialIcons name="badge" size={16} color="#90CAF9" />
+                </View>
+                <View style={styles.metaRowText}>
+                  <Text style={styles.locationLabel}>Grade • statut</Text>
+                  <Text style={styles.userMetaText}>
+                    {(profile?.grade?.trim() || '—') +
+                      ' • ' +
+                      (isDutyActive ? 'En service' : 'Hors service')}
+                  </Text>
+                </View>
+              </View>
+              <View style={[styles.metaRowWithIcon, styles.metaBlockSpacing]}>
+                <View style={styles.metaIconSlot}>
+                  <MaterialIcons
+                    name="my-location"
+                    size={16}
+                    color={colors.success}
+                  />
+                </View>
+                <View style={styles.metaRowText}>
+                  <Text style={styles.locationLabel}>Zone</Text>
+                  <Text style={styles.zoneValue} numberOfLines={3}>
+                    {profile?.zone?.trim()
+                      ? profile.zone.trim()
+                      : 'Non renseignée'}
+                  </Text>
+                </View>
+              </View> */}
             </View>
           </View>
           <View style={styles.headerIconRow}>
@@ -275,33 +359,68 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: 20
+  },
+  headerTextCol: {
+    flex: 1,
+    minWidth: 0,
+    paddingRight: 8,
   },
   hospitalName: {
     color: "#FFF",
     fontSize: 26,
     fontWeight: "900",
   },
-  locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 8,
+  /** Colonne d’icônes fixe : même alignement que la carte « Prêt pour intervention » */
+  metaInfoColumn: {
     marginTop: 10,
   },
   locationLabel: {
     color: 'rgba(255,255,255,0.4)',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  metaBlockSpacing: {
+    marginTop: 10,
+  },
+  metaRowWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 20,
+  },
+  metaIconSlot: {
+    width: 24,
+    alignItems: 'center',
+    paddingTop: 2,
+    flexShrink: 0,
+  },
+  metaRowText: {
+    flex: 1,
+    minWidth: 0,
+  },
+  unitNameValue: {
+    color: '#FFF',
+    fontSize: 17,
+    fontWeight: '800',
+    marginTop: 4,
+    lineHeight: 22,
+  },
+  zoneValue: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
+    marginTop: 4,
+    lineHeight: 20,
   },
   userMetaText: {
     color: "#FFF",
     opacity: 0.8,
     fontSize: 13,
     fontWeight: "700",
-    marginTop: 2,
+    marginTop: 4,
   },
   headerIconRow: {
     flexDirection: 'row',
@@ -334,7 +453,7 @@ const styles = StyleSheet.create({
   },
   notifBadgeText: {
     color: "#FFF",
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: "900",
   },
   headerAvatarBtn: {
@@ -380,7 +499,7 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
   },
   statusTitle: {
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '900',
     color: colors.textMuted,
     letterSpacing: 1.5,
@@ -432,7 +551,7 @@ const styles = StyleSheet.create({
   },
   alertTime: {
     color: 'rgba(255,255,255,0.3)',
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '600',
   },
   alertType: {

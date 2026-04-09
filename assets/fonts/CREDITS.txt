@@ -1,0 +1,2 @@
+Police Marianne — État français (DSFR), licence SIL Open Font License 1.1.
+Fichiers dérivés des polices publiées dans le paquet npm @gouvfr/dsfr (woff2 convertis en OTF).

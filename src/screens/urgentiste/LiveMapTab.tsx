@@ -45,6 +45,7 @@ import {
   openExternalDirections,
   openWazeDirections,
 } from "../../utils/navigation";
+import { spreadOverlappingMarkers } from "../../utils/mapMarkerLayout";
 import { MapboxMapView } from "../../components/map/MapboxMapView";
 import {
   MePuck,
@@ -356,6 +357,28 @@ export function LiveMapTab() {
     }
     return list;
   }, [incidentsInView, userLngLat, selection]);
+
+  const rescuersForMapDisplay = useMemo(
+    () =>
+      spreadOverlappingMarkers(rescuersForMap, (r) =>
+        r.lat != null && r.lng != null ? [r.lng, r.lat] : null,
+      ),
+    [rescuersForMap],
+  );
+
+  const hospitalsForMapDisplay = useMemo(
+    () =>
+      spreadOverlappingMarkers(hospitalsForMap, (h) =>
+        h.lat != null && h.lng != null ? [h.lng, h.lat] : null,
+      ),
+    [hospitalsForMap],
+  );
+
+  const incidentsForMapDisplay = useMemo(
+    () =>
+      spreadOverlappingMarkers(incidentsForMap, (inc) => incidentLngLat(inc)),
+    [incidentsForMap],
+  );
 
   const rescuerTruncLegend = rescuersOthers.length > rescuersForMap.length;
   const hospTruncLegend = hospitalsFiltered.length > hospitalsForMap.length;
@@ -773,65 +796,17 @@ export function LiveMapTab() {
         : `Statut : ${selection.data.status}`
     : "";
 
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [telemetryExpanded, setTelemetryExpanded] = useState(false);
+  const [legendExpanded, setLegendExpanded] = useState(false);
+
+  const activeFilterCount = ESTABLISHMENT_TYPE_KEYS.filter(
+    (k) => establishmentTypeFilter[k] === true,
+  ).length;
+
   return (
     <TabScreenSafeArea style={[styles.container, styles.tabScreenNoBottomPad]}>
       <StatusBar barStyle="light-content" />
-
-      <View style={styles.topHeader}>
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.kicker}>Carte temps réel</Text>
-            <Text style={styles.screenTitle}>Réseau tactique</Text>
-            <Text style={styles.screenSubtitle}>
-              Unités, établissements et signalements dans un rayon de 10 km
-            </Text>
-          </View>
-          <View style={styles.liveBadge}>
-            <Animated.View style={[styles.liveDot, { opacity: pulseAnim }]} />
-            <Text style={styles.liveText}>Live</Text>
-          </View>
-        </View>
-      </View>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.establishmentFilterRow}
-        contentContainerStyle={styles.establishmentFilterContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        <TouchableOpacity
-          style={styles.establishmentFilterChipAll}
-          onPress={selectAllEstablishmentTypes}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.establishmentFilterChipAllText}>Tous</Text>
-        </TouchableOpacity>
-        {ESTABLISHMENT_TYPE_KEYS.map((key) => {
-          const on = establishmentTypeFilter[key] === true;
-          return (
-            <TouchableOpacity
-              key={key}
-              style={[
-                styles.establishmentFilterChip,
-                on && styles.establishmentFilterChipOn,
-              ]}
-              onPress={() => toggleEstablishmentType(key)}
-              activeOpacity={0.85}
-            >
-              <Text
-                style={[
-                  styles.establishmentFilterChipText,
-                  on && styles.establishmentFilterChipTextOn,
-                ]}
-                numberOfLines={1}
-              >
-                {ESTABLISHMENT_TYPE_LABELS[key]}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
 
       <View style={[styles.mapAreaShell, { paddingBottom: tabBottomPad }]}>
       <View style={styles.mapWrapper}>
@@ -914,11 +889,11 @@ export function LiveMapTab() {
               <MePuck headingDeg={heading} />
             </Mapbox.PointAnnotation>
 
-            {rescuersForMap.map((r) => (
+            {rescuersForMapDisplay.map(({ item: r, displayCoord }) => (
               <Mapbox.MarkerView
                 key={r.id}
                 id={`rescuer-mv-${r.id}`}
-                coordinate={[r.lng, r.lat]}
+                coordinate={displayCoord}
               >
                 <UnitMarker
                   status={r.status}
@@ -927,11 +902,11 @@ export function LiveMapTab() {
               </Mapbox.MarkerView>
             ))}
 
-            {hospitalsForMap.map((h) => (
+            {hospitalsForMapDisplay.map(({ item: h, displayCoord }) => (
               <Mapbox.MarkerView
                 key={h.id}
                 id={`hospital-mv-${h.id}`}
-                coordinate={[h.lng!, h.lat!]}
+                coordinate={displayCoord}
               >
                 <HospitalMarker
                   label={h.short_name || h.name.slice(0, 10)}
@@ -941,24 +916,20 @@ export function LiveMapTab() {
               </Mapbox.MarkerView>
             ))}
 
-            {incidentsForMap.map((inc) => {
-              const c = incidentLngLat(inc);
-              if (!c) return null;
-              return (
-                <Mapbox.MarkerView
-                  key={inc.id}
-                  id={`incident-mv-${inc.id}`}
-                  coordinate={c}
-                >
-                  <IncidentMarker
-                    priority={inc.priority}
-                    onPress={() =>
-                      setSelection({ kind: "incident", data: inc })
-                    }
-                  />
-                </Mapbox.MarkerView>
-              );
-            })}
+            {incidentsForMapDisplay.map(({ item: inc, displayCoord }) => (
+              <Mapbox.MarkerView
+                key={inc.id}
+                id={`incident-mv-${inc.id}`}
+                coordinate={displayCoord}
+              >
+                <IncidentMarker
+                  priority={inc.priority}
+                  onPress={() =>
+                    setSelection({ kind: "incident", data: inc })
+                  }
+                />
+              </Mapbox.MarkerView>
+            ))}
           </MapboxMapView>
         )}
 
@@ -970,130 +941,139 @@ export function LiveMapTab() {
           </View>
         )}
 
-        <View style={styles.telemetryHUD}>
-          <View style={styles.glassCardMoving}>
-            <Text style={styles.hudSection}>Déplacement</Text>
-            <View style={styles.telRow}>
-              <MaterialIcons name="speed" color={colors.secondary} size={16} />
-              <Text style={styles.telLabel}>Vitesse</Text>
-              <Text style={styles.telValue}>
-                {speed.toFixed(0)} <Text style={styles.telUnit}>km/h</Text>
-              </Text>
-            </View>
-            <View style={styles.telRow}>
-              <MaterialIcons
-                name="explore"
-                color={colors.secondary}
-                size={16}
-              />
-              <Text style={styles.telLabel}>Cap</Text>
-              <Text style={styles.telValue}>{heading.toFixed(0)}°</Text>
-            </View>
-            <View style={styles.telRow}>
-              <MaterialIcons
-                name="gps-fixed"
-                color={accuracy < 25 ? colors.success : "#FF9F0A"}
-                size={16}
-              />
-              <Text style={styles.telLabel}>Précision</Text>
-              <Text
-                style={[
-                  styles.telValue,
-                  { color: accuracy < 25 ? colors.success : "#FF9F0A" },
-                ]}
-              >
-                ±{accuracy.toFixed(0)} m
-              </Text>
-            </View>
-            <View style={styles.telRow}>
-              <MaterialIcons
-                name="battery-std"
-                color={battery > 20 ? colors.success : "#FF453A"}
-                size={16}
-              />
-              <Text style={styles.telLabel}>Batterie</Text>
-              <Text
-                style={[
-                  styles.telValue,
-                  { color: battery > 20 ? colors.success : "#FF453A" },
-                ]}
-              >
-                {battery}%
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.legendHUD}>
-          <View style={styles.glassCard}>
-            <Text style={styles.hudSection}>Légende</Text>
-            <View style={styles.legendRow}>
-              <View
-                style={[
-                  styles.legendDot,
-                  { backgroundColor: colors.secondary },
-                ]}
-              />
-              <Text style={styles.legendText}>Votre position</Text>
-            </View>
-            <View style={styles.legendRow}>
-              <View
-                style={[styles.legendDot, { backgroundColor: colors.success }]}
-              />
-              <Text style={styles.legendText}>
-                Unités ({rescuersForMap.length}
-                {rescuerTruncLegend ? "+" : ""})
-              </Text>
-            </View>
-            <View style={styles.legendRow}>
-              <View
-                style={[styles.legendDot, { backgroundColor: "#2E7D32" }]}
-              />
-              <Text style={styles.legendText}>
-                Établissements ({hospitalsForMap.length}
-                {hospTruncLegend ? "+" : ""})
-              </Text>
-            </View>
-            <View style={styles.legendRow}>
-              <View
-                style={[styles.legendDot, { backgroundColor: "#FF453A" }]}
-              />
-              <Text style={styles.legendText}>
-                Signalements ({incidentsForMap.length}
-                {incTruncLegend ? "+" : ""})
-              </Text>
-            </View>
-          </View>
-        </View>
-
+        {/* ── Top overlay : Live + counts + filter dropdown ── */}
         {gpsReady && (
-          <View style={styles.statusBar}>
-            <View style={styles.statusChip}>
-              <Ambulance size={14} color={colors.success} strokeWidth={2.5} />
-              <Text style={styles.statusChipText}>
-                {rescuersForMap.length}
-                {rescuerTruncLegend ? "+" : ""}
-              </Text>
+          <View style={styles.topOverlay}>
+            <View style={styles.topOverlayRow}>
+              <View style={styles.liveBadge}>
+                <Animated.View style={[styles.liveDot, { opacity: pulseAnim }]} />
+                <Text style={styles.liveText}>Live</Text>
+              </View>
+              <View style={styles.statusChip}>
+                <Ambulance size={13} color={colors.success} strokeWidth={2.5} />
+                <Text style={styles.statusChipText}>{rescuersForMap.length}{rescuerTruncLegend ? "+" : ""}</Text>
+              </View>
+              <View style={styles.statusChip}>
+                <Hospital size={13} color={colors.success} strokeWidth={2.5} />
+                <Text style={styles.statusChipText}>{hospitalsForMap.length}{hospTruncLegend ? "+" : ""}</Text>
+              </View>
+              <View style={styles.statusChip}>
+                <TriangleAlert size={13} color="#FF453A" strokeWidth={2.5} />
+                <Text style={styles.statusChipText}>{incidentsForMap.length}{incTruncLegend ? "+" : ""}</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.filterBtn, filterOpen && styles.filterBtnOpen]}
+                onPress={() => setFilterOpen((v) => !v)}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="filter-list" size={18} color={filterOpen ? "#FFF" : colors.secondary} />
+                <Text style={[styles.filterBtnText, filterOpen && { color: "#FFF" }]}>
+                  {activeFilterCount}/{ESTABLISHMENT_TYPE_KEYS.length}
+                </Text>
+              </TouchableOpacity>
             </View>
-            <View style={styles.statusChip}>
-              <Hospital size={14} color={colors.success} strokeWidth={2.5} />
-              <Text style={styles.statusChipText}>
-                {hospitalsForMap.length}
-                {hospTruncLegend ? "+" : ""}
-              </Text>
-            </View>
-            <View style={styles.statusChip}>
-              <TriangleAlert size={14} color="#FF453A" strokeWidth={2.5} />
-              <Text style={styles.statusChipText}>
-                {incidentsForMap.length}
-                {incTruncLegend ? "+" : ""}
-              </Text>
-            </View>
+
+            {filterOpen && (
+              <View style={styles.filterDropdown}>
+                <TouchableOpacity
+                  style={styles.filterDropdownChipAll}
+                  onPress={() => { selectAllEstablishmentTypes(); }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.filterDropdownChipAllText}>Tout cocher</Text>
+                </TouchableOpacity>
+                {ESTABLISHMENT_TYPE_KEYS.map((key) => {
+                  const on = establishmentTypeFilter[key] === true;
+                  return (
+                    <TouchableOpacity
+                      key={key}
+                      style={[styles.filterDropdownItem, on && styles.filterDropdownItemOn]}
+                      onPress={() => toggleEstablishmentType(key)}
+                      activeOpacity={0.85}
+                    >
+                      <View style={[styles.filterDot, on && styles.filterDotOn]} />
+                      <Text style={[styles.filterDropdownText, on && styles.filterDropdownTextOn]} numberOfLines={1}>
+                        {ESTABLISHMENT_TYPE_LABELS[key]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </View>
         )}
 
+        {/* ── Bottom-left: Telemetry HUD (collapsible) ── */}
+        {telemetryExpanded && (
+          <View style={[styles.hudExpandedLeft, { bottom: spacing.sm + 44 }]}>
+            <View style={styles.hudExpandedCard}>
+              <View style={styles.telRow}>
+                <MaterialIcons name="speed" color={colors.secondary} size={14} />
+                <Text style={styles.telLabel}>Vitesse</Text>
+                <Text style={styles.telValue} numberOfLines={1}>{speed.toFixed(0)} km/h</Text>
+              </View>
+              <View style={styles.telRow}>
+                <MaterialIcons name="explore" color={colors.secondary} size={14} />
+                <Text style={styles.telLabel}>Cap</Text>
+                <Text style={styles.telValue} numberOfLines={1}>{heading.toFixed(0)}°</Text>
+              </View>
+              <View style={styles.telRow}>
+                <MaterialIcons name="gps-fixed" color={accuracy < 25 ? colors.success : "#FF9F0A"} size={14} />
+                <Text style={styles.telLabel}>Précision</Text>
+                <Text style={[styles.telValue, { color: accuracy < 25 ? colors.success : "#FF9F0A" }]} numberOfLines={1}>±{accuracy.toFixed(0)} m</Text>
+              </View>
+              <View style={[styles.telRow, { marginBottom: 0 }]}>
+                <MaterialIcons name="battery-std" color={battery > 20 ? colors.success : "#FF453A"} size={14} />
+                <Text style={styles.telLabel}>Batterie</Text>
+                <Text style={[styles.telValue, { color: battery > 20 ? colors.success : "#FF453A" }]} numberOfLines={1}>{battery}%</Text>
+              </View>
+            </View>
+          </View>
+        )}
+        <View style={[styles.telemetryHUD, { bottom: spacing.sm }]}>
+          <TouchableOpacity
+            style={styles.hudPill}
+            onPress={() => { setTelemetryExpanded((v) => !v); setLegendExpanded(false); }}
+            activeOpacity={0.85}
+          >
+            <MaterialIcons name="speed" color={colors.secondary} size={16} />
+            <Text style={styles.hudPillValue}>{speed.toFixed(0)} km/h</Text>
+            <MaterialIcons name={telemetryExpanded ? "expand-more" : "expand-less"} color="rgba(255,255,255,0.5)" size={18} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ── Bottom-right: Legend HUD (collapsible) ── */}
+        {legendExpanded && (
+          <View style={[styles.hudExpandedRight, { bottom: spacing.sm + 44 }]}>
+            <View style={styles.hudExpandedCard}>
+              {[
+                { color: colors.secondary, label: "Votre position" },
+                { color: colors.success, label: `Unités (${rescuersForMap.length}${rescuerTruncLegend ? "+" : ""})` },
+                { color: "#2E7D32", label: `Établ. (${hospitalsForMap.length}${hospTruncLegend ? "+" : ""})` },
+                { color: "#FF453A", label: `Signal. (${incidentsForMap.length}${incTruncLegend ? "+" : ""})` },
+              ].map((item, i) => (
+                <View key={i} style={[styles.legendRow, i === 3 && { marginBottom: 0 }]}>
+                  <View style={[styles.legendDot, { backgroundColor: item.color }]} />
+                  <Text style={styles.legendText} numberOfLines={1}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        )}
+        <View style={[styles.legendHUD, { bottom: spacing.sm }]}>
+          <TouchableOpacity
+            style={styles.hudPill}
+            onPress={() => { setLegendExpanded((v) => !v); setTelemetryExpanded(false); }}
+            activeOpacity={0.85}
+          >
+            <MaterialIcons name="layers" color={colors.secondary} size={16} />
+            <Text style={styles.hudPillValue}>Légende</Text>
+            <MaterialIcons name={legendExpanded ? "expand-more" : "expand-less"} color="rgba(255,255,255,0.5)" size={18} />
+          </TouchableOpacity>
+        </View>
+
         {selection && destLngLat && (
-          <View style={styles.destSheet}>
+          <View style={[styles.destSheet, { bottom: spacing.sm }]}>
             <View style={styles.destSheetInner}>
               <View style={styles.destHeader}>
                 <View style={{ flex: 1 }}>
@@ -1265,101 +1245,8 @@ export function LiveMapTab() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.mainBackground },
-  /** Évite le double comptage : le padding bas est sur mapAreaShell (contrainte fiable avec Mapbox Android). */
   tabScreenNoBottomPad: { paddingBottom: 0 },
   mapAreaShell: { flex: 1, minHeight: 0 },
-  topHeader: {
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
-    borderBottomLeftRadius: radius.xl,
-    borderBottomRightRadius: radius.xl,
-    backgroundColor: colors.tabBar,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderHairline,
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  kicker: {
-    ...typography.sectionLabel,
-    marginBottom: 4,
-  },
-  screenTitle: {
-    ...typography.screenTitle,
-  },
-  screenSubtitle: {
-    ...typography.screenSubtitle,
-    marginTop: 4,
-    maxWidth: "92%",
-  },
-  liveBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.secondary + "18",
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: radius.md,
-  },
-  liveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: colors.secondary,
-    marginRight: 8,
-  },
-  liveText: { color: colors.secondary, fontSize: 12, fontWeight: "700" },
-
-  establishmentFilterRow: {
-    maxHeight: 48,
-    flexGrow: 0,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderHairline,
-    backgroundColor: colors.tabBar,
-  },
-  establishmentFilterContent: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.md,
-    gap: spacing.xs,
-  },
-  establishmentFilterChipAll: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 7,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.secondary + "55",
-    backgroundColor: colors.secondary + "18",
-  },
-  establishmentFilterChipAllText: {
-    color: colors.secondary,
-    fontSize: 12,
-    fontWeight: "800",
-  },
-  establishmentFilterChip: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 7,
-    borderRadius: radius.pill,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    backgroundColor: "rgba(255,255,255,0.04)",
-  },
-  establishmentFilterChipOn: {
-    borderColor: colors.secondary,
-    backgroundColor: colors.secondary + "22",
-  },
-  establishmentFilterChipText: {
-    color: "rgba(255,255,255,0.45)",
-    fontSize: 11,
-    fontWeight: "700",
-    maxWidth: 120,
-  },
-  establishmentFilterChipTextOn: {
-    color: "#fff",
-  },
 
   mapWrapper: { flex: 1, minHeight: 0, position: "relative" },
 
@@ -1381,82 +1268,177 @@ const styles = StyleSheet.create({
     transformOrigin: "0% 0%",
   },
 
-  telemetryHUD: {
+  /* ── Top overlay (Live + counts + filter) ── */
+  topOverlay: {
     position: "absolute",
-    left: spacing.md,
-    bottom: spacing.md,
-    zIndex: 20,
-    elevation: 20,
+    top: spacing.sm,
+    left: spacing.sm,
+    right: spacing.sm,
+    zIndex: 25,
+    elevation: 25,
   },
-  legendHUD: {
-    position: "absolute",
-    right: spacing.md,
-    bottom: spacing.md,
-    zIndex: 20,
-    elevation: 20,
-  },
-  glassCard: {
-    backgroundColor: "rgba(18,18,18,0.94)",
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderHairline,
-    maxWidth: 200,
-    
-  },
-  glassCardMoving: {
-    backgroundColor: "rgba(18,18,18,0.94)",
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderHairline,
-    maxWidth: 200,
-    position: "relative",
-    top: -200,
-    
-  },
-  hudSection: {
-    ...typography.sectionLabel,
-    marginBottom: spacing.sm,
-  },
-  telRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  telLabel: { ...typography.bodyMuted, fontSize: 12, marginLeft: 8, flex: 1 },
-  telValue: { ...typography.metric, fontSize: 15 },
-  telUnit: { ...typography.metricUnit, fontSize: 11 },
-
-  legendRow: { flexDirection: "row", alignItems: "center", marginBottom: 7 },
-  legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 10 },
-  legendText: {
-    fontSize: 12,
-    fontWeight: "500",
-    color: "rgba(255,255,255,0.65)",
-  },
-
-  statusBar: {
-    position: "absolute",
-    top: spacing.md,
-    alignSelf: "center",
-    flexDirection: "row",
-    gap: spacing.xs,
-  },
-  statusChip: {
+  topOverlayRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 6,
+  },
+  liveBadge: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "rgba(18,18,18,0.92)",
-    paddingHorizontal: spacing.sm,
+    paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: radius.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderHairline,
   },
-  statusChipText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+    marginRight: 6,
+  },
+  liveText: { color: colors.success, fontSize: 13, fontWeight: "800" },
+  statusChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(18,18,18,0.92)",
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderHairline,
+  },
+  statusChipText: { color: "#FFF", fontSize: 13, fontWeight: "700" },
+  filterBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(18,18,18,0.92)",
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderHairline,
+    marginLeft: "auto",
+  },
+  filterBtnOpen: {
+    backgroundColor: colors.secondary,
+    borderColor: colors.secondary,
+  },
+  filterBtnText: { color: colors.secondary, fontSize: 13, fontWeight: "800" },
+
+  /* ── Filter dropdown ── */
+  filterDropdown: {
+    marginTop: 6,
+    backgroundColor: "rgba(14,14,14,0.96)",
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderHairline,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  filterDropdownChipAll: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: colors.secondary + "55",
+    backgroundColor: colors.secondary + "18",
+  },
+  filterDropdownChipAllText: { color: colors.secondary, fontSize: 13, fontWeight: "800" },
+  filterDropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  filterDropdownItemOn: {
+    borderColor: colors.secondary,
+    backgroundColor: colors.secondary + "22",
+  },
+  filterDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.2)" },
+  filterDotOn: { backgroundColor: colors.secondary },
+  filterDropdownText: { color: "rgba(255,255,255,0.45)", fontSize: 13, fontWeight: "700" },
+  filterDropdownTextOn: { color: "#FFF" },
+
+  /* ── Collapsible HUDs ── */
+  telemetryHUD: {
+    position: "absolute",
+    left: spacing.sm,
+    zIndex: 20,
+    elevation: 20,
+  },
+  legendHUD: {
+    position: "absolute",
+    right: spacing.sm,
+    zIndex: 20,
+    elevation: 20,
+  },
+  hudPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(18,18,18,0.94)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderHairline,
+  },
+  hudPillValue: { color: "#FFF", fontSize: 13, fontWeight: "700" },
+  hudExpandedLeft: {
+    position: "absolute",
+    left: spacing.sm,
+    zIndex: 21,
+    elevation: 21,
+  },
+  hudExpandedRight: {
+    position: "absolute",
+    right: spacing.sm,
+    zIndex: 21,
+    elevation: 21,
+  },
+  hudExpandedCard: {
+    backgroundColor: "rgba(14,14,14,0.96)",
+    borderRadius: radius.lg,
+    padding: spacing.sm,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderHairline,
+    minWidth: 185,
+  },
+  telRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  telLabel: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 8,
+    flex: 1,
+  },
+  telValue: { color: "#FFF", fontSize: 14, fontWeight: "800" },
+  telUnit: { fontSize: 13, fontWeight: "600", color: "rgba(255,255,255,0.5)" },
+
+  legendRow: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
+  legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
+  legendText: { fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.7)" },
 
   destSheet: {
     position: "absolute",
-    left: spacing.md,
-    right: spacing.md,
-    bottom: spacing.md,
+    left: spacing.sm,
+    right: spacing.sm,
     zIndex: 30,
     elevation: 24,
   },
@@ -1542,7 +1524,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginTop: 2,
   },
-  routeChipMetaSmall: { ...typography.bodyMuted, fontSize: 10, marginTop: 2 },
+  routeChipMetaSmall: { ...typography.bodyMuted, fontSize: 12, marginTop: 2 },
   criterionRow: {
     flexDirection: "row",
     gap: spacing.sm,

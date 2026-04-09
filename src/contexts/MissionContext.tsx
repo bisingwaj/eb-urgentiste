@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { Alert, Vibration } from 'react-native';
+import { Alert, Vibration, DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { Mission } from '../hooks/useActiveMission';
@@ -91,40 +91,35 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
     try {
       if (!silent) setIsLoading(true);
-      const { data: dispatch, error: dispatchError } = await supabase
+      /** `incidents!inner` = jointure stricte dispatch → incident ; `citizen_id` et champs UI viennent d’ici. */
+      const { data, error: dispatchError } = await supabase
         .from('dispatches')
-        .select(`
-          id,
-          status,
-          incident_id,
-          assigned_structure_id,
-          assigned_structure_name,
-          assigned_structure_lat,
-          assigned_structure_lng,
-          assigned_structure_phone,
-          assigned_structure_address,
-          assigned_structure_type,
-          incidents (
+        .select(
+          `
+          *,
+          incidents!inner(
             id,
-            reference,
-            type,
-            title,
-            description,
-            priority,
-            status,
+            citizen_id,
+            caller_name,
+            caller_phone,
             location_lat,
             location_lng,
             location_address,
+            description,
+            type,
+            priority,
+            reference,
+            title,
+            status,
             caller_realtime_lat,
             caller_realtime_lng,
             caller_realtime_updated_at,
             commune,
-            caller_name,
-            caller_phone,
             recommended_facility,
             created_at
           )
-        `)
+        `.trim()
+        )
         .eq('unit_id', profile.assigned_unit_id)
         .in('status', ['dispatched', 'en_route', 'on_scene', 'en_route_hospital', 'arrived_hospital', 'mission_end'])
         .order('created_at', { ascending: false })
@@ -132,6 +127,13 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (dispatchError) throw dispatchError;
+
+      /** Le client TS ne déduit pas toujours `incidents!inner` + `*` — typage explicite. */
+      const dispatch = data as {
+        id: string;
+        status: string;
+        incidents?: Record<string, unknown> | null;
+      } | null;
 
       if (dispatch && dispatch.incidents) {
         const incident = dispatch.incidents as any;
@@ -150,6 +152,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         setActiveMission({
           id: dispatch.id,
           incident_id: incident.id,
+          citizen_id: incident.citizen_id != null ? String(incident.citizen_id) : null,
           reference: incident.reference,
           type: incident.type,
           title: incident.title,
@@ -228,7 +231,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         },
         (payload: any) => {
           console.log('[Mission] 🚨 NOUVELLE MISSION REÇUE !', payload.new?.id);
-          Vibration.vibrate([0, 500, 200, 500, 200, 500]);
+          // Déclencher l'alarme sonore continue (gérée par AlertAlarmManager)
+          DeviceEventEmitter.emit('NEW_MISSION_ALERT');
           fetchActiveMission({ silent: true }).then(() => {
             Alert.alert(
               '🚨 NOUVELLE MISSION',

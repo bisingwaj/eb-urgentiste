@@ -7,12 +7,20 @@ import {
   TouchableOpacity,
   Vibration,
   Platform,
+  AppState,
 } from 'react-native';
+import { Audio } from 'expo-av';
 import { MaterialIcons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
 import { colors } from '../../theme/colors';
 import { navigationRef } from '../../navigation/navigationRef';
+import {
+  markIncomingCallRealtimeModal,
+  releaseIncomingCallUi,
+  shouldSkipModalForIncomingCall,
+} from '../../lib/incomingCallUiCoordinator';
+import { NotificationService } from '../../services/NotificationService';
 
 type PendingIncoming = {
   id: string;
@@ -39,6 +47,7 @@ export function IncomingCallSubscriber() {
   const { session, isAuthenticated } = useAuth();
   const [pending, setPending] = useState<PendingIncoming | null>(null);
   const subRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const ringSoundRef = useRef<Audio.Sound | null>(null);
 
   const cleanup = useCallback(() => {
     if (subRef.current) {
@@ -82,6 +91,13 @@ export function IncomingCallSubscriber() {
           if (!typed.id || !isIncomingFromCenter(typed)) {
             return;
           }
+          if (AppState.currentState !== 'active') {
+            return;
+          }
+          if (shouldSkipModalForIncomingCall(typed.id)) {
+            return;
+          }
+          markIncomingCallRealtimeModal(typed.id);
           if (Platform.OS === 'android') {
             Vibration.vibrate([0, 400, 200, 400]);
           } else {
@@ -104,12 +120,66 @@ export function IncomingCallSubscriber() {
     };
   }, [isAuthenticated, session?.user?.id, cleanup]);
 
+  /** Sonnerie en boucle tant que le modal d’appel est visible (app au premier plan). */
+  useEffect(() => {
+    if (!pending) {
+      const s = ringSoundRef.current;
+      if (s) {
+        void s
+          .stopAsync()
+          .then(() => s.unloadAsync())
+          .catch(() => {});
+        ringSoundRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+        const { sound } = await Audio.Sound.createAsync(
+          require('../../../assets/sounds/incoming_call_ring.wav'),
+          { isLooping: true, shouldPlay: true, volume: 1 }
+        );
+        if (cancelled) {
+          await sound.unloadAsync();
+          return;
+        }
+        ringSoundRef.current = sound;
+      } catch (e) {
+        console.warn('[IncomingCall] lecture sonnerie:', e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      const s = ringSoundRef.current;
+      if (s) {
+        void s
+          .stopAsync()
+          .then(() => s.unloadAsync())
+          .catch(() => {});
+        ringSoundRef.current = null;
+      }
+    };
+  }, [pending]);
+
   const decline = async () => {
     if (!pending) {
       return;
     }
     const id = pending.id;
     setPending(null);
+    releaseIncomingCallUi(id);
+    void NotificationService.dismissIncomingCallNotification(id);
     try {
       await supabase
         .from('call_history')
@@ -135,6 +205,8 @@ export function IncomingCallSubscriber() {
       return;
     }
     setPending(null);
+    releaseIncomingCallUi(id);
+    void NotificationService.dismissIncomingCallNotification(id);
     if (navigationRef.isReady()) {
       navigationRef.navigate('CallCenter', {
         incoming: true,

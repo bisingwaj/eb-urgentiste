@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
   },
   delayLabel: {
     color: colors.textMuted,
-    fontSize: 11,
+    fontSize: 13,
   },
   delayValue: {
     color: colors.secondary,
@@ -468,7 +468,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   levelMiniText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '800',
   },
 

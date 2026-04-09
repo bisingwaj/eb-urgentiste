@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, StatusBar, Alert, Linking } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, StatusBar, Alert, Linking, ActivityIndicator } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -9,6 +9,9 @@ import * as Location from 'expo-location';
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from '../../lib/mapbox';
 import { MapboxMapView } from '../../components/map/MapboxMapView';
 import { openExternalDirections } from '../../utils/navigation';
+import { formatMissionAddress, formatDescriptionLines } from '../../utils/missionAddress';
+import { alertVoipError, startRescuerToCitizenVoipCall } from '../../lib/rescuerCallCitizen';
+import { canOfferVictimContactCalls } from '../../lib/missionVictimCall';
 
 const STATUS_STEPS = [
   { key: 'dispatched', label: 'Dispatché', icon: 'assignment', color: '#FF9500' },
@@ -20,11 +23,13 @@ const STATUS_STEPS = [
 ] as const;
 
 export function MissionActiveScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { activeMission, updateDispatchStatus } = useActiveMission();
   const [noteText, setNoteText] = useState('');
   const [notes, setNotes] = useState<{ text: string; time: string }[]>([]);
   const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [voipLoading, setVoipLoading] = useState(false);
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
@@ -145,6 +150,11 @@ export function MissionActiveScreen({ navigation }: any) {
   const distance = routeDistance != null ? (routeDistance / 1000).toFixed(1) : straightLineDistance;
   const eta = routeDuration != null ? `${Math.ceil(routeDuration / 60)} min` : null;
 
+  const siteAddress = useMemo(
+    () => (activeMission ? formatMissionAddress(activeMission.location) : ''),
+    [activeMission]
+  );
+
   const handleAddNote = () => {
     if (noteText.trim() === '') return;
     const now = new Date();
@@ -200,6 +210,26 @@ export function MissionActiveScreen({ navigation }: any) {
     }
   };
 
+  const callVictimVoip = async () => {
+    if (!activeMission.citizen_id || !activeMission.incident_id || voipLoading) {
+      return;
+    }
+    setVoipLoading(true);
+    try {
+      await startRescuerToCitizenVoipCall({
+        incidentId: activeMission.incident_id,
+        citizenId: activeMission.citizen_id,
+        callType: 'audio',
+      });
+    } catch (e) {
+      alertVoipError(e);
+    } finally {
+      setVoipLoading(false);
+    }
+  };
+
+  const canCallVictim = canOfferVictimContactCalls(activeMission?.dispatch_status);
+
   const nextStatusLabel: Record<string, string> = {
     dispatched: '🚗  DÉPART EN ROUTE',
     en_route: '📍  ARRIVÉ SUR ZONE',
@@ -211,26 +241,24 @@ export function MissionActiveScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" />
-      
-      <View style={styles.topHeader}>
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-          </TouchableOpacity>
-          <View style={{ flex: 1, marginLeft: 16 }}>
-             <Text style={styles.greetingText}>MISSION {activeMission.reference}</Text>
-             <Text style={styles.hospitalName}>{activeMission.type || 'Intervention'}</Text>
-          </View>
-          <View style={[styles.priorityChip, { backgroundColor: priority.bg }]}>
-            <View style={[styles.priorityDot, { backgroundColor: priority.color }]} />
-            <Text style={[styles.priorityChipText, { color: priority.color }]}>{priority.label}</Text>
-          </View>
-        </View>
-      </View>
 
       <View style={{ flex: 1 }}>
         {/* MAP */}
         <View style={styles.mapContainer}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={[styles.floatingBack, { top: insets.top + 8 }]}
+            accessibilityRole="button"
+            accessibilityLabel="Retour"
+          >
+            <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+          </TouchableOpacity>
+          <View style={[styles.floatingPriorityChip, { top: insets.top + 8 }]}>
+            <View style={[styles.priorityDot, { backgroundColor: priority.color }]} />
+            <Text style={[styles.priorityChipText, { color: priority.color }]} numberOfLines={1}>
+              {priority.label}
+            </Text>
+          </View>
           <MapboxMapView style={styles.map} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
             {mapCameraBounds ? (
               <Mapbox.Camera
@@ -268,12 +296,14 @@ export function MissionActiveScreen({ navigation }: any) {
             )}
           </MapboxMapView>
 
-          {/* HUD Overlay */}
-          <View style={styles.hudOverlay}>
+          {/* HUD Overlay — sous les boutons flottants */}
+          <View style={[styles.hudOverlay, { top: insets.top + 56 }]}>
             <View style={styles.hudLeft}>
                <Text style={styles.victimLabel}>{activeMission.caller?.name !== 'Anonyme' ? 'VICTIME IDENTIFIÉE' : 'VICTIME ANONYME'}</Text>
                <Text style={styles.victimName}>{activeMission.caller?.name || 'Inconnu'}</Text>
-               {activeMission.caller?.phone && activeMission.caller.phone !== '-' && (
+               {canCallVictim &&
+                 activeMission.caller?.phone &&
+                 activeMission.caller.phone !== '-' && (
                  <TouchableOpacity onPress={callVictim} style={styles.phoneChip}>
                    <MaterialIcons name="phone" color="#30D158" size={12} />
                    <Text style={styles.phoneText}>{activeMission.caller.phone}</Text>
@@ -289,6 +319,11 @@ export function MissionActiveScreen({ navigation }: any) {
 
         {/* BOTTOM PANEL */}
         <View style={styles.bottomControls}>
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingBottom: 12 }}
+          >
           {/* Status Progress */}
           <View style={styles.statusProgress}>
             {STATUS_STEPS.map((step, idx) => (
@@ -312,18 +347,21 @@ export function MissionActiveScreen({ navigation }: any) {
 
           {/* Location info */}
           <View style={styles.locationInfo}>
-            <MaterialIcons name="place" size={16} color="rgba(255,255,255,0.4)" />
-            <Text style={styles.locationText} numberOfLines={2}>
-              {typeof activeMission.location === 'string'
-                ? activeMission.location
-                : activeMission.location?.address || 'Adresse non disponible'}
-            </Text>
+            <MaterialIcons name="place" size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2 }} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={styles.siteAffectationLabel}>Site d'affectation</Text>
+              <Text style={styles.locationText} numberOfLines={4}>
+                {siteAddress || 'Adresse non disponible'}
+              </Text>
+            </View>
           </View>
 
           {/* Description */}
           {activeMission.description && (
             <View style={styles.descriptionBox}>
-              <Text style={styles.descriptionText} numberOfLines={3}>{activeMission.description}</Text>
+              {formatDescriptionLines(activeMission.description).map((line, i) => (
+                <Text key={i} style={styles.descriptionText}>{"\u2022  "}{line}</Text>
+              ))}
             </View>
           )}
 
@@ -358,10 +396,12 @@ export function MissionActiveScreen({ navigation }: any) {
 
           {/* Action Buttons */}
           <View style={styles.actionGrid}>
+            {canCallVictim && (
             <TouchableOpacity style={styles.roundActionBtn} onPress={callVictim}>
                <MaterialIcons name="phone" color="#30D158" size={24} />
                <Text style={styles.actionLabel}>Appeler</Text>
             </TouchableOpacity>
+            )}
 
             <TouchableOpacity style={styles.roundActionBtn} onPress={openNavigation}>
                <MaterialIcons name="navigation" color={colors.secondary} size={24} />
@@ -380,6 +420,28 @@ export function MissionActiveScreen({ navigation }: any) {
               </TouchableOpacity>
             )}
           </View>
+
+          {canCallVictim && activeMission.citizen_id ? (
+            <View style={styles.voipBlock}>
+              <Text style={styles.voipTitle}>Appel vers l’app victime (audio — vidéo depuis l’écran d’appel)</Text>
+              <TouchableOpacity
+                style={[styles.voipBtnFull, voipLoading && { opacity: 0.6 }]}
+                onPress={() => void callVictimVoip()}
+                disabled={voipLoading}
+              >
+                {voipLoading ? (
+                  <ActivityIndicator color={colors.secondary} size="small" />
+                ) : (
+                  <>
+                    <MaterialIcons name="phone-in-talk" color={colors.secondary} size={22} />
+                    <Text style={styles.voipBtnText}>App audio</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
+          </ScrollView>
         </View>
       </View>
     </SafeAreaView>
@@ -388,23 +450,38 @@ export function MissionActiveScreen({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.mainBackground },
-  topHeader: { 
-    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 18,
-    borderBottomLeftRadius: 32, borderBottomRightRadius: 32,
-    backgroundColor: '#0A0A0A',
+  floatingBack: {
+    position: 'absolute',
+    left: 12,
+    zIndex: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
-  headerRow: { flexDirection: 'row', alignItems: 'center' },
-  backBtn: { 
-    width: 44, height: 44, borderRadius: 16, backgroundColor: '#1A1A1A',
-    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+  floatingPriorityChip: {
+    position: 'absolute',
+    right: 12,
+    zIndex: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 12,
+    gap: 6,
+    maxWidth: '62%',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
   },
-  greetingText: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
-  hospitalName: { color: '#FFF', fontSize: 20, fontWeight: '700', marginTop: 2 },
-  priorityChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, gap: 6 },
   priorityDot: { width: 6, height: 6, borderRadius: 3 },
-  priorityChipText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+  priorityChipText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5, flexShrink: 1 },
 
-  mapContainer: { flex: 3 },
+  mapContainer: { flex: 1, minHeight: 200 },
   map: { width: '100%', height: '100%' },
   myMarker: {
     width: 32, height: 32, borderRadius: 16,
@@ -426,21 +503,23 @@ const styles = StyleSheet.create({
   },
 
   hudOverlay: { 
-    position: 'absolute', top: 16, left: 16, right: 16, 
+    position: 'absolute', left: 16, right: 16, 
     backgroundColor: 'rgba(10,10,10,0.92)', padding: 18, borderRadius: 24,
     flexDirection: 'row', justifyContent: 'space-between',
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
   hudLeft: { flex: 1 },
-  victimLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '800', letterSpacing: 1.5, marginBottom: 4 },
+  victimLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 4 },
   victimName: { color: '#FFF', fontWeight: '900', fontSize: 17 },
   phoneChip: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
   phoneText: { color: '#30D158', fontSize: 12, fontWeight: '700' },
   hudDistanceText: { color: colors.secondary, fontSize: 30, fontWeight: '900' },
-  hudDistanceLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '800', marginTop: 2 },
+  hudDistanceLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: '800', marginTop: 2 },
 
   bottomControls: { 
-    flex: 4, backgroundColor: '#0F0F0F', 
+    flexShrink: 0,
+    maxHeight: '52%',
+    backgroundColor: '#0F0F0F', 
     borderTopLeftRadius: 32, borderTopRightRadius: 32,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
     paddingTop: 16, paddingHorizontal: 16,
@@ -450,31 +529,55 @@ const styles = StyleSheet.create({
   statusProgress: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
   stepItem: { alignItems: 'center', flex: 1, position: 'relative' },
   stepDot: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  stepLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.5 },
+  stepLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   stepLine: { position: 'absolute', top: 14, left: '60%', right: '-40%', height: 2 },
 
   locationInfo: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 12, paddingHorizontal: 4 },
-  locationText: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '500', flex: 1 },
+  siteAffectationLabel: {
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+  },
+  locationText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600', lineHeight: 18 },
 
   descriptionBox: { backgroundColor: '#1A1A1A', borderRadius: 16, padding: 14, marginBottom: 12 },
   descriptionText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '500', lineHeight: 19 },
 
   journalContainer: { backgroundColor: '#1A1A1A', borderRadius: 16, padding: 14, marginBottom: 12 },
-  journalHeader: { color: 'rgba(255,255,255,0.3)', fontSize: 9, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
+  journalHeader: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
   noteItem: { flexDirection: 'row', gap: 10, marginBottom: 6 },
-  noteTime: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '700', width: 42 },
+  noteTime: { color: 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: '700', width: 42 },
   noteBody: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '500', flex: 1 },
 
   inputBox: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   textInput: { flex: 1, backgroundColor: '#1A1A1A', borderRadius: 16, paddingHorizontal: 16, height: 44, color: '#FFF', fontSize: 13, fontWeight: '600' },
   sendBtn: { width: 44, height: 44, borderRadius: 16, backgroundColor: colors.secondary, justifyContent: 'center', alignItems: 'center' },
 
+  voipBlock: { marginBottom: 16 },
+  voipTitle: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginBottom: 10 },
+  voipBtnFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: '#1A1A1A',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  voipBtnText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+
   actionGrid: { flexDirection: 'row', gap: 10, paddingBottom: 20, alignItems: 'center' },
   roundActionBtn: { 
     width: 64, height: 64, borderRadius: 20, backgroundColor: '#1A1A1A',
     justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
   },
-  actionLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '700', marginTop: 4 },
+  actionLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', marginTop: 4 },
   mainActionBtn: {
     flex: 1, height: 56, borderRadius: 20, backgroundColor: colors.secondary,
     justifyContent: 'center', alignItems: 'center',

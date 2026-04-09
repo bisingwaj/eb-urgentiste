@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useFonts } from 'expo-font';
+import * as SystemUI from 'expo-system-ui';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { navigationRef } from './src/navigation/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar, ActivityIndicator, View, Text, ScrollView } from 'react-native';
+import { StatusBar, View, Text, ScrollView, Appearance } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 
@@ -12,12 +14,15 @@ if (mapboxToken) {
 }
 
 import { colors } from './src/theme/colors';
+import { applyMarianneDefaultTextStyle, fonts as marianneFonts } from './src/theme/fonts';
 import { isSupabaseConfigured } from './src/lib/supabase';
 import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { AppLockProvider } from './src/contexts/AppLockContext';
 import { MissionProvider } from './src/contexts/MissionContext';
 import { CallSessionProvider } from './src/contexts/CallSessionContext';
 import { GlobalAlert } from './src/components/shared/GlobalAlert';
+import { AlertAlarmManager } from './src/components/alerts/AlertAlarmManager';
+import { BrandedSplashScreen } from './src/components/splash/BrandedSplashScreen';
 
 // Shared entry screens
 import { LoginPage } from './src/screens/LoginPage';
@@ -44,6 +49,8 @@ import { HospitalAdmissionsListScreen } from './src/screens/hospital/HospitalAdm
 import { CallCenterScreen } from './src/screens/urgentiste/CallCenterScreen';
 import { CallHistoryCallsScreen } from './src/screens/urgentiste/CallHistoryCallsScreen';
 import { IncomingCallSubscriber } from './src/components/calls/IncomingCallSubscriber';
+import { IncomingCallNotificationHandler } from './src/components/calls/IncomingCallNotificationHandler';
+import { usePushTokenRegistration } from './src/hooks/usePushTokenRegistration';
 import { FloatingCallBar } from './src/components/calls/FloatingCallBar';
 import { SignalementScreen } from './src/screens/urgentiste/SignalementScreen';
 import { ProtocolesScreen } from './src/screens/urgentiste/ProtocolesScreen';
@@ -64,6 +71,12 @@ const navTheme = {
     text: '#FFF',
     border: 'transparent',
     notification: colors.primary,
+  },
+  fonts: {
+    regular: { fontFamily: marianneFonts.regular, fontWeight: '400' as const },
+    medium: { fontFamily: marianneFonts.medium, fontWeight: '500' as const },
+    bold: { fontFamily: marianneFonts.bold, fontWeight: '600' as const },
+    heavy: { fontFamily: marianneFonts.bold, fontWeight: '700' as const },
   },
 };
 
@@ -93,13 +106,16 @@ function ConfigErrorScreen() {
   );
 }
 
-// Écran de chargement pendant la vérification de session
+// Écran de chargement (polices / session) — identité Étoile Bleue
 function LoadingScreen() {
-  return (
-    <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#050505' }}>
-      <ActivityIndicator size="large" color={colors.secondary} />
-    </View>
-  );
+  return <BrandedSplashScreen showSpinner />;
+}
+
+/** Enregistre le token FCM natif pour `send-call-push` (Edge Supabase). */
+function PushTokenRegistration() {
+  const { isAuthenticated, session } = useAuth();
+  usePushTokenRegistration(isAuthenticated && !!session?.user?.id, session?.user?.id);
+  return null;
 }
 
 // Navigation interne basée sur l'état d'auth
@@ -127,7 +143,7 @@ function RootNavigator() {
           <Stack.Screen name="Login" component={LoginPage} />
         </>
       ) : (
-        // ── Authentifié ── Écrans principaux (pas d’écran obligatoire de changement de mot de passe)
+        // ── Authentifié ── Écrans principaux (auth ID + PIN uniquement, pas d’écran mot de passe obligatoire)
         <>
           {/* Écran initial basé sur le rôle */}
           {profile?.role === 'hopital' ? (
@@ -170,10 +186,38 @@ function RootNavigator() {
 }
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    'Marianne-Regular': require('./assets/fonts/Marianne-Regular.otf'),
+    'Marianne-Medium': require('./assets/fonts/Marianne-Medium.otf'),
+    'Marianne-Bold': require('./assets/fonts/Marianne-Bold.otf'),
+    'Marianne-Light': require('./assets/fonts/Marianne-Light.otf'),
+  });
+
+  useEffect(() => {
+    /** Toujours sombre : barres système / contrôles comme en mode dark, même si le téléphone est en mode clair. */
+    Appearance.setColorScheme('dark');
+    void SystemUI.setBackgroundColorAsync('#000000');
+  }, []);
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      applyMarianneDefaultTextStyle();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
+        <LoadingScreen />
+      </SafeAreaProvider>
+    );
+  }
+
   if (!isSupabaseConfigured()) {
     return (
       <SafeAreaProvider>
-        <StatusBar barStyle="light-content" backgroundColor={colors.mainBackground} />
+        <StatusBar barStyle="light-content" backgroundColor="#000000" />
         <ConfigErrorScreen />
       </SafeAreaProvider>
     );
@@ -184,13 +228,16 @@ export default function App() {
       <MissionProvider>
         <AppLockProvider>
           <SafeAreaProvider>
-            <StatusBar barStyle="light-content" backgroundColor={colors.mainBackground} />
+            <StatusBar barStyle="light-content" backgroundColor="#000000" />
             <NavigationContainer ref={navigationRef} theme={navTheme}>
               <CallSessionProvider>
+                <PushTokenRegistration />
                 <RootNavigator />
                 <FloatingCallBar />
                 <IncomingCallSubscriber />
+                <IncomingCallNotificationHandler />
                 <GlobalAlert />
+                <AlertAlarmManager />
               </CallSessionProvider>
             </NavigationContainer>
           </SafeAreaProvider>

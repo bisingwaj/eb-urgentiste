@@ -153,14 +153,14 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: "#FFF", fontSize: 16, fontWeight: '600', marginLeft: 10 },
 
   scrollPad: { paddingHorizontal: 20, paddingBottom: 100 },
-  sectionTitle: { color: colors.textMuted, fontSize: 11, fontWeight: '800', marginLeft: 16, marginBottom: 15, marginTop: 10, letterSpacing: 1.5 },
+  sectionTitle: { color: colors.textMuted, fontSize: 13, fontWeight: '800', marginLeft: 16, marginBottom: 15, marginTop: 10, letterSpacing: 1.5 },
 
   listCard: { backgroundColor: "#1A1A1A", borderRadius: 32, overflow: 'hidden', borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },
   protocolItem: { flexDirection: 'row', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.02)" },
   iconCircle: { width: 48, height: 48, backgroundColor: colors.secondary + '10', borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
   cardContent: { flex: 1 },
   cardTitle: { color: "#FFF", fontSize: 16, fontWeight: '800', marginBottom: 4 },
-  cardType: { color: colors.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+  cardType: { color: colors.textMuted, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
 
   emptyView: { alignItems: 'center', marginTop: 80 },
   emptyText: { color: colors.textMuted, fontSize: 16, fontWeight: '600' },

@@ -1,27 +1,16 @@
-# macOS
+# OSX
+#
 .DS_Store
-**/.DS_Store
 
-# Windows (builds ouverts depuis l’explorateur dans android/)
-Thumbs.db
-Desktop.ini
-
-# Android / Gradle / Studio
+# Android/IntelliJ
+#
 build/
-app/build/
-.idea/
-.gradle/
+.idea
+.gradle
 local.properties
 *.iml
 *.hprof
 .cxx/
-captures/
-.externalNativeBuild/
 
-# Artéfacts JS embarqués
+# Bundle artifacts
 *.jsbundle
-
-# Clés de signature release (le debug de l’app peut être versionné pour builds locales cohérents)
-*.jks
-*.keystore
-!app/debug.keystore

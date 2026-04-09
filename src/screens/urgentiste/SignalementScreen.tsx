@@ -9,13 +9,14 @@ import {
    Dimensions,
    Platform,
    StatusBar,
+   Alert,
    TextInput,
    ActivityIndicator,
    FlatList,
    PanResponder,
    Linking,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Mapbox from "@rnmapbox/maps";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../../theme/colors";
@@ -24,6 +25,8 @@ import * as Location from "expo-location";
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from "../../lib/mapbox";
 import { MapboxMapView } from "../../components/map/MapboxMapView";
 import { openExternalDirections } from "../../utils/navigation";
+import { formatMissionAddress, formatIncidentType, formatDescriptionLines } from "../../utils/missionAddress";
+import { HeartPulse, Ambulance, Hospital as HospitalIcon } from "lucide-react-native";
 
 // Helper for ETA and distance
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -39,6 +42,8 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
 import { useFocusEffect } from "@react-navigation/native";
 import { useActiveMission } from "../../hooks/useActiveMission";
 import { useMission, Hospital } from "../../contexts/MissionContext";
+import { alertVoipError, startRescuerToCitizenVoipCall } from "../../lib/rescuerCallCitizen";
+import { canOfferVictimContactCalls } from "../../lib/missionVictimCall";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 const IS_TABLET = SCREEN_WIDTH > 600;
@@ -55,6 +60,19 @@ type MissionStep =
    | "transport_mode"
    | "transport"
    | "closure";
+
+const STEP_LABELS: Record<MissionStep, string> = {
+   standby: "Attente",
+   reception: "Réception",
+   arrival: "En route",
+   assessment: "Évaluation initiale",
+   aid: "Premiers soins",
+   decision: "Plan d'évacuation",
+   assignment: "Affectation",
+   transport_mode: "Mode de transport",
+   transport: "Transport en cours",
+   closure: "Clôture",
+};
 
 interface TimelineEvent {
    id: string;
@@ -114,6 +132,7 @@ const HOSPITALS = [
 ];
 
 export function SignalementScreen({ navigation, route }: any) {
+   const insets = useSafeAreaInsets();
    const { activeMission, isLoading: missionLoading, updateDispatchStatus, refresh } = useActiveMission();
    const { fetchHospitals, updateMissionDetails } = useMission();
    const initialMission = route?.params?.mission || activeMission;
@@ -150,6 +169,7 @@ export function SignalementScreen({ navigation, route }: any) {
    const [routeDuration, setRouteDuration] = useState<number | null>(null);
    const [routeDistance, setRouteDistance] = useState<number | null>(null);
    const lastRouteFetch = useRef<number>(0);
+   const [voipLoading, setVoipLoading] = useState(false);
 
    useEffect(() => {
       if (!urgentisteLoc || !selectedMission) return;
@@ -272,13 +292,13 @@ export function SignalementScreen({ navigation, route }: any) {
       fetchAddress();
    }, [selectedMission?.location?.lat, selectedMission?.location?.lng]);
 
-   // Chaîne de priorité : address > commune > reverse geocode > GPS brut
-   const displayAddress = selectedMission ? (
-      selectedMission.location?.address 
-         || (selectedMission.location?.commune ? `Commune de ${selectedMission.location.commune}` : null)
-         || resolvedAddress 
-         || "Recherche de l'adresse..."
-   ) : "Adresse inconnue";
+   const displayAddress = useMemo(
+      () =>
+         selectedMission
+            ? formatMissionAddress(selectedMission.location, resolvedAddress)
+            : "Adresse inconnue",
+      [selectedMission, resolvedAddress]
+   );
 
    const distanceInfo = useMemo(() => {
       if (!urgentisteLoc || !selectedMission) return { dist: "Calcul...", eta: "--" };
@@ -771,7 +791,8 @@ export function SignalementScreen({ navigation, route }: any) {
           <FlatList
              data={timeline}
              keyExtractor={(item) => item.id}
-             scrollEnabled={false}
+             nestedScrollEnabled
+             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
                <View style={styles.timelineItem}>
                   <View style={styles.timelinePointRow}>
@@ -808,34 +829,140 @@ export function SignalementScreen({ navigation, route }: any) {
       </View>
    );
 
+   const missionTypeLabel = formatIncidentType(selectedMission?.type);
+
+   const runVictimVoipFromSignalement = async () => {
+      const m = selectedMission;
+      if (!m?.citizen_id || !m?.incident_id || voipLoading) {
+         if (m && !m.citizen_id) {
+            Alert.alert(
+               "Appel (application)",
+               "Aucun compte citoyen lié à cet incident (incidents.citizen_id). L’appel in-app n’est pas disponible.",
+            );
+         }
+         return;
+      }
+      setVoipLoading(true);
+      try {
+         await startRescuerToCitizenVoipCall({
+            incidentId: m.incident_id,
+            citizenId: m.citizen_id,
+            callType: "audio",
+         });
+      } catch (e) {
+         alertVoipError(e);
+      } finally {
+         setVoipLoading(false);
+      }
+   };
+
+   const callVictimPstnFromSignalement = () => {
+      const m = selectedMission;
+      const phone = m?.caller?.phone;
+      if (phone && phone !== "-") {
+         Linking.openURL(`tel:${phone}`);
+      } else {
+         Alert.alert("Téléphone", "Aucun numéro renseigné pour cette victime.");
+      }
+   };
+
+   /** Bandeau contacter victime — uniquement avant arrivée sur les lieux (dispatché / en route). Vidéo via l’écran d’appel. */
+   const renderVictimContactStripContent = () => {
+      if (!selectedMission || !canOfferVictimContactCalls(selectedMission.dispatch_status)) {
+         return null;
+      }
+      const hasPhone = !!(selectedMission.caller?.phone && selectedMission.caller.phone !== "-");
+      const hasCitizen = !!selectedMission.citizen_id;
+      return (
+         <View style={styles.victimContactStrip}>
+            <Text style={styles.victimContactStripTitle}>Contacter la victime (avant arrivée sur place)</Text>
+            <View style={styles.victimContactRow}>
+               <TouchableOpacity
+                  style={[styles.victimContactChip, !hasPhone && styles.victimContactChipDisabled]}
+                  onPress={callVictimPstnFromSignalement}
+               >
+                  <MaterialIcons
+                     name="phone"
+                     size={20}
+                     color={hasPhone ? "#30D158" : "rgba(255,255,255,0.25)"}
+                  />
+                  <Text
+                     style={[
+                        styles.victimContactChipText,
+                        !hasPhone && styles.victimContactChipTextDisabled,
+                     ]}
+                  >
+                     Téléphone
+                  </Text>
+               </TouchableOpacity>
+               <TouchableOpacity
+                  style={[
+                     styles.victimContactChip,
+                     (!hasCitizen || voipLoading) && styles.victimContactChipDisabled,
+                  ]}
+                  onPress={() => void runVictimVoipFromSignalement()}
+                  disabled={voipLoading || !hasCitizen}
+               >
+                  {voipLoading ? (
+                     <ActivityIndicator color={colors.secondary} size="small" />
+                  ) : (
+                     <>
+                        <MaterialIcons name="phone-in-talk" size={20} color={colors.secondary} />
+                        <Text style={styles.victimContactChipText}>App audio</Text>
+                     </>
+                  )}
+               </TouchableOpacity>
+            </View>
+            {!hasCitizen && (
+               <Text style={styles.victimContactHint}>
+                  App in-app : identifiant citoyen absent (vérifiez incidents.citizen_id en base).
+               </Text>
+            )}
+            {!hasPhone && hasCitizen && (
+               <Text style={styles.victimContactHint}>Pas de numéro de téléphone sur la fiche.</Text>
+            )}
+         </View>
+      );
+   };
+
+   const renderStepInlineHeader = () => (
+      <View style={[styles.stepInlineHeader, { paddingTop: Math.max(insets.top, 12) }]}>
+         <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.stepInlineBack}
+            accessibilityRole="button"
+            accessibilityLabel="Retour"
+         >
+            <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+         </TouchableOpacity>
+         <View style={styles.stepInlineTextCol}>
+            <Text style={styles.stepInlineLabel}>{STEP_LABELS[step]}</Text>
+            <Text style={styles.stepInlineTitle} numberOfLines={2}>{missionTypeLabel}</Text>
+         </View>
+      </View>
+   );
+
    return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
          <StatusBar barStyle="light-content" />
-         <View style={styles.topHeader}>
-            <View style={styles.headerRow}>
-               <TouchableOpacity
-                  onPress={() => navigation.goBack()}
-                  style={styles.backBtn}
-               >
-                  <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-               </TouchableOpacity>
-               <View style={{ flex: 1, paddingHorizontal: 15 }}>
-                  <Text style={styles.greetingText}>
-                     {step === "standby"
-                        ? "Centrale régulation"
-                        : "Unité intervention"}
-                  </Text>
-                  <Text style={styles.hospitalName} numberOfLines={1}>
-                     {step === "standby"
-                        ? "Attente d'affectation..."
-                        : selectedMission?.type || "Mission"}
-                  </Text>
-               </View>
-               <View style={styles.stepBadge}>
-                  <Text style={styles.stepBadgeText}>{step}</Text>
+         {step === "standby" && (
+            <View style={styles.topHeader}>
+               <View style={styles.headerRow}>
+                  <TouchableOpacity
+                     onPress={() => navigation.goBack()}
+                     style={styles.backBtn}
+                  >
+                     <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, paddingHorizontal: 15 }}>
+                     <Text style={styles.greetingText}>Centrale régulation</Text>
+                     <Text style={styles.hospitalName} numberOfLines={1}>
+                        Attente d'affectation...
+                     </Text>
+                  </View>
                </View>
             </View>
-         </View>
+         )}
 
          <View style={styles.mainWrapper}>
             <Animated.View style={[styles.contentArea, { opacity: fadeAnim }]}>
@@ -914,6 +1041,14 @@ export function SignalementScreen({ navigation, route }: any) {
                {step === "reception" && selectedMission && (
                   <View style={[styles.receptionView, { padding: 0 }]}>
                      <View style={styles.receptionMapWrapper}>
+                        <TouchableOpacity
+                           onPress={() => navigation.goBack()}
+                           style={[styles.floatingBackSignalement, { top: insets.top + 10 }]}
+                           accessibilityRole="button"
+                           accessibilityLabel="Retour"
+                        >
+                           <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+                        </TouchableOpacity>
                         <MapboxMapView style={styles.receptionMap} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
                            {receptionCameraBounds ? (
                               <Mapbox.Camera
@@ -930,14 +1065,14 @@ export function SignalementScreen({ navigation, route }: any) {
 
                            <Mapbox.PointAnnotation id="victim-reception" coordinate={[selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447]}>
                              <View style={styles.victimMarker}>
-                                <View style={styles.victimMarkerDot} />
+                                <HeartPulse size={16} color="#FFF" strokeWidth={2.5} />
                              </View>
                            </Mapbox.PointAnnotation>
 
                            {urgentisteLoc && (
                               <Mapbox.PointAnnotation id="my-unit-reception" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
                                  <View style={styles.urgentisteMarker}>
-                                    <View style={styles.urgentisteMarkerDot} />
+                                    <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
                                  </View>
                               </Mapbox.PointAnnotation>
                            )}
@@ -954,7 +1089,7 @@ export function SignalementScreen({ navigation, route }: any) {
                        </View>
                     </View>
 
-                     <View style={{ flex: 1 }}>
+                     <View style={styles.receptionBottomPanel}>
                         <ScrollView
                            showsVerticalScrollIndicator={false}
                            contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
@@ -974,9 +1109,9 @@ export function SignalementScreen({ navigation, route }: any) {
                                     }
                                     size={32}
                                  />
-                                 <View>
-                                    <Text style={styles.detailLabel}>
-                                       Mission affectée ID: {selectedMission.id}
+                                 <View style={{ flex: 1, minWidth: 0 }}>
+                                    <Text style={styles.detailMissionType} numberOfLines={2}>
+                                       {formatIncidentType(selectedMission.type)}
                                     </Text>
                                     <Text style={styles.priorityStatusText}>
                                        {selectedMission.priority} • {selectedMission.time}{" "}
@@ -985,17 +1120,24 @@ export function SignalementScreen({ navigation, route }: any) {
                                  </View>
                               </View>
                               <View style={styles.divider} />
-                              <Text style={styles.detailLabel}>Site d'intervention</Text>
+                              <Text style={styles.detailLabel}>Site d'affectation</Text>
                                <Text style={styles.detailVal}>
                                  {displayAddress}
                                </Text>
                               <View style={styles.divider} />
                               <Text style={styles.detailLabel}>Descriptif central</Text>
-                              <Text style={styles.detailDesc}>
-                                 {selectedMission.description}
-                              </Text>
+                              {formatDescriptionLines(selectedMission.description).map((line, i) => (
+                                 <Text key={i} style={styles.detailDesc}>{"\u2022  "}{line}</Text>
+                              ))}
                            </View>
                         </ScrollView>
+
+                        {selectedMission &&
+                           canOfferVictimContactCalls(selectedMission.dispatch_status) && (
+                              <View style={styles.victimStripReceptionWrap}>
+                                 {renderVictimContactStripContent()}
+                              </View>
+                           )}
 
                         <View style={styles.stickySwipeWrapper}>
                            <View style={styles.swipeContainer}>
@@ -1041,6 +1183,14 @@ export function SignalementScreen({ navigation, route }: any) {
                             { flex: 1, borderRadius: 0, borderWidth: 0 },
                          ]}
                       >
+                         <TouchableOpacity
+                            onPress={() => navigation.goBack()}
+                            style={[styles.floatingBackSignalement, { top: insets.top + 10 }]}
+                            accessibilityRole="button"
+                            accessibilityLabel="Retour"
+                         >
+                            <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+                         </TouchableOpacity>
                          <MapboxMapView style={styles.trackingMap} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
                             {receptionCameraBounds ? (
                                <Mapbox.Camera
@@ -1057,14 +1207,14 @@ export function SignalementScreen({ navigation, route }: any) {
 
                             <Mapbox.PointAnnotation id="victim-arrival" coordinate={[selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447]}>
                               <View style={styles.victimMarker}>
-                                 <View style={styles.victimMarkerDot} />
+                                 <HeartPulse size={16} color="#FFF" strokeWidth={2.5} />
                               </View>
                             </Mapbox.PointAnnotation>
 
                             {urgentisteLoc && (
                                <Mapbox.PointAnnotation id="my-unit-arrival" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
                                   <View style={styles.urgentisteMarker}>
-                                     <View style={styles.urgentisteMarkerDot} />
+                                     <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
                                   </View>
                                </Mapbox.PointAnnotation>
                             )}
@@ -1081,9 +1231,12 @@ export function SignalementScreen({ navigation, route }: any) {
                               size={14}
                               color="rgba(255,255,255,0.6)"
                            />
-                            <Text style={styles.smallAddressText}>
-                               {displayAddress}
-                            </Text>
+                           <View style={{ flex: 1, minWidth: 0 }}>
+                              <Text style={styles.mapAddressOverlayLabel}>Site d'affectation</Text>
+                              <Text style={styles.smallAddressText} numberOfLines={4}>
+                                 {displayAddress}
+                              </Text>
+                           </View>
                         </View>
                      </View>
                      <View style={styles.arrivalFooter}>
@@ -1109,7 +1262,8 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "assessment" && (
                   <View style={styles.stepBase}>
-                     <Text style={styles.stepHeading}>Évaluation initiale</Text>
+                     {renderStepInlineHeader()}
+                     <Text style={styles.stepSectionHeading}>Évaluation initiale</Text>
                      <ScrollView
                         style={{ flex: 1 }}
                         showsVerticalScrollIndicator={false}
@@ -1310,7 +1464,8 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "aid" && (
                   <View style={styles.stepBase}>
-                     <Text style={styles.stepHeading}>Premiers soins</Text>
+                     {renderStepInlineHeader()}
+                     <Text style={styles.stepSectionHeading}>Premiers soins</Text>
                      <ScrollView
                         style={{ flex: 1 }}
                         showsVerticalScrollIndicator={false}
@@ -1394,7 +1549,8 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "decision" && (
                   <View style={styles.stepBase}>
-                     <Text style={styles.stepHeading}>Plan d'évacuation</Text>
+                     {renderStepInlineHeader()}
+                     <Text style={styles.stepSectionHeading}>Plan d'évacuation</Text>
                      <View style={styles.decisionGrid}>
                         <TouchableOpacity
                            style={styles.decisionCardGrid}
@@ -1463,6 +1619,7 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "assignment" && (
                   <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
+                     <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</View>
                      {!targetHospital && !pendingStructureInfo ? (
                         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
                            <ActivityIndicator size="large" color={colors.secondary} />
@@ -1518,14 +1675,14 @@ export function SignalementScreen({ navigation, route }: any) {
 
                                  <Mapbox.PointAnnotation id="hospital-assign" coordinate={[targetHospital.coords.longitude, targetHospital.coords.latitude]}>
                                     <View style={styles.hospitalMarker}>
-                                       <View style={styles.hospitalMarkerDot} />
+                                       <HospitalIcon size={16} color="#FFF" strokeWidth={2.5} />
                                     </View>
                                  </Mapbox.PointAnnotation>
 
                                  {urgentisteLoc && (
                                     <Mapbox.PointAnnotation id="my-unit-assign" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
                                        <View style={styles.urgentisteMarker}>
-                                          <View style={styles.urgentisteMarkerDot} />
+                                          <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
                                        </View>
                                     </Mapbox.PointAnnotation>
                                  )}
@@ -1632,7 +1789,8 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "transport_mode" && (
                   <View style={styles.stepBase}>
-                     <Text style={styles.stepHeading}>Mode de transport</Text>
+                     {renderStepInlineHeader()}
+                     <Text style={styles.stepSectionHeading}>Mode de transport</Text>
                      <View style={styles.aidGrid}>
                         <TouchableOpacity
                            style={styles.aidCardGrid}
@@ -1720,6 +1878,14 @@ export function SignalementScreen({ navigation, route }: any) {
                {step === "transport" && targetHospital && (
                   <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
                      <View style={{ flex: 1, borderRadius: 0, overflow: "hidden" }}>
+                        <TouchableOpacity
+                           onPress={() => navigation.goBack()}
+                           style={[styles.floatingBackSignalement, { top: insets.top + 10 }]}
+                           accessibilityRole="button"
+                           accessibilityLabel="Retour"
+                        >
+                           <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+                        </TouchableOpacity>
                         <MapboxMapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
                            {urgentisteLoc ? (
                               <Mapbox.Camera
@@ -1751,14 +1917,14 @@ export function SignalementScreen({ navigation, route }: any) {
 
                            <Mapbox.PointAnnotation id="hospital-dest" coordinate={[targetHospital.coords.longitude, targetHospital.coords.latitude]}>
                               <View style={styles.hospitalMarker}>
-                                 <View style={styles.hospitalMarkerDot} />
+                                 <HospitalIcon size={16} color="#FFF" strokeWidth={2.5} />
                               </View>
                            </Mapbox.PointAnnotation>
 
                            {urgentisteLoc && (
                               <Mapbox.PointAnnotation id="my-unit-transport" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
                                  <View style={styles.urgentisteMarker}>
-                                    <View style={styles.urgentisteMarkerDot} />
+                                    <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
                                  </View>
                               </Mapbox.PointAnnotation>
                            )}
@@ -1793,7 +1959,7 @@ export function SignalementScreen({ navigation, route }: any) {
                            </View>
                            {transportMode && (
                               <View style={{ backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-                                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '700' }}>{transportMode}</Text>
+                                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' }}>{transportMode}</Text>
                               </View>
                            )}
                         </View>
@@ -1812,6 +1978,7 @@ export function SignalementScreen({ navigation, route }: any) {
 
                {step === "closure" && (
                   <View style={styles.stepBase}>
+                     {renderStepInlineHeader()}
                      <View style={styles.closureView}>
                         <View style={styles.successHalo}>
                            <MaterialIcons
@@ -1837,6 +2004,13 @@ export function SignalementScreen({ navigation, route }: any) {
                   </View>
                )}
             </Animated.View>
+            {selectedMission &&
+               step !== "standby" &&
+               step !== "reception" &&
+               step !== "closure" &&
+               canOfferVictimContactCalls(selectedMission.dispatch_status) && (
+                  <View style={styles.victimStripGlobalWrap}>{renderVictimContactStripContent()}</View>
+               )}
             {step !== "standby" && step !== "reception" && (
                <View style={{ height: 250 }}>{renderTimeline()}</View>
             )}
@@ -1864,7 +2038,7 @@ const styles = StyleSheet.create({
    },
    greetingText: {
       color: "rgba(255,255,255,0.4)",
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "900",
       letterSpacing: 1,
    },
@@ -1874,23 +2048,50 @@ const styles = StyleSheet.create({
       fontWeight: "900",
       marginTop: 2,
    },
-   stepBadge: {
-      paddingHorizontal: 12,
-      paddingVertical: 6,
-      borderRadius: 10,
-      backgroundColor: colors.secondary + "20",
-      borderWidth: 1,
-      borderColor: colors.secondary + "40",
-   },
-   stepBadgeText: { color: colors.secondary, fontSize: 10, fontWeight: "900" },
    mainWrapper: { flex: 1 },
    contentArea: { flex: 1 },
    stepBase: { flex: 1, padding: 24 },
-   stepHeading: {
+   stepInlineHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      marginBottom: 14,
+      gap: 12,
+   },
+   stepInlineBack: {
+      width: 44,
+      height: 44,
+      borderRadius: 16,
+      backgroundColor: "#1A1A1A",
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.1)",
+   },
+   stepInlineTextCol: {
+      flex: 1,
+      minWidth: 0,
+      paddingTop: 2,
+   },
+   stepInlineLabel: {
+      color: "rgba(255,255,255,0.45)",
+      fontSize: 13,
+      fontWeight: "800",
+      letterSpacing: 1.2,
+      marginBottom: 6,
+      textTransform: "uppercase",
+   },
+   stepInlineTitle: {
       color: "#FFF",
-      fontSize: 24,
+      fontSize: 22,
       fontWeight: "900",
-      marginBottom: 25,
+      letterSpacing: -0.3,
+      lineHeight: 28,
+   },
+   stepSectionHeading: {
+      color: "rgba(255,255,255,0.9)",
+      fontSize: 17,
+      fontWeight: "800",
+      marginBottom: 14,
    },
    divider: {
       height: 1,
@@ -2013,7 +2214,7 @@ const styles = StyleSheet.create({
    },
    assignHeader: {
       color: "rgba(255,255,255,0.5)",
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "900",
       letterSpacing: 1,
    },
@@ -2029,7 +2230,72 @@ const styles = StyleSheet.create({
       borderRadius: 15,
    },
    assignActionText: { color: "#FFF", fontSize: 14, fontWeight: "900" },
-   receptionView: { flex: 1, padding: 24 },
+   victimStripReceptionWrap: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 4,
+      backgroundColor: "rgba(0,0,0,0.55)",
+   },
+   victimStripGlobalWrap: {
+      paddingHorizontal: 12,
+      paddingTop: 10,
+      paddingBottom: 6,
+      backgroundColor: colors.mainBackground,
+   },
+   victimContactStrip: {
+      backgroundColor: "#161616",
+      borderRadius: 16,
+      padding: 12,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+   },
+   victimContactStripTitle: {
+      color: "rgba(255,255,255,0.5)",
+      fontSize: 11,
+      fontWeight: "900",
+      letterSpacing: 0.8,
+      marginBottom: 10,
+   },
+   victimContactRow: { flexDirection: "row", gap: 8, alignItems: "stretch" },
+   victimContactChip: {
+      flex: 1,
+      flexDirection: "column",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 4,
+      paddingVertical: 10,
+      paddingHorizontal: 6,
+      borderRadius: 12,
+      backgroundColor: "#222",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.08)",
+      minHeight: 72,
+   },
+   victimContactChipDisabled: { opacity: 0.45 },
+   victimContactChipText: { color: "#FFF", fontSize: 11, fontWeight: "800", textAlign: "center" },
+   victimContactChipTextDisabled: { color: "rgba(255,255,255,0.35)" },
+   victimContactHint: {
+      color: "rgba(255,255,255,0.35)",
+      fontSize: 11,
+      marginTop: 10,
+      lineHeight: 15,
+   },
+   receptionView: { flex: 1, flexDirection: "column", padding: 0 },
+   receptionBottomPanel: { flex: 1, minHeight: 180 },
+   floatingBackSignalement: {
+      position: "absolute",
+      left: 12,
+      zIndex: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 16,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+   },
+   detailMissionType: { color: "#FFF", fontSize: 18, fontWeight: "800" },
    detailBox: {
       flex: 1,
       backgroundColor: "#111",
@@ -2046,7 +2312,7 @@ const styles = StyleSheet.create({
    },
    detailLabel: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "900",
       letterSpacing: 1.5,
       marginBottom: 4,
@@ -2057,7 +2323,8 @@ const styles = StyleSheet.create({
 
    // New Reception Map Styles
    receptionMapWrapper: {
-      height: 320,
+      flex: 1,
+      minHeight: 220,
       width: "100%",
       backgroundColor: "#1A1A1A",
       overflow: "hidden",
@@ -2144,52 +2411,49 @@ const styles = StyleSheet.create({
       borderColor: colors.primary,
    },
    victimMarker: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: "rgba(255,59,48,0.25)",
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.primary,
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 2,
-      borderColor: colors.primary,
-   },
-   victimMarkerDot: {
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: colors.primary,
+      borderColor: "#FFFFFF",
+      shadowColor: colors.primary,
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 6,
    },
    urgentisteMarker: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: "rgba(21,100,191,0.25)",
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.secondary,
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 2,
-      borderColor: "#1564bf",
-   },
-   urgentisteMarkerDot: {
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: "#1564bf",
+      borderColor: "#FFFFFF",
+      shadowColor: colors.secondary,
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 6,
    },
    hospitalMarker: {
-      width: 32,
-      height: 32,
-      borderRadius: 16,
-      backgroundColor: "rgba(52,199,89,0.25)",
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: "#2E7D32",
       justifyContent: "center",
       alignItems: "center",
       borderWidth: 2,
-      borderColor: colors.success || "#34C759",
-   },
-   hospitalMarkerDot: {
-      width: 14,
-      height: 14,
-      borderRadius: 7,
-      backgroundColor: colors.success || "#34C759",
+      borderColor: "#FFFFFF",
+      shadowColor: "#2E7D32",
+      shadowOpacity: 0.5,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 },
+      elevation: 6,
    },
    assignmentBottomPanel: {
       backgroundColor: colors.mainBackground,
@@ -2227,7 +2491,7 @@ const styles = StyleSheet.create({
    },
    structureCoords: {
       color: 'rgba(255,255,255,0.3)',
-      fontSize: 10,
+      fontSize: 12,
       fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
       marginTop: 4,
    },
@@ -2261,13 +2525,22 @@ const styles = StyleSheet.create({
       backgroundColor: "rgba(0,0,0,0.8)",
       padding: 12,
       flexDirection: "row",
-      alignItems: "center",
+      alignItems: "flex-start",
       gap: 8,
    },
+   mapAddressOverlayLabel: {
+      fontSize: 12,
+      fontWeight: "800",
+      color: "rgba(255,255,255,0.45)",
+      letterSpacing: 1,
+      marginBottom: 4,
+      textTransform: "uppercase",
+   },
    smallAddressText: {
-      color: "rgba(255,255,255,0.8)",
+      color: "rgba(255,255,255,0.9)",
       fontSize: 13,
       fontWeight: "600",
+      lineHeight: 18,
    },
    arrivalFooter: {
       flexDirection: "row",
@@ -2283,7 +2556,7 @@ const styles = StyleSheet.create({
    footerTimerVal: { color: "#FFF", fontSize: 24, fontWeight: "900" },
    footerTimerLab: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 8,
+      fontSize: 10,
       fontWeight: "900",
       marginTop: 2,
    },
@@ -2321,7 +2594,7 @@ const styles = StyleSheet.create({
    },
    assessmentRowTitle: {
       color: "rgba(255,255,255,0.4)",
-      fontSize: 9,
+      fontSize: 13,
       fontWeight: "900",
       letterSpacing: 1,
    },
@@ -2355,14 +2628,14 @@ const styles = StyleSheet.create({
    },
    miniToggleText: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: "900",
    },
    miniToggleTextActive: { color: colors.secondary },
    miniToggleTextCrit: { color: colors.primary },
    sectionHeader: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: "900",
       letterSpacing: 1.5,
       marginBottom: 16,
@@ -2380,7 +2653,7 @@ const styles = StyleSheet.create({
       gap: 8,
    },
    severityItemText: {
-      fontSize: 9,
+      fontSize: 13,
       fontWeight: "900",
       color: "rgba(255,255,255,0.3)",
    },
@@ -2396,7 +2669,7 @@ const styles = StyleSheet.create({
    },
    smartAlertBoxText: {
       color: "#FFF",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: "900",
       flex: 1,
    },
@@ -2428,7 +2701,7 @@ const styles = StyleSheet.create({
    },
    aidLabelGrid: {
       color: "rgba(255,255,255,0.5)",
-      fontSize: 11,
+      fontSize: 13,
       fontWeight: "800",
       textAlign: "center",
    },
@@ -2480,7 +2753,7 @@ const styles = StyleSheet.create({
    },
    decisionLabel: {
       color: "rgba(255,255,255,0.5)",
-      fontSize: 9,
+      fontSize: 13,
       fontWeight: "900",
       textAlign: "center",
       letterSpacing: 0.3,
@@ -2512,7 +2785,7 @@ const styles = StyleSheet.create({
    },
    hospResBadgeText: {
       color: colors.secondary,
-      fontSize: 10,
+      fontSize: 12,
       fontWeight: "900",
    },
    transportChoiceCard: {
@@ -2579,7 +2852,7 @@ const styles = StyleSheet.create({
    },
    timelineHeader: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 10,
+      fontSize: 16,
       fontWeight: "900",
       marginBottom: 15,
       letterSpacing: 1,
@@ -2604,10 +2877,10 @@ const styles = StyleSheet.create({
    timelineTextRow: { flexDirection: "row", alignItems: "center", gap: 8 },
    timelineTime: {
       color: "rgba(255,255,255,0.3)",
-      fontSize: 10,
+      fontSize: 14,
       fontWeight: "900",
    },
-   timelineLabel: { color: "#FFF", fontSize: 13, fontWeight: "700" },
+   timelineLabel: { color: "#FFF", fontSize: 15, fontWeight: "700" },
    itemStatusBadge: {
       backgroundColor: "rgba(255,255,255,0.05)",
       alignSelf: "flex-start",
@@ -2616,5 +2889,5 @@ const styles = StyleSheet.create({
       borderRadius: 6,
       marginTop: 4,
    },
-   itemStatusText: { color: colors.secondary, fontSize: 8, fontWeight: "900" },
+   itemStatusText: { color: colors.secondary, fontSize: 12, fontWeight: "900" },
 });

@@ -188,7 +188,7 @@ const styles = StyleSheet.create({
   groupContainer: { marginTop: 24, paddingHorizontal: 20 },
   groupTitle: {
     color: "rgba(255,255,255,0.25)",
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "900",
     letterSpacing: 1.5,
     marginBottom: 12,
@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   },
   copyrightText: {
     color: colors.secondary,
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: "800",
     textTransform: "uppercase",
     letterSpacing: 0.5,

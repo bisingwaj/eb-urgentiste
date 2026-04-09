@@ -7,6 +7,11 @@ export type CallCenterRouteParams = {
   hasVideo?: boolean;
   /** Reprise après réduction (appel toujours actif côté Agora). */
   resume?: boolean;
+  /** Token RTC déjà fourni par `rescuer-call-citizen` (ne pas rappeler `agora-token`). */
+  prefetchedToken?: string;
+  prefetchedAppId?: string;
+  /** UID Agora côté secouriste si le serveur le fixe (sinon 0). */
+  prefetchedRtcUid?: number;
 };
 
 export type RootStackParamList = ParamListBase & {

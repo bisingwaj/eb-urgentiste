@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
     width: 44, height: 44, borderRadius: 16, backgroundColor: '#1A1A1A',
     justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
   },
-  headerSub: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '800', letterSpacing: 1.5 },
+  headerSub: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '800', letterSpacing: 1.5 },
   headerTitle: { color: '#FFF', fontSize: 24, fontWeight: '700', marginTop: 2 },
   markAllBtn: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
@@ -136,11 +136,11 @@ const styles = StyleSheet.create({
   notifContent: { flex: 1 },
   notifHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 },
   notifTitle: { color: '#FFF', fontSize: 15, fontWeight: '700', flex: 1, marginRight: 8 },
-  notifTime: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '600' },
+  notifTime: { color: 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: '600' },
   notifBody: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '500', lineHeight: 18, marginBottom: 8 },
   notifFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   typeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  typeBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.5 },
+  typeBadgeText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.5 },
   unreadDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.secondary },
 
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },

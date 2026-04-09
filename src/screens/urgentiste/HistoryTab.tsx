@@ -48,6 +48,7 @@ const HISTORY_DATA = [
 ];
 
 import { useMissionHistory } from "../../hooks/useMissionHistory";
+import { formatIncidentType } from "../../utils/missionAddress";
 import { ActivityIndicator } from "react-native";
 
 export function HistoryTab({ navigation }: any) {
@@ -214,8 +215,16 @@ export function HistoryTab({ navigation }: any) {
                         color={colors.secondary}
                         size={16}
                       />
-                      <Text style={styles.addressText} numberOfLines={1}>
-                        {mission.location.address}
+                      <Text style={styles.addressText} numberOfLines={2}>
+                        {mission.location?.address?.trim() ||
+                          [
+                            mission.location?.commune,
+                            mission.location?.ville,
+                            mission.location?.province,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ') ||
+                          '—'}
                       </Text>
                     </View>
                     <View style={styles.cardDivider} />
@@ -241,7 +250,7 @@ export function HistoryTab({ navigation }: any) {
                         </Text>
                       </View>
                       <View style={styles.etaContainer}>
-                        <Text style={styles.etaValue}>{mission.type}</Text>
+                        <Text style={styles.etaValue}>{formatIncidentType(mission.type)}</Text>
                       </View>
                     </View>
                   </View>
@@ -324,7 +333,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: "rgba(255,255,255,0.6)",
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: "900",
     letterSpacing: 0.5,
   },
@@ -425,7 +434,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
   },
-  statusBadgeText: { fontSize: 11, fontWeight: "800", letterSpacing: 0.5 },
+  statusBadgeText: { fontSize: 13, fontWeight: "800", letterSpacing: 0.5 },
   etaContainer: { flexDirection: "row", alignItems: "center" },
   etaValue: { color: "rgba(255,255,255,0.3)", fontSize: 13, fontWeight: "800" },
   arrowContainer: { marginLeft: 16 },
