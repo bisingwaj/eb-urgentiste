@@ -20,9 +20,19 @@ function ageFromDateOfBirth(dob: string | undefined): number | null {
   return age >= 0 && age < 130 ? age : null;
 }
 
+/** Pourquoi la liste peut être vide malgré une affectation côté centrale */
+export type HospitalListBlocker =
+  | null
+  | 'not_hospital_role'
+  | 'no_structure_link'
+  | 'supabase_error';
+
 interface HospitalContextType {
   activeCases: EmergencyCase[];
   isLoading: boolean;
+  /** Raison métier / config si aucun dispatch n’est chargé (diagnostic) */
+  listBlocker: HospitalListBlocker;
+  lastFetchError: string | null;
   refresh: () => Promise<void>;
   updateCaseStatus: (
     caseId: string,
@@ -41,6 +51,8 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
   const [activeCases, setActiveCases] = useState<EmergencyCase[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [listBlocker, setListBlocker] = useState<HospitalListBlocker>(null);
+  const [lastFetchError, setLastFetchError] = useState<string | null>(null);
 
   // We map the raw dispatch/incident to EmergencyCase.
   // Lovable: quand `dispatches.status` passe à `en_route_hospital`, le backend peut aussi
@@ -137,13 +149,30 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchCases = useCallback(async () => {
-    // Structure ID logic: use health_structure_id, fallback to assigned_unit_id if that was used.
-    const structureId = profile?.health_structure_id || profile?.assigned_unit_id;
-    if (!structureId || profile?.role !== 'hopital') {
+    setLastFetchError(null);
+
+    if (profile?.role !== 'hopital') {
+      setListBlocker('not_hospital_role');
       setActiveCases([]);
       setIsLoading(false);
       return;
     }
+
+    // Doit correspondre à dispatches.assigned_structure_id (= health_structures.id).
+    // Résolu dans AuthContext via health_structures.linked_user_id = users_directory.id
+    const structureId = profile.health_structure_id;
+    if (!structureId) {
+      setListBlocker('no_structure_link');
+      setActiveCases([]);
+      setIsLoading(false);
+      console.warn(
+        '[HospitalContext] Compte hôpital sans structure liée : health_structures.linked_user_id doit pointer vers users_directory.id de ce compte. ' +
+          'Sans cela, assigned_structure_id ne peut pas être filtré correctement.',
+      );
+      return;
+    }
+
+    setListBlocker(null);
 
     try {
       setIsLoading(true);
@@ -152,7 +181,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         .select(`
           *,
           incidents (*),
-          units (callsign, phone, vehicle_type, vehicle_plate, agent_name)
+          units (callsign, vehicle_type, vehicle_plate, agent_name)
         `)
         .eq('assigned_structure_id', structureId)
         .order('created_at', { ascending: false });
@@ -196,12 +225,15 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         // Maybe sort active cases first
         setActiveCases(mappedCases);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('[HospitalContext] Fetch error:', err);
+      setListBlocker('supabase_error');
+      setLastFetchError(err?.message ?? String(err));
+      setActiveCases([]);
     } finally {
       setIsLoading(false);
     }
-  }, [profile?.health_structure_id, profile?.assigned_unit_id, profile?.role]);
+  }, [profile?.health_structure_id, profile?.role]);
 
   useEffect(() => {
     fetchCases();
@@ -209,7 +241,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
 
   // Realtime
   useEffect(() => {
-    const structureId = profile?.health_structure_id || profile?.assigned_unit_id;
+    const structureId = profile?.health_structure_id;
     if (!structureId || profile?.role !== 'hopital') return;
 
     const channel = supabase.channel(`hospital-dashboard-${structureId}`)
@@ -227,7 +259,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchCases, profile?.health_structure_id, profile?.assigned_unit_id, profile?.role]);
+  }, [fetchCases, profile?.health_structure_id, profile?.role]);
 
   const updateCaseStatus = async (caseId: string, transition: { status?: CaseStatus; data?: any; hospitalStatus?: HospitalStatus; hospitalNotes?: string }) => {
     try {
@@ -302,7 +334,16 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <HospitalContext.Provider value={{ activeCases, isLoading, refresh: fetchCases, updateCaseStatus }}>
+    <HospitalContext.Provider
+      value={{
+        activeCases,
+        isLoading,
+        listBlocker,
+        lastFetchError,
+        refresh: fetchCases,
+        updateCaseStatus,
+      }}
+    >
       {children}
     </HospitalContext.Provider>
   );

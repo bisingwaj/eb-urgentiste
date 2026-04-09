@@ -80,7 +80,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         
         const profile = fallbackData as UserProfile;
         if (profile && profile.role === 'hopital') {
-          const { data: st } = await supabase.from('health_structures').select('id').eq('linked_user_id', profile.id).maybeSingle();
+          let { data: st } = await supabase
+            .from('health_structures')
+            .select('id')
+            .eq('linked_user_id', profile.id)
+            .maybeSingle();
+          if (!st?.id) {
+            const r2 = await supabase
+              .from('health_structures')
+              .select('id')
+              .eq('linked_user_id', profile.auth_user_id)
+              .maybeSingle();
+            st = r2.data;
+          }
           profile.health_structure_id = st?.id || null;
         }
         return profile;
@@ -88,7 +100,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       const profile = data as UserProfile;
       if (profile && profile.role === 'hopital') {
-        const { data: st } = await supabase.from('health_structures').select('id').eq('linked_user_id', profile.id).maybeSingle();
+        let { data: st } = await supabase
+          .from('health_structures')
+          .select('id')
+          .eq('linked_user_id', profile.id)
+          .maybeSingle();
+        if (!st?.id) {
+          const r2 = await supabase
+            .from('health_structures')
+            .select('id')
+            .eq('linked_user_id', profile.auth_user_id)
+            .maybeSingle();
+          st = r2.data;
+        }
         profile.health_structure_id = st?.id || null;
       }
       return profile;

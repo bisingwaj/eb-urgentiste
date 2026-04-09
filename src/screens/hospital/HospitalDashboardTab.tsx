@@ -8,6 +8,8 @@ import {
   StatusBar,
   Dimensions,
   ActivityIndicator,
+  RefreshControl,
+  Platform,
 } from "react-native";
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -59,7 +61,7 @@ export interface EmergencyCase {
   incidentReference?: string;
   /** Téléphone laissé au signalement (`incidents.caller_phone`) */
   callerPhone?: string;
-  /** Contact radio / GSM unité (`units.phone`) — peut différer du téléphone patient */
+  /** Contact GSM unité — renseigné si la colonne existe côté Supabase (sinon UI sans numéro unité) */
   unitPhone?: string;
   unitVehicleType?: string;
   unitVehiclePlate?: string;
@@ -373,7 +375,20 @@ export const getStatusConfig = (status: CaseStatus) => {
 
 export function HospitalDashboardTab({ navigation }: any) {
   const { profile } = useAuth();
-  const { activeCases, isLoading } = useHospital();
+  const { activeCases, isLoading, listBlocker, lastFetchError, refresh } = useHospital();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useMemo(
+    () => async () => {
+      setRefreshing(true);
+      try {
+        await refresh();
+      } finally {
+        setRefreshing(false);
+      }
+    },
+    [refresh],
+  );
 
   const { displayName, displayIdLine } = useMemo(() => {
     const name =
@@ -496,7 +511,41 @@ export function HospitalDashboardTab({ navigation }: any) {
         </View>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.secondary}
+          />
+        }
+      >
+        {listBlocker === "no_structure_link" && profile?.role === "hopital" ? (
+          <View style={styles.configBanner}>
+            <MaterialIcons name="link-off" size={22} color="#FFB74D" />
+            <Text style={styles.configBannerText}>
+              Aucune structure n’est liée à votre compte. Vérifiez en base que la ligne{" "}
+              <Text style={styles.configBannerMono}>health_structures</Text> a{" "}
+              <Text style={styles.configBannerMono}>linked_user_id</Text> égal à votre{" "}
+              <Text style={styles.configBannerMono}>users_directory.id</Text> (ou à votre{" "}
+              <Text style={styles.configBannerMono}>auth_user_id</Text> selon votre schéma). La centrale doit
+              renseigner <Text style={styles.configBannerMono}>dispatches.assigned_structure_id</Text> avec le{" "}
+              <Text style={styles.configBannerMono}>id</Text> de cette même structure.
+            </Text>
+          </View>
+        ) : null}
+        {listBlocker === "supabase_error" && lastFetchError ? (
+          <View style={[styles.configBanner, { borderColor: "rgba(255,82,82,0.4)" }]}>
+            <MaterialIcons name="error-outline" size={22} color="#FF5252" />
+            <Text style={styles.configBannerText}>
+              Impossible de charger les dispatches ({lastFetchError}). Vérifiez les droits RLS (rôle hopital) et la
+              connexion.
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Alertes récentes</Text>
           <View style={styles.filterOptions}>
@@ -508,9 +557,15 @@ export function HospitalDashboardTab({ navigation }: any) {
         {isLoading ? (
           <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
         ) : filteredCases.length === 0 ? (
-          <View style={{ alignItems: 'center', marginTop: 40 }}>
+          <View style={{ alignItems: "center", marginTop: 40, paddingHorizontal: 24 }}>
             <MaterialIcons name="inbox" size={48} color="rgba(255,255,255,0.2)" />
-            <Text style={{ color: "rgba(255,255,255,0.4)", marginTop: 16 }}>Aucun cas à afficher</Text>
+            <Text style={{ color: "rgba(255,255,255,0.4)", marginTop: 16, textAlign: "center" }}>
+              {listBlocker === "no_structure_link"
+                ? "Corrigez la liaison structure ci-dessus pour voir les alertes."
+                : listBlocker === "supabase_error"
+                  ? "Erreur de chargement."
+                  : "Aucune alerte assignée à votre structure pour l’instant. Vérifiez que la centrale a bien renseigné assigned_structure_id sur le dispatch."}
+            </Text>
           </View>
         ) : (
           filteredCases.map((caseItem) => {
@@ -578,6 +633,31 @@ const styles = StyleSheet.create({
   summaryNumber: { color: "#FFF", fontSize: 36, fontWeight: "900" },
   cardGlow: { position: "absolute", right: -20, bottom: -20, width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.15)" },
   scrollView: { flex: 1 },
+  configBanner: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 183, 77, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 183, 77, 0.25)",
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  configBannerText: {
+    flex: 1,
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  configBannerMono: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    color: "#FFB74D",
+    fontWeight: "700",
+  },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, marginVertical: 20 },
   sectionTitle: { color: "#FFF", fontSize: 18, fontWeight: "600" },
   filterOptions: { flexDirection: "row", gap: 16 },
