@@ -99,6 +99,10 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       unitId: d.unit_id,
       assignedStructureLat: toNullableNumber(d.assigned_structure_lat) ?? undefined,
       assignedStructureLng: toNullableNumber(d.assigned_structure_lng) ?? undefined,
+      assignedStructureName:
+        typeof d.assigned_structure_name === 'string' && d.assigned_structure_name.trim()
+          ? d.assigned_structure_name.trim()
+          : undefined,
 
       // Hospital spec mapping
       hospitalStatus: d.hospital_status || 'pending',

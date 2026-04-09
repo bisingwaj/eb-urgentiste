@@ -18,7 +18,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MapboxMapView } from '../../components/map/MapboxMapView';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { HospitalMarker, UnitMarker } from '../../components/map/mapMarkers';
+import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { supabase } from '../../lib/supabase';
 import {
@@ -36,6 +37,15 @@ const { width, height } = Dimensions.get('window');
 const MAP_TRACK_HEIGHT = Math.min(500, Math.max(300, Math.round(height * 1.0)));
 const SWIPE_WIDTH = width - 40;
 const BUTTON_SIZE = 56;
+
+/** Aligné sur `UnitMarker` / `mapMarkers` (carte live urgentiste) */
+function mapDispatchStatusToUnitMarkerStatus(dispatchStatus?: string): string {
+  if (!dispatchStatus) return '';
+  if (dispatchStatus === 'en_route_hospital') return 'en_route';
+  if (dispatchStatus === 'arrived_hospital' || dispatchStatus === 'on_scene') return 'on_scene';
+  if (dispatchStatus === 'en_intervention') return 'en_intervention';
+  return '';
+}
 
 const getLevelConfig = (level: UrgencyLevel) => {
   switch (level) {
@@ -177,7 +187,6 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const [ambulanceLng, setAmbulanceLng] = useState<number | null>(null);
   const [ambulanceSpeed, setAmbulanceSpeed] = useState<number | null>(null);
   const [ambulanceBattery, setAmbulanceBattery] = useState<number | null>(null);
-  const [ambulanceHeading, setAmbulanceHeading] = useState<number | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [rescuerName, setRescuerName] = useState<string>('Unité');
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -277,7 +286,6 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
         setAmbulanceLng(Number(activeRescuers[0].lng));
         setAmbulanceSpeed(activeRescuers[0].speed);
         setAmbulanceBattery(activeRescuers[0].battery);
-        setAmbulanceHeading(activeRescuers[0].heading);
         setLastUpdate(new Date(activeRescuers[0].updated_at));
       } else {
         // Fallback to unit position if no active_rescuer found
@@ -305,7 +313,6 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 setAmbulanceLng(Number(data.lng));
                 setAmbulanceSpeed(data.speed);
                 setAmbulanceBattery(data.battery);
-                setAmbulanceHeading(data.heading);
                 setLastUpdate(new Date(data.updated_at));
               }
             }
@@ -332,6 +339,16 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
       : caseData.eta && String(caseData.eta).trim()
         ? caseData.eta
         : '—';
+
+  const structureMapLabel = useMemo(
+    () => (caseData.assignedStructureName?.trim() ? caseData.assignedStructureName.trim() : 'Structure'),
+    [caseData.assignedStructureName],
+  );
+
+  const unitMarkerStatus = useMemo(
+    () => mapDispatchStatusToUnitMarkerStatus(caseData.dispatchStatus),
+    [caseData.dispatchStatus],
+  );
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -375,27 +392,35 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                   />
                 )}
                 {hospitalCoord && (
-                  <Mapbox.PointAnnotation id="hospital-structure" coordinate={hospitalCoord}>
-                    <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.secondary, justifyContent: 'center', alignItems: 'center' }}>
-                      <MaterialIcons name="local-hospital" color="#FFF" size={14} />
-                    </View>
-                  </Mapbox.PointAnnotation>
+                  <Mapbox.MarkerView id="hospital-structure-mv" coordinate={hospitalCoord}>
+                    <HospitalMarker
+                      label={structureMapLabel}
+                      beds={0}
+                      onPress={() =>
+                        Alert.alert('Structure', structureMapLabel, [{ text: 'OK' }])
+                      }
+                    />
+                  </Mapbox.MarkerView>
                 )}
                 {hasAmbulancePosition && (
-                  <Mapbox.PointAnnotation id="ambulance" coordinate={[ambulanceLng!, ambulanceLat!]}>
-                    <View style={[
-                      styles.ambulanceMarker,
-                      ambulanceHeading !== null ? { transform: [{ rotate: `${ambulanceHeading}deg` }] } : {},
-                    ]}>
-                      <MaterialCommunityIcons name="navigation" color="#FFF" size={20} />
-                    </View>
-                  </Mapbox.PointAnnotation>
+                  <Mapbox.MarkerView id="ambulance-unit-mv" coordinate={[ambulanceLng!, ambulanceLat!]}>
+                    <UnitMarker
+                      status={unitMarkerStatus}
+                      onPress={() =>
+                        Alert.alert('Unité', caseData.urgentisteName, [{ text: 'OK' }])
+                      }
+                    />
+                  </Mapbox.MarkerView>
                 )}
                 {routeGeoJSON && (
                   <Mapbox.ShapeSource id="hospital-route" shape={routeGeoJSON}>
                     <Mapbox.LineLayer
                       id="hospital-route-line"
-                      style={{ lineColor: '#4A90D9', lineWidth: 4, lineOpacity: 0.85 }}
+                      style={{
+                        lineColor: colors.routePrimary,
+                        lineWidth: 4,
+                        lineOpacity: 0.85,
+                      }}
                     />
                   </Mapbox.ShapeSource>
                 )}
@@ -782,7 +807,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   coordsMissingText: { color: '#FFF', fontSize: 12, fontWeight: '700', flex: 1 },
-  ambulanceMarker: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.primary, justifyContent: 'center', alignItems: 'center', borderWidth: 3, borderColor: '#FFF' },
   mapStatusBadge: { position: 'absolute', top: 16, left: 16, backgroundColor: 'rgba(0,0,0,0.7)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, gap: 8 },
   liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF5252' },
   liveText: { color: '#FFF', fontSize: 13, fontWeight: '900' },

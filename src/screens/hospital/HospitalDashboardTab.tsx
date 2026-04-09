@@ -51,6 +51,8 @@ export interface EmergencyCase {
   /** Coordonnées de la structure assignée (`dispatches.assigned_structure_*`) — destination carte / itinéraire */
   assignedStructureLat?: number;
   assignedStructureLng?: number;
+  /** `dispatches.assigned_structure_name` — libellé carte / UI */
+  assignedStructureName?: string;
 
   /** Référence métier (`incidents.reference`) */
   incidentReference?: string;
