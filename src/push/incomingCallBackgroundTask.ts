@@ -7,6 +7,10 @@ import { markIncomingCallPushNotification } from '../lib/incomingCallUiCoordinat
 
 export const INCOMING_CALL_BACKGROUND_TASK = 'INCOMING-CALL-BACKGROUND-TASK';
 
+/**
+ * Pour que cette tâche s’exécute hors app (accueil, autre app, app tuée), le serveur doit envoyer
+ * un message FCM **data-only** haute priorité — voir `src/lib/incomingCallFcmContract.ts`.
+ */
 TaskManager.defineTask<NotificationTaskPayload>(INCOMING_CALL_BACKGROUND_TASK, async ({ data, error }) => {
   if (error) {
     return;

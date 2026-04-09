@@ -9,6 +9,7 @@ import {
   Platform,
   AppState,
 } from 'react-native';
+import { Audio } from 'expo-av';
 import { MaterialIcons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -46,6 +47,7 @@ export function IncomingCallSubscriber() {
   const { session, isAuthenticated } = useAuth();
   const [pending, setPending] = useState<PendingIncoming | null>(null);
   const subRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const ringSoundRef = useRef<Audio.Sound | null>(null);
 
   const cleanup = useCallback(() => {
     if (subRef.current) {
@@ -117,6 +119,58 @@ export function IncomingCallSubscriber() {
       cleanup();
     };
   }, [isAuthenticated, session?.user?.id, cleanup]);
+
+  /** Sonnerie en boucle tant que le modal d’appel est visible (app au premier plan). */
+  useEffect(() => {
+    if (!pending) {
+      const s = ringSoundRef.current;
+      if (s) {
+        void s
+          .stopAsync()
+          .then(() => s.unloadAsync())
+          .catch(() => {});
+        ringSoundRef.current = null;
+      }
+      return;
+    }
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: false,
+          playsInSilentModeIOS: true,
+          staysActiveInBackground: false,
+          shouldDuckAndroid: true,
+          playThroughEarpieceAndroid: false,
+        });
+        const { sound } = await Audio.Sound.createAsync(
+          require('../../../assets/sounds/incoming_call_ring.wav'),
+          { isLooping: true, shouldPlay: true, volume: 1 }
+        );
+        if (cancelled) {
+          await sound.unloadAsync();
+          return;
+        }
+        ringSoundRef.current = sound;
+      } catch (e) {
+        console.warn('[IncomingCall] lecture sonnerie:', e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      const s = ringSoundRef.current;
+      if (s) {
+        void s
+          .stopAsync()
+          .then(() => s.unloadAsync())
+          .catch(() => {});
+        ringSoundRef.current = null;
+      }
+    };
+  }, [pending]);
 
   const decline = async () => {
     if (!pending) {
