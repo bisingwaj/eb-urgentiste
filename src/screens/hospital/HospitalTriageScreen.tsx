@@ -72,14 +72,21 @@ export function HospitalTriageScreen({ route, navigation }: any) {
           text: 'Valider',
           onPress: async () => {
             try {
+              const triageRecordedAt = new Date().toISOString();
+              const vitalsForDb = {
+                ...vitals,
+                bloodPressure: vitals.tension,
+                spO2: vitals.satO2,
+              };
               await updateCaseStatus(caseData.id, {
                 status: 'triage',
                 data: {
                   triageLevel,
-                  vitals,
+                  vitals: vitalsForDb,
                   symptoms,
                   provisionalDiagnosis: diagnosis,
-                }
+                  triageRecordedAt,
+                },
               });
 
               navigation.navigate('HospitalPriseEnCharge', {
@@ -87,10 +94,10 @@ export function HospitalTriageScreen({ route, navigation }: any) {
                   ...caseData,
                   status: 'triage' as const,
                   triageLevel,
-                  vitals,
+                  vitals: vitalsForDb,
                   symptoms,
                   provisionalDiagnosis: diagnosis,
-                }
+                },
               });
             } catch (err) {
               Alert.alert('Erreur', 'Impossible de sauvegarder le triage.');

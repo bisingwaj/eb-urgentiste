@@ -27,7 +27,11 @@ export type CaseStatus =
   | "admis"
   | "triage"
   | "prise_en_charge"
+  | "monitoring"
   | "termine";
+
+/** Valeurs `hospital_data.monitoringStatus` (spec Lovable) */
+export type MonitoringPatientStatus = "amelioration" | "stable" | "degradation";
 
 export type HospitalStatus = 
   | "pending"
@@ -109,7 +113,18 @@ export interface EmergencyCase {
   };
   symptoms?: string;
   provisionalDiagnosis?: string;
-  // Prise en charge
+  // Prise en charge (JSON `hospital_data` — tableaux persistés par `HospitalPriseEnChargeScreen`)
+  observations?: unknown[];
+  treatments?: unknown[];
+  exams?: unknown[];
+  timeline?: unknown[];
+  /** Résumés dashboard Lovable (`treatment` / `notes` dans `hospital_data`) */
+  pecTreatmentSummary?: string;
+  pecNotesSummary?: string;
+  /** Suivi monitoring (`hospital_data` — spec Lovable) */
+  monitoringStatus?: MonitoringPatientStatus;
+  monitoringNotes?: string;
+  transferTarget?: string | null;
   interventions?: Intervention[];
   // Closure
   outcome?: "hospitalise" | "sorti" | "decede" | string;
@@ -363,6 +378,13 @@ export const getStatusConfig = (status: CaseStatus) => {
         label: "Soin",
         icon: "medical-services" as const,
       };
+    case "monitoring":
+      return {
+        color: "#B388FF",
+        bg: "rgba(179, 136, 255, 0.15)",
+        label: "Suivi",
+        icon: "favorite" as const,
+      };
     case "termine":
       return {
         color: colors.textMuted,
@@ -426,7 +448,7 @@ export function HospitalDashboardTab({ navigation }: any) {
     (c) => c.level === "critique" && !isCaseClosed(c)
   ).length;
   const activeCount = activeCases.filter((c) =>
-    ["en_cours", "triage", "prise_en_charge"].includes(c.status)
+    ["en_cours", "triage", "prise_en_charge", "monitoring"].includes(c.status)
   ).length;
 
   return (

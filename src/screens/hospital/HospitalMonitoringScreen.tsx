@@ -8,41 +8,107 @@ import {
   TextInput,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import type { EmergencyCase } from './HospitalDashboardTab';
+import type { EmergencyCase, MonitoringPatientStatus } from './HospitalDashboardTab';
+import { useHospital } from '../../contexts/HospitalContext';
 
 const STATUS_OPTIONS = [
-  { key: 'amelioration', label: 'Amélioration', icon: 'trending-up' as const, color: colors.success },
-  { key: 'stable', label: 'Stable', icon: 'trending-flat' as const, color: colors.secondary },
-  { key: 'degradation', label: 'Dégradation', icon: 'trending-down' as const, color: colors.primary },
+  { key: 'amelioration' as const, label: 'Amélioration', icon: 'trending-up' as const, color: colors.success },
+  { key: 'stable' as const, label: 'Stable', icon: 'trending-flat' as const, color: colors.secondary },
+  { key: 'degradation' as const, label: 'Dégradation', icon: 'trending-down' as const, color: colors.primary },
 ];
 
 const TRANSFER_OPTIONS = [
-  { key: 'reanimation', label: 'Soins Intensifs', type: 'interne' },
-  { key: 'chirurgie', label: 'Chirurgie', type: 'interne' },
-  { key: 'autre_hospital', label: 'Autre Hôpital', type: 'externe' },
+  { key: 'reanimation', label: 'Soins Intensifs', type: 'interne' as const },
+  { key: 'chirurgie', label: 'Chirurgie', type: 'interne' as const },
+  { key: 'autre_hospital', label: 'Autre Hôpital', type: 'externe' as const },
 ];
+
+function initialFromCase(c: EmergencyCase): {
+  patientStatus: MonitoringPatientStatus;
+  notes: string;
+  transferKey: string | null;
+  otherHospitalText: string;
+} {
+  const patientStatus: MonitoringPatientStatus = c.monitoringStatus ?? 'stable';
+  const notes = c.monitoringNotes ?? '';
+  const tt = c.transferTarget;
+  if (tt == null || String(tt).trim() === '') {
+    return { patientStatus, notes, transferKey: null, otherHospitalText: '' };
+  }
+  const s = String(tt).trim();
+  const byLabel = TRANSFER_OPTIONS.find((o) => o.label === s);
+  if (byLabel && byLabel.key !== 'autre_hospital') {
+    return { patientStatus, notes, transferKey: byLabel.key, otherHospitalText: '' };
+  }
+  const byKey = TRANSFER_OPTIONS.find((o) => o.key === s);
+  if (byKey && byKey.key !== 'autre_hospital') {
+    return { patientStatus, notes, transferKey: byKey.key, otherHospitalText: '' };
+  }
+  return { patientStatus, notes, transferKey: 'autre_hospital', otherHospitalText: s };
+}
+
+function resolveTransferTarget(transferKey: string | null, otherText: string): string | null {
+  if (transferKey == null) return null;
+  if (transferKey === 'autre_hospital') {
+    const t = otherText.trim();
+    return t.length > 0 ? t : null;
+  }
+  return TRANSFER_OPTIONS.find((o) => o.key === transferKey)?.label ?? null;
+}
 
 export function HospitalMonitoringScreen({ route, navigation }: any) {
   const { caseData } = route.params as { caseData: EmergencyCase };
-  const [patientStatus, setPatientStatus] = useState('stable');
-  const [transferTarget, setTransferTarget] = useState('');
-  const [notes, setNotes] = useState('');
+  const { updateCaseStatus } = useHospital();
+  const init = initialFromCase(caseData);
 
-  const handleUpdate = () => {
-    Alert.alert(
-      'Mettre à jour le statut',
-      'Le statut du patient a été mis à jour avec succès.',
-      [{ text: 'OK', onPress: () => navigation.navigate('HospitalClosure', { caseData }) }]
-    );
+  const [patientStatus, setPatientStatus] = useState<MonitoringPatientStatus>(init.patientStatus);
+  const [transferKey, setTransferKey] = useState<string | null>(init.transferKey);
+  const [otherHospitalText, setOtherHospitalText] = useState(init.otherHospitalText);
+  const [notes, setNotes] = useState(init.notes);
+  const [saving, setSaving] = useState(false);
+
+  const handleConfirm = async () => {
+    const resolvedTransfer = resolveTransferTarget(transferKey, otherHospitalText);
+    if (transferKey === 'autre_hospital' && !otherHospitalText.trim()) {
+      Alert.alert('Transfert', 'Indiquez le nom de la structure pour un transfert externe, ou choisissez « Aucun transfert ».');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await updateCaseStatus(caseData.id, {
+        status: 'monitoring',
+        data: {
+          monitoringStatus: patientStatus,
+          monitoringNotes: notes.trim(),
+          transferTarget: resolvedTransfer,
+        },
+      });
+
+      const nextCase: EmergencyCase = {
+        ...caseData,
+        status: 'monitoring',
+        monitoringStatus: patientStatus,
+        monitoringNotes: notes.trim(),
+        transferTarget: resolvedTransfer,
+      };
+
+      navigation.navigate('HospitalClosure', { caseData: nextCase });
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Erreur', 'Impossible d’enregistrer le suivi sur le serveur.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      {/* App bar */}
       <View style={styles.appBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
@@ -56,7 +122,6 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 120 }}
       >
-        {/* Status Selector */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>État actuel du patient</Text>
           <View style={styles.statusGrid}>
@@ -84,12 +149,31 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
           </View>
         </View>
 
-        {/* Transfer Options */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Transfert / Destination</Text>
           <View style={styles.transferList}>
+            <TouchableOpacity
+              style={[
+                styles.transferCard,
+                transferKey === null && { borderColor: colors.secondary, backgroundColor: 'rgba(68,138,255,0.08)' },
+              ]}
+              onPress={() => {
+                setTransferKey(null);
+                setOtherHospitalText('');
+              }}
+            >
+              <View style={styles.transferLeft}>
+                <MaterialIcons name="block" color={transferKey === null ? colors.secondary : colors.textMuted} size={20} />
+                <View>
+                  <Text style={[styles.transferLabel, transferKey === null && { color: '#FFF' }]}>Aucun transfert</Text>
+                  <Text style={styles.transferType}>Patient suivi sur place</Text>
+                </View>
+              </View>
+              <View style={[styles.radio, transferKey === null && { borderColor: colors.secondary, borderWidth: 6 }]} />
+            </TouchableOpacity>
+
             {TRANSFER_OPTIONS.map((option) => {
-              const isSelected = transferTarget === option.key;
+              const isSelected = transferKey === option.key;
               return (
                 <TouchableOpacity
                   key={option.key}
@@ -97,7 +181,7 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
                     styles.transferCard,
                     isSelected && { borderColor: colors.secondary, backgroundColor: 'rgba(68,138,255,0.08)' },
                   ]}
-                  onPress={() => setTransferTarget(option.key)}
+                  onPress={() => setTransferKey(option.key)}
                 >
                   <View style={styles.transferLeft}>
                     <MaterialIcons
@@ -115,9 +199,21 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
               );
             })}
           </View>
+
+          {transferKey === 'autre_hospital' && (
+            <View style={styles.otherHospitalBox}>
+              <Text style={styles.otherHospitalLabel}>Nom de la structure cible</Text>
+              <TextInput
+                style={styles.otherHospitalInput}
+                value={otherHospitalText}
+                onChangeText={setOtherHospitalText}
+                placeholder="Ex. CHU de Kinshasa"
+                placeholderTextColor="rgba(255,255,255,0.25)"
+              />
+            </View>
+          )}
         </View>
 
-        {/* Clinical Notes */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Notes cliniques complémentaires</Text>
           <View style={styles.noteContainer}>
@@ -135,11 +231,20 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
         </View>
       </ScrollView>
 
-      {/* Primary Action */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.submitBtn} onPress={handleUpdate}>
-          <Text style={styles.submitBtnText}>Confirmer le Monitoring</Text>
-          <MaterialIcons name="done-all" color="#FFF" size={24} />
+        <TouchableOpacity
+          style={[styles.submitBtn, saving && styles.submitBtnDisabled]}
+          onPress={handleConfirm}
+          disabled={saving}
+        >
+          {saving ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <>
+              <Text style={styles.submitBtnText}>Confirmer le Monitoring</Text>
+              <MaterialIcons name="done-all" color="#FFF" size={24} />
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -164,9 +269,22 @@ const styles = StyleSheet.create({
   transferLabel: { color: colors.textMuted, fontSize: 15, fontWeight: '600' },
   transferType: { color: 'rgba(255,255,255,0.3)', fontSize: 12 },
   radio: { width: 20, height: 20, borderRadius: 10, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
+  otherHospitalBox: { marginTop: 12 },
+  otherHospitalLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 13, fontWeight: '600', marginBottom: 8 },
+  otherHospitalInput: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    color: '#FFF',
+    fontSize: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
   noteContainer: { backgroundColor: '#1A1A1A', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', marginTop: 8 },
   noteInput: { color: '#FFF', fontSize: 14, padding: 16, minHeight: 120, lineHeight: 22 },
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 34 : 20, paddingTop: 14, backgroundColor: colors.mainBackground, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
   submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16, borderRadius: 28, backgroundColor: colors.secondary },
+  submitBtnDisabled: { opacity: 0.7 },
   submitBtnText: { color: '#FFF', fontWeight: '800', fontSize: 16 },
 });

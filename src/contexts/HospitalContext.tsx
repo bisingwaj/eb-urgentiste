@@ -1,7 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
-import { EmergencyCase, CaseStatus, UrgencyLevel, Intervention, HospitalStatus } from '../screens/hospital/HospitalDashboardTab';
+import {
+  EmergencyCase,
+  CaseStatus,
+  UrgencyLevel,
+  Intervention,
+  HospitalStatus,
+  MonitoringPatientStatus,
+} from '../screens/hospital/HospitalDashboardTab';
 
 function toNullableNumber(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;
@@ -18,6 +25,75 @@ function ageFromDateOfBirth(dob: string | undefined): number | null {
   const m = t.getMonth() - d.getMonth();
   if (m < 0 || (m === 0 && t.getDate() < d.getDate())) age -= 1;
   return age >= 0 && age < 130 ? age : null;
+}
+
+const CASE_STATUS_VALUES: readonly CaseStatus[] = [
+  'en_attente',
+  'en_cours',
+  'admis',
+  'triage',
+  'prise_en_charge',
+  'monitoring',
+  'termine',
+];
+
+const MONITORING_STATUS_VALUES: readonly MonitoringPatientStatus[] = ['amelioration', 'stable', 'degradation'];
+
+function parseMonitoringStatus(v: unknown): MonitoringPatientStatus | undefined {
+  return typeof v === 'string' && (MONITORING_STATUS_VALUES as readonly string[]).includes(v)
+    ? (v as MonitoringPatientStatus)
+    : undefined;
+}
+
+function isCaseStatus(s: unknown): s is CaseStatus {
+  return typeof s === 'string' && (CASE_STATUS_VALUES as readonly string[]).includes(s);
+}
+
+/** Priorise `hospital_data.status` quand le dispatch est à l’hôpital ou clôturé (spec Lovable). */
+function resolveCaseStatusFromRow(d: { status?: string }, hData: { status?: unknown }): CaseStatus {
+  const ds = d.status;
+  if (ds === 'completed') {
+    if (isCaseStatus(hData.status)) return hData.status;
+    return 'termine';
+  }
+  if (ds === 'arrived_hospital') {
+    if (isCaseStatus(hData.status)) return hData.status;
+    return 'admis';
+  }
+  if (ds === 'dispatched' || ds === 'en_route' || ds === 'on_scene') return 'en_attente';
+  if (ds === 'en_route_hospital') return 'en_cours';
+  if (isCaseStatus(hData.status)) return hData.status;
+  return 'en_attente';
+}
+
+/** Fusion partielle de `hospital_data` (ex. vitaux seuls) sans écraser les clés imbriquées de `vitals`. */
+function mergeHospitalDataPartial(existing: Record<string, unknown> | null | undefined, partial: Record<string, unknown>): Record<string, unknown> {
+  const base: Record<string, unknown> = { ...(existing || {}) };
+  for (const key of Object.keys(partial)) {
+    const pv = partial[key];
+    if (key === 'vitals' && pv != null && typeof pv === 'object' && !Array.isArray(pv)) {
+      const prev = base.vitals;
+      base.vitals = {
+        ...(prev != null && typeof prev === 'object' && !Array.isArray(prev) ? (prev as Record<string, unknown>) : {}),
+        ...(pv as Record<string, unknown>),
+      };
+    } else {
+      base[key] = pv;
+    }
+  }
+  return base;
+}
+
+/** Aligne les issues Lovable (`dischargeType`) sur le champ `outcome` utilisé par l’UI mobile. */
+function dischargeTypeToLegacyOutcome(dischargeType: unknown): string | undefined {
+  if (typeof dischargeType !== 'string') return undefined;
+  const m: Record<string, string> = {
+    hospitalisation: 'hospitalise',
+    transfert: 'hospitalise',
+    sortie: 'sorti',
+    deces: 'decede',
+  };
+  return m[dischargeType];
 }
 
 /** Pourquoi la liste peut être vide malgré une affectation côté centrale */
@@ -101,10 +177,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       unitVehiclePlate: typeof u.vehicle_plate === 'string' ? u.vehicle_plate : undefined,
       unitAgentName: typeof u.agent_name === 'string' && u.agent_name.trim() ? u.agent_name.trim() : undefined,
       eta: '5 min', // To be calculated or drawn from dispatches if available
-      status: (d.status === 'dispatched' || d.status === 'en_route' || d.status === 'on_scene' ? 'en_attente' : 
-              d.status === 'en_route_hospital' ? 'en_cours' : 
-              d.status === 'arrived_hospital' ? 'admis' :
-              hData.status || 'en_attente') as CaseStatus, // Simplified mapping
+      status: resolveCaseStatusFromRow(d, hData),
       address: inc.location_address || '',
       timestamp: new Date(inc.created_at || d.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
       typeUrgence: inc.type || 'Inconnu',
@@ -139,11 +212,27 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       vitals: hData.vitals,
       symptoms: hData.symptoms,
       provisionalDiagnosis: hData.provisionalDiagnosis,
-      
+
+      observations: Array.isArray(hData.observations) ? hData.observations : undefined,
+      treatments: Array.isArray(hData.treatments) ? hData.treatments : undefined,
+      exams: Array.isArray(hData.exams) ? hData.exams : undefined,
+      timeline: Array.isArray(hData.timeline) ? hData.timeline : undefined,
+      pecTreatmentSummary: typeof hData.treatment === 'string' ? hData.treatment : undefined,
+      pecNotesSummary: typeof hData.notes === 'string' ? hData.notes : undefined,
+
+      monitoringStatus: parseMonitoringStatus(hData.monitoringStatus),
+      monitoringNotes: typeof hData.monitoringNotes === 'string' ? hData.monitoringNotes : undefined,
+      transferTarget:
+        hData.transferTarget === null
+          ? null
+          : typeof hData.transferTarget === 'string' && hData.transferTarget.trim()
+            ? hData.transferTarget.trim()
+            : undefined,
+
       interventions: hData.interventions || [],
       
-      outcome: hData.outcome,
-      finalDiagnosis: hData.finalDiagnosis,
+      outcome: hData.outcome ?? dischargeTypeToLegacyOutcome(hData.dischargeType),
+      finalDiagnosis: hData.finalDiagnosis ?? hData.dischargeNotes,
       closureTime: hData.closureTime,
     };
   };
@@ -263,35 +352,48 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
 
   const updateCaseStatus = async (caseId: string, transition: { status?: CaseStatus; data?: any; hospitalStatus?: HospitalStatus; hospitalNotes?: string }) => {
     try {
-      // We store the status in hospital_data JSON column and update dispatch status if applicable
       const { data: currentDispatch, error: fetchError } = await supabase
         .from('dispatches')
         .select('*')
         .eq('id', caseId)
         .single();
-        
+
       if (fetchError) throw fetchError;
-      
-      let updateObj: any = {};
+
+      const updateObj: Record<string, unknown> = {};
+      const dataPayload =
+        transition.data != null && typeof transition.data === 'object' && !Array.isArray(transition.data)
+          ? (transition.data as Record<string, unknown>)
+          : null;
 
       if (transition.status) {
-        const newHospitalData = {
-          ...(currentDispatch.hospital_data || {}),
+        const newHospitalData = mergeHospitalDataPartial(currentDispatch.hospital_data || {}, {
+          ...(dataPayload || {}),
           status: transition.status,
-          ...(transition.data || {})
-        };
+        });
 
         let newStatus = currentDispatch.status;
-        // Map back to dispatch status if needed
         if (transition.status === 'en_cours') newStatus = 'en_route_hospital';
         if (transition.status === 'admis') newStatus = 'arrived_hospital';
         if (transition.status === 'termine') newStatus = 'completed';
-        
+
         updateObj.hospital_data = newHospitalData;
         updateObj.status = newStatus;
+
+        if (transition.status === 'admis') {
+          updateObj.admission_recorded_at = new Date().toISOString();
+          if (profile?.id) {
+            updateObj.admission_recorded_by = profile.id;
+          }
+        }
+        if (transition.status === 'termine') {
+          updateObj.completed_at = new Date().toISOString();
+        }
+      } else if (dataPayload && Object.keys(dataPayload).length > 0) {
+        // Mise à jour partielle (ex. vitaux seuls) — ne modifie pas dispatches.status
+        updateObj.hospital_data = mergeHospitalDataPartial(currentDispatch.hospital_data || {}, dataPayload);
       }
 
-      // Explicit Hospital Status fields
       if (transition.hospitalStatus) {
         updateObj.hospital_status = transition.hospitalStatus;
         updateObj.hospital_responded_at = new Date().toISOString();
@@ -300,32 +402,43 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         updateObj.hospital_notes = transition.hospitalNotes;
       }
 
-      const performFullUpdate = async () => {
-        const { error } = await supabase
-          .from('dispatches')
-          .update(updateObj)
-          .eq('id', caseId);
+      if (Object.keys(updateObj).length === 0) {
+        return;
+      }
+
+      const performUpdate = async (payload: Record<string, unknown>) => {
+        const { error } = await supabase.from('dispatches').update(payload).eq('id', caseId);
         return error;
       };
 
-      let updateError = await performFullUpdate();
+      let updateError = await performUpdate(updateObj);
 
-      // If the column hospital_data hasn't been created yet on Supabase, fallback to updating just the status
-      if (updateError && updateError.code === '42703') {
-        console.warn('[HospitalContext] The column hospital_data does not exist yet. Only updating status.');
-        // Fallback for hospital_data missing: strip it and ensure status is updated
-        delete updateObj.hospital_data;
-        const { error: fallbackError } = await supabase
-          .from('dispatches')
-          .update(updateObj)
-          .eq('id', caseId);
-        
-        if (fallbackError) throw fallbackError;
-      } else if (updateError) {
-        throw updateError;
+      if (updateError?.code === '42703') {
+        const stripped = { ...updateObj };
+        delete stripped.hospital_data;
+        console.warn('[HospitalContext] hospital_data missing; retrying without JSON.');
+        updateError = await performUpdate(stripped);
+      }
+      if (updateError?.code === '42703') {
+        const stripped = { ...updateObj };
+        delete stripped.hospital_data;
+        delete stripped.admission_recorded_at;
+        delete stripped.admission_recorded_by;
+        console.warn('[HospitalContext] admission_recorded_* missing; retrying without.');
+        updateError = await performUpdate(stripped);
+      }
+      if (updateError?.code === '42703') {
+        const stripped = { ...updateObj };
+        delete stripped.hospital_data;
+        delete stripped.admission_recorded_at;
+        delete stripped.admission_recorded_by;
+        delete stripped.completed_at;
+        console.warn('[HospitalContext] completed_at missing; retrying without.');
+        updateError = await performUpdate(stripped);
       }
 
-      // Optimistic update
+      if (updateError) throw updateError;
+
       fetchCases();
     } catch (error) {
       console.error('[HospitalContext] updateCaseStatus error', error);

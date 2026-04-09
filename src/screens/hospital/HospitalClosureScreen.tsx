@@ -13,6 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import type { EmergencyCase } from './HospitalDashboardTab';
+import { useHospital } from '../../contexts/HospitalContext';
 
 const OUTCOME_OPTIONS = [
   { key: 'hospitalise', label: 'Hospitalisé', icon: 'local-hospital' as const, color: colors.secondary },
@@ -20,8 +21,15 @@ const OUTCOME_OPTIONS = [
   { key: 'decede', label: 'Décédé', icon: 'sentiment-very-dissatisfied' as const, color: colors.primary },
 ];
 
+function mapOutcomeToDischargeType(outcomeKey: string): 'hospitalisation' | 'sortie' | 'deces' {
+  if (outcomeKey === 'hospitalise') return 'hospitalisation';
+  if (outcomeKey === 'decede') return 'deces';
+  return 'sortie';
+}
+
 export function HospitalClosureScreen({ route, navigation }: any) {
   const { caseData } = route.params as { caseData: EmergencyCase };
+  const { updateCaseStatus } = useHospital();
   const [outcome, setOutcome] = useState('');
   const [finalDiagnosis, setFinalDiagnosis] = useState('');
   const [closureTime] = useState(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
@@ -38,10 +46,30 @@ export function HospitalClosureScreen({ route, navigation }: any) {
       [
         { text: 'Annuler', style: 'cancel' },
         {
-          text: 'Clôturer', onPress: () => navigation.navigate('HospitalReport', {
-            caseData: { ...caseData, status: 'termine', finalDiagnosis, outcome, closureTime }
-          })
-        }
+          text: 'Clôturer',
+          onPress: async () => {
+            try {
+              const dischargeType = mapOutcomeToDischargeType(outcome);
+              const dischargedAt = new Date().toISOString();
+              await updateCaseStatus(caseData.id, {
+                status: 'termine',
+                data: {
+                  dischargeType,
+                  dischargeNotes: finalDiagnosis,
+                  dischargedAt,
+                  outcome,
+                  finalDiagnosis,
+                  closureTime,
+                },
+              });
+              navigation.navigate('HospitalReport', {
+                caseData: { ...caseData, status: 'termine', finalDiagnosis, outcome, closureTime },
+              });
+            } catch {
+              Alert.alert('Erreur', 'Impossible de clôturer le dossier sur le serveur.');
+            }
+          },
+        },
       ]
     );
   };
