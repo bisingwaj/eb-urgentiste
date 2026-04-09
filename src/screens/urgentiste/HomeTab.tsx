@@ -13,17 +13,21 @@ import { ProfileIcon, NotificationIcon, CallOutgoingIcon, FirstAidBriefcaseIcon,
 const { width } = Dimensions.get('window');
 
 const SkeletonItem = ({ width: w, height: h, borderRadius = 8, style }: any) => {
-  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+  const pulseAnim = useRef(new Animated.Value(0.3)).current;
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.4, duration: 900, useNativeDriver: true })
+        Animated.timing(pulseAnim, { toValue: 0.6, duration: 1000, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.3, duration: 1000, useNativeDriver: true })
       ])
     ).start();
   }, []);
-  return <Animated.View style={[{ width: w, height: h, borderRadius, backgroundColor: '#1A1A1A', opacity: pulseAnim }, style]} />;
+  return <Animated.View style={[{ width: w, height: h, borderRadius, backgroundColor: '#222', opacity: pulseAnim }, style]} />;
 };
+
+const SkeletonText = ({ width: w, style }: { width: any, style?: any }) => (
+  <SkeletonItem width={w} height={14} borderRadius={4} style={[{ marginTop: 6 }, style]} />
+);
 
 export function HomeTab({ navigation }: any) {
   const { profile, refreshProfile } = useAuth();
@@ -78,25 +82,42 @@ export function HomeTab({ navigation }: any) {
     if (profile) setIsDutyActive(profile.available);
   }, [profile?.available]);
 
+  const [sectionsAnim] = useState({
+    header: new Animated.Value(0),
+    status: new Animated.Value(0),
+    dynamic: new Animated.Value(0),
+    shortcuts: new Animated.Value(0),
+  });
+
   useEffect(() => {
-    setTimeout(() => {
+    // Initial loading delay simulator
+    const timer = setTimeout(() => {
       setIsLoading(false);
-      Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    }, 1500);
+      
+      // Staggered entrance
+      Animated.stagger(100, [
+        Animated.spring(sectionsAnim.header, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+        Animated.spring(sectionsAnim.status, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+        Animated.spring(sectionsAnim.dynamic, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+        Animated.spring(sectionsAnim.shortcuts, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+      ]).start();
+    }, 1200);
 
     // Radar & Pulse Animations
     Animated.loop(
       Animated.parallel([
         Animated.sequence([
-          Animated.timing(radarAnim, { toValue: 1, duration: 2000, useNativeDriver: true }),
+          Animated.timing(radarAnim, { toValue: 1, duration: 2400, useNativeDriver: true }),
           Animated.timing(radarAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
         ]),
         Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.05, duration: 1000, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1.04, duration: 1200, useNativeDriver: true }),
+          Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
         ])
       ])
     ).start();
+
+    return () => clearTimeout(timer);
   }, []);
 
   const handleToggleDuty = async (val: boolean) => {
@@ -149,10 +170,7 @@ export function HomeTab({ navigation }: any) {
                 <View style={styles.metaRowText}>
                   <Text style={styles.locationLabel}>Unité</Text>
                   {unitName === null ? (
-                    <ActivityIndicator
-                      color={colors.secondary}
-                      style={{ marginTop: 8, alignSelf: 'flex-start' }}
-                    />
+                    <SkeletonText width={80} style={{ marginTop: 8 }} />
                   ) : (
                     <Text style={styles.userMetaText} numberOfLines={2}>
                       {unitName}
@@ -208,12 +226,27 @@ export function HomeTab({ navigation }: any) {
         </View>
 
         {/* Status Card */}
-        <Animated.View style={[styles.statusCard, !isLoading && { opacity: fadeAnim }]}>
+        <Animated.View style={[
+          styles.statusCard, 
+          { 
+            opacity: sectionsAnim.status,
+            transform: [{ translateY: sectionsAnim.status.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }]
+          }
+        ]}>
           {isLoading ? (
-            <SkeletonItem width="100%" height={80} borderRadius={24} />
+            <View style={styles.statusContent}>
+               <View style={styles.statusMain}>
+                  <SkeletonItem width={12} height={12} borderRadius={6} />
+                  <View>
+                    <SkeletonText width={60} />
+                    <SkeletonText width={90} />
+                  </View>
+               </View>
+               <SkeletonItem width={40} height={24} borderRadius={12} />
+            </View>
           ) : (
             <View style={styles.statusContent}>
-              <View style={styles.statusMain}>
+               <View style={styles.statusMain}>
                 <View style={[styles.statusIndicator, { backgroundColor: isDutyActive ? colors.success : colors.textMuted }]} />
                 <View>
                   <Text style={styles.statusTitle}>Statut de service</Text>
@@ -234,9 +267,23 @@ export function HomeTab({ navigation }: any) {
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
 
         {/* Dynamic Alert / Standby Section */}
-        <Animated.View style={[styles.dynamicSection, !isLoading && { opacity: fadeAnim }]}>
+        <Animated.View style={[
+          styles.dynamicSection,
+          { 
+            opacity: sectionsAnim.dynamic,
+            transform: [{ translateY: sectionsAnim.dynamic.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }]
+          }
+        ]}>
           {isLoading || missionLoading ? (
-            <SkeletonItem width="100%" height={160} borderRadius={32} />
+            <View style={styles.standbyCard}>
+               <View style={styles.standbyContent}>
+                  <SkeletonItem width={56} height={56} borderRadius={20} />
+                  <View style={{ flex: 1 }}>
+                    <SkeletonText width="60%" />
+                    <SkeletonText width="90%" />
+                  </View>
+               </View>
+            </View>
           ) : activeMission && activeMission.dispatch_status !== 'completed' ? (
             /* ACTIVE ALERT CASE (DYNAMIC) */
             <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
@@ -291,52 +338,63 @@ export function HomeTab({ navigation }: any) {
         </Animated.View>
 
         {/* Shortcuts Section */}
-        <Text style={styles.sectionHeading}>Accès rapides</Text>
-        <View style={styles.shortcutsGrid}>
-          {isLoading ? (
-            [1, 2, 3, 4].map(i => <SkeletonItem key={i} width="48%" height={140} borderRadius={32} style={{ marginBottom: 15 }} />)
-          ) : (
-            <>
-              <TouchableOpacity style={styles.shortcutCard} onPress={() => {
-                if (activeMission) {
-                  navigation.navigate('Signalement', { mission: activeMission });
-                } else {
-                  Alert.alert('Aucune alerte', 'Aucune mission en cours. Restez en attente, la centrale vous notifiera.');
-                }
-              }}>
-                <View style={[styles.shortcutIconBox, { backgroundColor: colors.secondary + '10' }]}>
-                  <NotificationIcon color={activeMission ? colors.primary : "#1564bf"} size={28} />
+        <Animated.View style={{ 
+          opacity: sectionsAnim.shortcuts,
+          transform: [{ translateY: sectionsAnim.shortcuts.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }]
+        }}>
+          <Text style={styles.sectionHeading}>Accès rapides</Text>
+          <View style={styles.shortcutsGrid}>
+            {isLoading ? (
+              [1, 2, 3, 4].map(i => (
+                <View key={i} style={[styles.shortcutCard, { opacity: 0.6 }]}>
+                   <SkeletonItem width={48} height={48} borderRadius={16} style={{ marginBottom: 16 }} />
+                   <SkeletonText width="70%" />
+                   <SkeletonText width="40%" />
                 </View>
-                <Text style={styles.shortcutTitle}>{activeMission ? 'Mission en cours' : 'Alertes'}</Text>
-                <Text style={styles.shortcutDesc}>{activeMission ? activeMission.reference : 'Aucune alerte'}</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('CallCenter')}>
-                <View style={[styles.shortcutIconBox, { backgroundColor: colors.success + '10' }]}>
-                  <CallOutgoingIcon color={colors.success} size={28} />
-                </View>
-                <Text style={styles.shortcutTitle}>Contacter la centrale</Text>
-                <Text style={styles.shortcutDesc}>Appel sécurisé</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('Protocoles')}>
-                <View style={[styles.shortcutIconBox, { backgroundColor: '#E3242B15' }]}>
-                  <FirstAidBriefcaseIcon color="#E3242B" size={28} />
-                </View>
-                <Text style={styles.shortcutTitle}>Protocoles</Text>
-                <Text style={styles.shortcutDesc}>SMUR / SAMU</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('SignalerProbleme')}>
-                <View style={[styles.shortcutIconBox, { backgroundColor: '#FF950015' }]}>
-                  <EmergencyBellIcon color="#FF9500" size={28} />
-                </View>
-                <Text style={styles.shortcutTitle}>Signalement</Text>
-                <Text style={styles.shortcutDesc}>Incident terrain</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
+              ))
+            ) : (
+              <>
+                <TouchableOpacity style={styles.shortcutCard} onPress={() => {
+                  if (activeMission) {
+                    navigation.navigate('Signalement', { mission: activeMission });
+                  } else {
+                    Alert.alert('Aucune alerte', 'Aucune mission en cours. Restez en attente, la centrale vous notifiera.');
+                  }
+                }}>
+                  <View style={[styles.shortcutIconBox, { backgroundColor: colors.secondary + '10' }]}>
+                    <NotificationIcon color={activeMission ? colors.primary : "#1564bf"} size={28} />
+                  </View>
+                  <Text style={styles.shortcutTitle}>{activeMission ? 'Mission en cours' : 'Alertes'}</Text>
+                  <Text style={styles.shortcutDesc}>{activeMission ? activeMission.reference : 'Aucune alerte'}</Text>
+                </TouchableOpacity>
+  
+                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('CallCenter')}>
+                  <View style={[styles.shortcutIconBox, { backgroundColor: colors.success + '10' }]}>
+                    <CallOutgoingIcon color={colors.success} size={28} />
+                  </View>
+                  <Text style={styles.shortcutTitle}>Contacter la centrale</Text>
+                  <Text style={styles.shortcutDesc}>Appel sécurisé</Text>
+                </TouchableOpacity>
+  
+                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('Protocoles')}>
+                  <View style={[styles.shortcutIconBox, { backgroundColor: '#E3242B15' }]}>
+                    <FirstAidBriefcaseIcon color="#E3242B" size={28} />
+                  </View>
+                  <Text style={styles.shortcutTitle}>Protocoles</Text>
+                  <Text style={styles.shortcutDesc}>SMUR / SAMU</Text>
+                </TouchableOpacity>
+  
+                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('SignalerProbleme')}>
+                  <View style={[styles.shortcutIconBox, { backgroundColor: '#FF950015' }]}>
+                    <EmergencyBellIcon color="#FF9500" size={28} />
+                  </View>
+                  <Text style={styles.shortcutTitle}>Signalement</Text>
+                  <Text style={styles.shortcutDesc}>Incident terrain</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </Animated.View>
 
       </ScrollView>
     </TabScreenSafeArea>
@@ -469,11 +527,11 @@ const styles = StyleSheet.create({
 
   // Status Card
   statusCard: {
-    backgroundColor: "#161616",
+    backgroundColor: colors.glassBackground,
     borderRadius: 24,
     padding: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.06)',
+    borderColor: colors.glassBorder,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.2,
@@ -519,11 +577,11 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   alertCard: {
-    backgroundColor: '#1E1E1E',
+    backgroundColor: colors.surfaceElevated,
     borderRadius: 32,
     padding: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
+    borderColor: colors.glassBorder,
   },
   alertHeader: {
     flexDirection: 'row',
@@ -590,11 +648,11 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   standbyCard: {
-    backgroundColor: '#161616',
+    backgroundColor: colors.glassBackground,
     borderRadius: 32,
     padding: 24,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)',
+    borderColor: colors.borderHairline,
   },
   standbyContent: {
     flexDirection: 'row',
@@ -646,12 +704,12 @@ const styles = StyleSheet.create({
   },
   shortcutCard: {
     width: '48%',
-    backgroundColor: "#161616",
+    backgroundColor: colors.glassBackground,
     borderRadius: 32,
     padding: 24,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.04)',
+    borderColor: colors.borderHairline,
   },
   shortcutIconBox: {
     width: 48,
