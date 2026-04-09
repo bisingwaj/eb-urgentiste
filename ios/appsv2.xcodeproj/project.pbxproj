@@ -15,6 +15,7 @@
 		8CDFF8964F8CE9CA3A6E1DC8 /* libPods-appsv2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 62BCE87D68D49C40AFBD146C /* libPods-appsv2.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
+		03F5C2D3E6804C4D8903D7B1 /* incoming_call_ring.wav in Resources */ = {isa = PBXBuildFile; fileRef = 20CE1F59DA1148C0BDFB6F39 /* incoming_call_ring.wav */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -32,6 +33,7 @@
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = appsv2/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* appsv2-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "appsv2-Bridging-Header.h"; path = "appsv2/appsv2-Bridging-Header.h"; sourceTree = "<group>"; };
+		20CE1F59DA1148C0BDFB6F39 /* incoming_call_ring.wav */ = {isa = PBXFileReference; name = "incoming_call_ring.wav"; path = "appsv2/incoming_call_ring.wav"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -57,6 +59,7 @@
 				AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */,
 				8030A1E05A7E4EF09C2CA87C /* alarm_alert.wav */,
 				A0C88728A678C61A8DF43356 /* PrivacyInfo.xcprivacy */,
+				20CE1F59DA1148C0BDFB6F39 /* incoming_call_ring.wav */,
 			);
 			name = appsv2;
 			sourceTree = "<group>";
@@ -201,6 +204,7 @@
 				3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */,
 				3238B9480BDA4BD183CB876D /* alarm_alert.wav in Resources */,
 				04FD7569B44EAD62E3AA831B /* PrivacyInfo.xcprivacy in Resources */,
+				03F5C2D3E6804C4D8903D7B1 /* incoming_call_ring.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -430,7 +434,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.eburgentiste.app;
-				PRODUCT_NAME = appsv2;
+				PRODUCT_NAME = "appsv2";
 				SWIFT_OBJC_BRIDGING_HEADER = "appsv2/appsv2-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -461,7 +465,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.eburgentiste.app;
-				PRODUCT_NAME = appsv2;
+				PRODUCT_NAME = "appsv2";
 				SWIFT_OBJC_BRIDGING_HEADER = "appsv2/appsv2-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

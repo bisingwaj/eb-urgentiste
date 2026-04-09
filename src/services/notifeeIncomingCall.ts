@@ -5,8 +5,8 @@ import notifee, {
 } from '@notifee/react-native';
 import { Platform } from 'react-native';
 
-/** Canal Notifee dédié (distinct du canal Expo `incoming_calls`). */
-export const NOTIFEE_INCOMING_CHANNEL_ID = 'notifee_incoming_calls';
+/** Canal Notifee dédié (distinct du canal Expo `incoming_calls`). Incrémenter si le son du canal change (Android cache les canaux). */
+export const NOTIFEE_INCOMING_CHANNEL_ID = 'notifee_incoming_calls_ring';
 
 /**
  * Canal Android haute priorité + catégorie « call » pour heads-up / full-screen intent.
@@ -19,8 +19,11 @@ export async function ensureNotifeeIncomingChannel(): Promise<void> {
   await notifee.createChannel({
     id: NOTIFEE_INCOMING_CHANNEL_ID,
     name: 'Appels entrants — Centrale',
+    description:
+      'Sonnerie et plein écran pour les appels de la centrale (app fermée ou en arrière-plan).',
     importance: AndroidImportance.HIGH,
-    sound: 'default',
+    /** Fichier `android/app/src/main/res/raw/incoming_call_ring.*` (sans extension). */
+    sound: 'incoming_call_ring',
     vibration: true,
     bypassDnd: true,
     lights: true,
@@ -71,6 +74,8 @@ export async function displayIncomingCallWithNotifee(params: IncomingCallNotifee
       ongoing: true,
       autoCancel: false,
       lightUpScreen: true,
+      /** Sonnerie type appel en cours (boucle tant que la notif est affichée). */
+      loopSound: true,
       pressAction: {
         id: 'default',
       },

@@ -59,9 +59,14 @@ class NotificationServiceClass {
       lightColor: '#1564bf',
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       bypassDnd: true,
-      sound: 'default',
+      sound: 'incoming_call_ring.wav',
       enableVibrate: true,
       enableLights: true,
+      /** Sonnerie type téléphone (volume canal « sonnerie » / heads-up hors app). */
+      audioAttributes: {
+        usage: Notifications.AndroidAudioUsage.NOTIFICATION_RINGTONE,
+        contentType: Notifications.AndroidAudioContentType.SONIFICATION,
+      },
     });
   }
 
@@ -251,7 +256,7 @@ class NotificationServiceClass {
             callerName,
             hasVideo: hasVideo ? 'true' : 'false',
           },
-          sound: true,
+          sound: 'incoming_call_ring.wav',
           priority: Notifications.AndroidNotificationPriority.MAX,
           sticky: true,
           interruptionLevel: 'timeSensitive',
