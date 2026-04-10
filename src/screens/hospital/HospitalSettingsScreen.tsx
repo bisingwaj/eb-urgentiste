@@ -105,7 +105,7 @@ export function HospitalSettingsScreen({ navigation }: any) {
   };
 
   const footerLabel = profile
-    ? `Connecté — ${profile.first_name} ${profile.last_name}`.trim()
+    ? `Connecté — ${profile.linkedStructure?.name?.trim() || `${profile.first_name} ${profile.last_name}`.trim()}`
     : "Portail hôpital";
 
   return (

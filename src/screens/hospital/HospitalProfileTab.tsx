@@ -28,9 +28,10 @@ export function HospitalProfileTab(_props: { navigation: unknown }) {
   };
 
   const displayName =
-    profile?.first_name || profile?.last_name
+    profile?.linkedStructure?.name?.trim() ||
+    (profile?.first_name || profile?.last_name
       ? `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim()
-      : 'Structure sanitaire';
+      : 'Structure sanitaire');
 
   const displayId =
     profile?.agent_login_id != null && String(profile.agent_login_id).length > 0
@@ -78,13 +79,19 @@ export function HospitalProfileTab(_props: { navigation: unknown }) {
             {
               icon: 'location-on' as const,
               label: 'Adresse',
-              value: profile.address?.trim() || 'Non renseignée',
+              value:
+                profile.linkedStructure?.address?.trim() ||
+                profile.address?.trim() ||
+                'Non renseignée',
               color: colors.primary,
             },
             {
               icon: 'phone' as const,
               label: 'Téléphone',
-              value: profile.phone?.trim() || 'Non renseigné',
+              value:
+                profile.linkedStructure?.phone?.trim() ||
+                profile.phone?.trim() ||
+                'Non renseigné',
               color: colors.success,
             },
             {

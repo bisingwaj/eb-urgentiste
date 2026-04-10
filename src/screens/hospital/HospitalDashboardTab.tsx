@@ -1,4 +1,5 @@
-import React, { useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
+import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
   Text,
@@ -423,28 +424,39 @@ export const getStatusConfig = (status: CaseStatus) => {
 };
 
 export function HospitalDashboardTab({ navigation }: any) {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const { activeCases, isLoading, listBlocker, lastFetchError, refresh } = useHospital();
   const [refreshing, setRefreshing] = useState(false);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refreshProfile();
+    }, [refreshProfile]),
+  );
 
   const onRefresh = useMemo(
     () => async () => {
       setRefreshing(true);
       try {
+        await refreshProfile();
         await refresh();
       } finally {
         setRefreshing(false);
       }
     },
-    [refresh],
+    [refresh, refreshProfile],
   );
 
-  const { displayName, displayIdLine } = useMemo(() => {
-    const name =
+  const { displayName, displayIdLine, displayAddress, displayPhone } = useMemo(() => {
+    const userLabel =
       profile?.first_name || profile?.last_name
         ? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim()
         : "";
-    const displayNameResolved = name.length > 0 ? name : "Structure sanitaire";
+    const struct = profile?.linkedStructure;
+    const displayNameResolved =
+      struct?.name?.trim() ||
+      userLabel ||
+      "Structure sanitaire";
     const displayIdLineResolved =
       profile?.agent_login_id != null &&
       String(profile.agent_login_id).length > 0
@@ -454,7 +466,16 @@ export function HospitalDashboardTab({ navigation }: any) {
           : profile?.id != null
             ? `ID : ${profile.id.slice(0, 8)}…`
             : null;
-    return { displayName: displayNameResolved, displayIdLine: displayIdLineResolved };
+    const displayAddressResolved =
+      struct?.address?.trim() || profile?.address?.trim() || "";
+    const displayPhoneResolved =
+      struct?.phone?.trim() || profile?.phone?.trim() || "";
+    return {
+      displayName: displayNameResolved,
+      displayIdLine: displayIdLineResolved,
+      displayAddress: displayAddressResolved,
+      displayPhone: displayPhoneResolved,
+    };
   }, [profile]);
 
   const [filter, setFilter] = useState<
@@ -511,7 +532,7 @@ export function HospitalDashboardTab({ navigation }: any) {
                 {displayIdLine ? (
                   <Text style={styles.headerIdLine}>{displayIdLine}</Text>
                 ) : null}
-                {profile.address?.trim() ? (
+                {displayAddress ? (
                   <View style={styles.headerMetaRow}>
                     <MaterialIcons
                       name="location-on"
@@ -519,11 +540,11 @@ export function HospitalDashboardTab({ navigation }: any) {
                       color={colors.secondary}
                     />
                     <Text style={styles.headerMetaText} numberOfLines={2}>
-                      {profile.address.trim()}
+                      {displayAddress}
                     </Text>
                   </View>
                 ) : null}
-                {profile.phone?.trim() ? (
+                {displayPhone ? (
                   <View style={styles.headerMetaRow}>
                     <MaterialIcons
                       name="phone"
@@ -531,7 +552,7 @@ export function HospitalDashboardTab({ navigation }: any) {
                       color={colors.success}
                     />
                     <Text style={styles.headerMetaText} numberOfLines={1}>
-                      {profile.phone.trim()}
+                      {displayPhone}
                     </Text>
                   </View>
                 ) : null}

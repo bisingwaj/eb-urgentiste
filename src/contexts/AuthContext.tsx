@@ -23,6 +23,14 @@ export interface UserProfile {
   health_structure_id: string | null;
   must_change_password: boolean;
   agent_login_id: string | null;
+  /** Fiche structure Supabase (role `hopital`) — à jour via `refreshProfile` / rechargement session. */
+  linkedStructure?: {
+    id: string;
+    name: string;
+    short_name: string | null;
+    address: string | null;
+    phone: string | null;
+  } | null;
 }
 
 interface AuthState {
@@ -52,7 +60,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: false,
   });
 
-  // Charger le profil depuis users_directory
+  const attachHospitalStructure = useCallback(async (profile: UserProfile) => {
+    if (profile.role !== 'hopital') {
+      profile.linkedStructure = null;
+      return;
+    }
+    let { data: st } = await supabase
+      .from('health_structures')
+      .select('id, name, short_name, address, phone')
+      .eq('linked_user_id', profile.id)
+      .maybeSingle();
+    if (!st?.id) {
+      const r2 = await supabase
+        .from('health_structures')
+        .select('id, name, short_name, address, phone')
+        .eq('linked_user_id', profile.auth_user_id)
+        .maybeSingle();
+      st = r2.data;
+    }
+    profile.health_structure_id = st?.id || null;
+    if (st?.id) {
+      profile.linkedStructure = {
+        id: st.id,
+        name: typeof st.name === 'string' && st.name.trim() ? st.name.trim() : 'Structure',
+        short_name: st.short_name != null && String(st.short_name).trim() ? String(st.short_name).trim() : null,
+        address: st.address != null && String(st.address).trim() ? String(st.address).trim() : null,
+        phone: st.phone != null && String(st.phone).trim() ? String(st.phone).trim() : null,
+      };
+    } else {
+      profile.linkedStructure = null;
+    }
+  }, []);
+
+  // Charger le profil depuis users_directory (+ fiche health_structures pour le portail hôpital)
   const fetchProfile = useCallback(async (authUserId: string): Promise<UserProfile | null> => {
     try {
       const { data, error } = await supabase
@@ -77,50 +117,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.error('[Auth] Erreur fallback profil:', fallbackError.message);
           return null;
         }
-        
+
         const profile = fallbackData as UserProfile;
-        if (profile && profile.role === 'hopital') {
-          let { data: st } = await supabase
-            .from('health_structures')
-            .select('id')
-            .eq('linked_user_id', profile.id)
-            .maybeSingle();
-          if (!st?.id) {
-            const r2 = await supabase
-              .from('health_structures')
-              .select('id')
-              .eq('linked_user_id', profile.auth_user_id)
-              .maybeSingle();
-            st = r2.data;
-          }
-          profile.health_structure_id = st?.id || null;
-        }
+        await attachHospitalStructure(profile);
         return profile;
       }
-      
+
       const profile = data as UserProfile;
-      if (profile && profile.role === 'hopital') {
-        let { data: st } = await supabase
-          .from('health_structures')
-          .select('id')
-          .eq('linked_user_id', profile.id)
-          .maybeSingle();
-        if (!st?.id) {
-          const r2 = await supabase
-            .from('health_structures')
-            .select('id')
-            .eq('linked_user_id', profile.auth_user_id)
-            .maybeSingle();
-          st = r2.data;
-        }
-        profile.health_structure_id = st?.id || null;
-      }
+      await attachHospitalStructure(profile);
       return profile;
     } catch (err) {
       console.error('[Auth] Exception chargement profil:', err);
       return null;
     }
-  }, []);
+  }, [attachHospitalStructure]);
 
   // Écouter les changements de session Supabase
   useEffect(() => {
