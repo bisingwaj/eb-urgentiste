@@ -39,6 +39,7 @@ interface HospitalContextType {
 
 const HospitalContext = createContext<HospitalContextType | undefined>(undefined);
 
+/** Schéma `units` sans colonne `phone` côté Supabase ; contact unité via `users_directory` (voir `mapDispatchRowToEmergencyCase` + `unitPhoneByUnitId`). */
 const UNITS_SELECT_FULL = `units (
   id,
   callsign,
@@ -51,8 +52,7 @@ const UNITS_SELECT_FULL = `units (
   agent_name,
   battery,
   heading,
-  last_location_update,
-  phone
+  last_location_update
 )`;
 
 const UNITS_SELECT_MINIMAL = `units (callsign, vehicle_type, vehicle_plate, agent_name)`;
