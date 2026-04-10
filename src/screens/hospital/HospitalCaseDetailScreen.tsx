@@ -722,42 +722,63 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
       {/* 🔴 REFUSAL MODAL */}
       <Modal visible={showRefusalModal} transparent animationType="slide" onRequestClose={() => setShowRefusalModal(false)}>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Raison du refus</Text>
-              <TouchableOpacity onPress={() => setShowRefusalModal(false)}><MaterialIcons name="close" color="rgba(255,255,255,0.4)" size={24} /></TouchableOpacity>
-            </View>
-            <Text style={styles.modalSub}>Veuillez indiquer pourquoi vous ne pouvez pas recevoir ce patient.</Text>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              style={styles.reasonsList}
-              keyboardShouldPersistTaps="handled"
-              keyboardDismissMode="on-drag"
+          <KeyboardAvoidingView
+            behavior="padding"
+            enabled={true}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+            style={styles.modalKeyboardAvoiding}
+          >
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  maxHeight: Dimensions.get('window').height * 0.92,
+                  paddingBottom: Math.max(insets.bottom, 24),
+                },
+              ]}
             >
-              {REFUSAL_REASONS.map((r, i) => (
-                <TouchableOpacity key={i} style={[styles.reasonItem, selectedReason === r && styles.reasonItemActive]} onPress={() => setSelectedReason(r)}>
-                  <Text style={[styles.reasonText, selectedReason === r && styles.reasonTextActive]}>{r}</Text>
-                  {selectedReason === r && <MaterialIcons name="check-circle" color={colors.primary} size={20} />}
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Raison du refus</Text>
+                <TouchableOpacity onPress={() => setShowRefusalModal(false)}>
+                  <MaterialIcons name="close" color="rgba(255,255,255,0.4)" size={24} />
                 </TouchableOpacity>
-              ))}
+              </View>
+              <Text style={styles.modalSub}>Veuillez indiquer pourquoi vous ne pouvez pas recevoir ce patient.</Text>
 
-              {selectedReason === "Autre raison" && (
-                <TextInput
-                  style={styles.reasonInput}
-                  placeholder="Précisez la raison..."
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  multiline
-                  autoFocus
-                  value={otherReason}
-                  onChangeText={setOtherReason}
-                />
-              )}
-            </ScrollView>
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                style={[
+                  styles.reasonsList,
+                  { maxHeight: Math.min(360, Dimensions.get('window').height * 0.42) },
+                ]}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                nestedScrollEnabled
+              >
+                {REFUSAL_REASONS.map((r, i) => (
+                  <TouchableOpacity key={i} style={[styles.reasonItem, selectedReason === r && styles.reasonItemActive]} onPress={() => setSelectedReason(r)}>
+                    <Text style={[styles.reasonText, selectedReason === r && styles.reasonTextActive]}>{r}</Text>
+                    {selectedReason === r && <MaterialIcons name="check-circle" color={colors.primary} size={20} />}
+                  </TouchableOpacity>
+                ))}
 
-            <TouchableOpacity style={styles.confirmRefusalBtn} onPress={handleRefuseCase}>
-              <Text style={styles.confirmRefusalText}>CONFIRMER LE REFUS</Text>
-            </TouchableOpacity>
+                {selectedReason === 'Autre raison' && (
+                  <TextInput
+                    style={styles.reasonInput}
+                    placeholder="Précisez la raison..."
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    multiline
+                    autoFocus
+                    value={otherReason}
+                    onChangeText={setOtherReason}
+                  />
+                )}
+              </ScrollView>
+
+              <TouchableOpacity style={styles.confirmRefusalBtn} onPress={handleRefuseCase}>
+                <Text style={styles.confirmRefusalText}>CONFIRMER LE REFUS</Text>
+              </TouchableOpacity>
+            </View>
           </KeyboardAvoidingView>
         </View>
       </Modal>
@@ -886,11 +907,18 @@ const styles = StyleSheet.create({
 
   // Modal Style
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#1A1A1A', borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: Platform.OS === 'ios' ? 40 : 24, minHeight: 450 },
+  modalKeyboardAvoiding: { width: '100%' },
+  modalContent: {
+    backgroundColor: '#1A1A1A',
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    minHeight: 450,
+  },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   modalTitle: { color: '#FFF', fontSize: 20, fontWeight: '800' },
   modalSub: { color: 'rgba(255,255,255,0.4)', fontSize: 14, marginBottom: 24 },
-  reasonsList: { maxHeight: 300 },
+  reasonsList: {},
   reasonItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#000', padding: 16, borderRadius: 16, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   reasonItemActive: { borderColor: colors.primary, backgroundColor: 'rgba(255, 59, 48, 0.05)' },
   reasonText: { color: 'rgba(255,255,255,0.6)', fontSize: 15, fontWeight: '600' },

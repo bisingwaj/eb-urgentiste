@@ -230,7 +230,7 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" enabled={true} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
@@ -383,40 +383,63 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
       {/* 📝 MODAL */}
       <Modal visible={modalType !== null} animationType="slide" transparent={true} onRequestClose={() => setModalType(null)}>
         <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalTitleBox}>
-                <MaterialIcons name={getModalConfig().icon as any} color={colors.secondary} size={20} />
-                <Text style={styles.modalTitle}>{getModalConfig().title}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setModalType(null)}>
-                <MaterialIcons name="close" color="rgba(255,255,255,0.4)" size={24} />
+          <KeyboardAvoidingView
+            behavior="padding"
+            enabled={true}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 8 : 0}
+            style={styles.modalKeyboardAvoiding}
+          >
+            <View
+              style={[
+                styles.modalContent,
+                {
+                  maxHeight: height * 0.92,
+                  paddingBottom: Math.max(insets.bottom, 20),
+                },
+              ]}
+            >
+              <ScrollView
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+                nestedScrollEnabled
+                style={{ maxHeight: height * 0.62 }}
+                contentContainerStyle={{ paddingBottom: 8 }}
+              >
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalTitleBox}>
+                    <MaterialIcons name={getModalConfig().icon as any} color={colors.secondary} size={20} />
+                    <Text style={styles.modalTitle}>{getModalConfig().title}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setModalType(null)}>
+                    <MaterialIcons name="close" color="rgba(255,255,255,0.4)" size={24} />
+                  </TouchableOpacity>
+                </View>
+
+                <TextInput
+                  style={styles.modalInput}
+                  placeholder={getModalConfig().placeholder}
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  multiline
+                  autoFocus
+                  value={newText}
+                  onChangeText={setNewText}
+                />
+
+                {modalType === 'note' && (
+                  <View style={styles.modalStatusRow}>
+                    {(['Amélioration', 'Stable', 'Aggravation'] as const).map((s) => (
+                      <TouchableOpacity key={s} style={[styles.modalStatusBtn, noteStatus === s && { backgroundColor: getStatusColor(s) }]} onPress={() => setNoteStatus(s)}>
+                        <Text style={[styles.modalStatusText, noteStatus === s && { color: '#000' }]}>{s}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </ScrollView>
+
+              <TouchableOpacity style={[styles.saveBtn, modalType === 'treatment_add' && { backgroundColor: '#FF5252' }]} onPress={handleSave}>
+                <Text style={styles.saveBtnText}>{getModalConfig().btn}</Text>
               </TouchableOpacity>
             </View>
-
-            <TextInput
-              style={styles.modalInput}
-              placeholder={getModalConfig().placeholder}
-              placeholderTextColor="rgba(255,255,255,0.3)"
-              multiline
-              autoFocus
-              value={newText}
-              onChangeText={setNewText}
-            />
-
-            {modalType === "note" && (
-              <View style={styles.modalStatusRow}>
-                {(["Amélioration", "Stable", "Aggravation"] as const).map(s => (
-                  <TouchableOpacity key={s} style={[styles.modalStatusBtn, noteStatus === s && { backgroundColor: getStatusColor(s) }]} onPress={() => setNoteStatus(s)}>
-                    <Text style={[styles.modalStatusText, noteStatus === s && { color: "#000" }]}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            <TouchableOpacity style={[styles.saveBtn, modalType === "treatment_add" && { backgroundColor: "#FF5252" }]} onPress={handleSave}>
-              <Text style={styles.saveBtnText}>{getModalConfig().btn}</Text>
-            </TouchableOpacity>
           </KeyboardAvoidingView>
         </View>
       </Modal>
@@ -553,7 +576,15 @@ const styles = StyleSheet.create({
   actionTime: { color: "rgba(255,255,255,0.3)", fontSize: 13, fontWeight: "700" },
   actionUser: { color: "rgba(255,255,255,0.2)", fontSize: 13, marginTop: 2 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "flex-end" },
-  modalContent: { backgroundColor: "#121212", borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.05)" },
+  modalKeyboardAvoiding: { width: "100%" },
+  modalContent: {
+    backgroundColor: "#121212",
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.05)",
+  },
   modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
   modalTitleBox: { flexDirection: "row", alignItems: "center", gap: 10 },
   modalTitle: { color: "#FFF", fontSize: 18, fontWeight: "800" },
