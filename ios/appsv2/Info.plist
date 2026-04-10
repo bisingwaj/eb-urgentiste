@@ -38,7 +38,7 @@
     <key>LSRequiresIPhoneOS</key>
     <true/>
     <key>MBXAccessToken</key>
-    <string>REMOVED_SECRET</string>
+    <string></string>
     <key>NSAppTransportSecurity</key>
     <dict>
       <key>NSAllowsArbitraryLoads</key>

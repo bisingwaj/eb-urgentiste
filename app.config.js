@@ -5,6 +5,10 @@ loadLocalEnv(__dirname);
 /**
  * Config Expo dynamique : secrets dans `.local.env` (EXPO_PUBLIC_*), non versionné.
  *
+ * Mapbox : ne pas injecter MBXAccessToken ici dans infoPlist — cela écrivait le jeton dans
+ * ios/.../Info.plist au prebuild (risque de commit). Le token vient de EXPO_PUBLIC_MAPBOX_TOKEN
+ * (Metro + App.tsx → Mapbox.setAccessToken). Info.plist garde une entrée vide ; même flux pour toute l’équipe.
+ *
  * FCM (send-call-push) : placer `google-services.json` (Firebase) à la racine du repo
  * ou renseigner `android.googleServicesFile` dans app.json, puis `eas build` — requis pour
  * `getDevicePushTokenAsync` / enregistrement `users_directory.fcm_token`.
@@ -17,7 +21,6 @@ loadLocalEnv(__dirname);
 const appJson = require('./app.json');
 
 module.exports = () => {
-  const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN ?? '';
   const base = appJson.expo;
 
   // EAS CLI lit `expo.extra.eas` (projectId, etc.) — doit toujours exister comme objet.
@@ -33,13 +36,6 @@ module.exports = () => {
       ...base,
       owner: 'arack',
       extra,
-      ios: {
-        ...base.ios,
-        infoPlist: {
-          ...(base.ios?.infoPlist || {}),
-          MBXAccessToken: mapboxToken,
-        },
-      },
     },
   };
 };
