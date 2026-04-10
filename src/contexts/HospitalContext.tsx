@@ -269,6 +269,10 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
     };
   }, [fetchCases, profile?.health_structure_id, profile?.role]);
 
+  /**
+   * Transitions métier : aligné PROMPT_CURSOR_HOPITAL_WORKFLOW §12
+   * (ex. `admis` → dispatches.status `arrived_hospital`, `termine` → `completed`).
+   */
   const updateCaseStatus = async (caseId: string, transition: { status?: CaseStatus; data?: any; hospitalStatus?: HospitalStatus; hospitalNotes?: string }) => {
     try {
       const { data: currentDispatch, error: fetchError } = await supabase.from('dispatches').select('*').eq('id', caseId).single();
@@ -314,6 +318,9 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       }
       if (transition.hospitalNotes) {
         updateObj.hospital_notes = transition.hospitalNotes;
+      } else if (transition.hospitalStatus === 'accepted') {
+        /** PROMPT_CURSOR_HOPITAL_WORKFLOW §2 — note par défaut si non fournie */
+        updateObj.hospital_notes = "Accepté par l'établissement";
       }
 
       if (Object.keys(updateObj).length === 0) {
