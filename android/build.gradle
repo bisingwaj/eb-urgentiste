@@ -23,6 +23,11 @@ allprojects {
   }
 }
 
+// NDK 26 requis : avec NDK 27, la liaison de `expo-modules-core` (New Architecture) échoue souvent
+// sous Windows (ld.lld : __cxa_*, libc++, operator new/delete, etc.). Expo ne remplace pas
+// `ext.ndkVersion` s'il est déjà défini (ExpoRootProjectPlugin#setIfNotExist).
+ext.ndkVersion = "26.1.10909125"
+
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
 
