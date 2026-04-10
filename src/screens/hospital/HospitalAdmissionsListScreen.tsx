@@ -16,6 +16,7 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { useHospital } from '../../contexts/HospitalContext';
 import { getLevelConfig, getStatusConfig } from './HospitalDashboardTab';
+import { navigateFromHospitalAdmissionsList } from '../../lib/hospitalNavigation';
 
 const { width } = Dimensions.get('window');
 
@@ -84,15 +85,8 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
                 key={item.id}
                 style={styles.alertCard}
                 onPress={() => {
-                  if (item.status === 'en_cours') {
-                    navigation.navigate('HospitalCaseDetail', { caseData: item });
-                  } else if (item.status === 'monitoring') {
-                    navigation.navigate('HospitalMonitoring', { caseData: item });
-                  } else if (item.status === 'admis' || item.status === 'triage') {
-                    navigation.navigate('HospitalTriage', { caseData: item });
-                  } else {
-                    navigation.navigate('HospitalPriseEnCharge', { caseData: item });
-                  }
+                  const fresh = activeCases.find((c) => c.id === item.id) ?? item;
+                  navigateFromHospitalAdmissionsList(navigation, fresh);
                 }}
                 activeOpacity={0.9}
               >

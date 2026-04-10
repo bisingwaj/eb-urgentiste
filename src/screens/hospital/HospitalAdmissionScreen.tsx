@@ -36,7 +36,7 @@ import { useHospital } from '../../contexts/HospitalContext';
 
 export function HospitalAdmissionScreen({ route, navigation }: any) {
   const { caseData } = route.params as { caseData: EmergencyCase };
-  const { updateCaseStatus } = useHospital();
+  const { updateCaseStatus, activeCases } = useHospital();
   const insets = useSafeAreaInsets();
 
   const now = new Date();
@@ -66,6 +66,11 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
     } else {
       navigation.goBack();
     }
+  };
+
+  const handleOpenCaseDetail = () => {
+    const fresh = activeCases.find((c) => c.id === caseData.id);
+    navigation.navigate('HospitalCaseDetail', { caseData: fresh ?? caseData });
   };
 
   const handleValidate = () => {
@@ -289,6 +294,15 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
           </Text>
           <MaterialIcons name={step === totalSteps ? 'check-circle' : 'east'} color="#000" size={20} />
         </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.secondaryFooterLink}
+          onPress={handleOpenCaseDetail}
+          accessibilityRole="button"
+          accessibilityLabel="Voir le suivi et la carte"
+        >
+          <MaterialIcons name="map" size={18} color={colors.secondary} />
+          <Text style={styles.secondaryFooterLinkText}>Voir le suivi / carte</Text>
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
@@ -364,4 +378,17 @@ const styles = StyleSheet.create({
   primaryBtn: { height: 64, borderRadius: 24, backgroundColor: colors.success, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, shadowColor: colors.success, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.2, shadowRadius: 16 },
   primaryBtnText: { color: '#000', fontSize: 15, fontWeight: '900', letterSpacing: 0.5 },
   btnDisabled: { opacity: 0.2 },
+  secondaryFooterLink: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+  },
+  secondaryFooterLinkText: {
+    color: colors.secondary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
 });

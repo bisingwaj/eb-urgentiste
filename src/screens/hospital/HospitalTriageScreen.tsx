@@ -63,7 +63,7 @@ const ANDROID_TEXT_INPUT_IME_MIN =
 
 export function HospitalTriageScreen({ route, navigation }: any) {
   const { caseData } = route.params as { caseData: EmergencyCase };
-  const { updateCaseStatus } = useHospital();
+  const { updateCaseStatus, activeCases } = useHospital();
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState(1);
@@ -106,6 +106,11 @@ export function HospitalTriageScreen({ route, navigation }: any) {
     } else {
       navigation.goBack();
     }
+  };
+
+  const handleOpenCaseDetail = () => {
+    const fresh = activeCases.find((c) => c.id === caseData.id);
+    navigation.navigate("HospitalCaseDetail", { caseData: fresh ?? caseData });
   };
 
   const updateVital = (key: string, val: string) => {
@@ -497,7 +502,14 @@ export function HospitalTriageScreen({ route, navigation }: any) {
               Évaluation de triage · {step}/{totalSteps}
             </Text>
           </View>
-          <View style={{ width: 40 }} />
+          <TouchableOpacity
+            onPress={handleOpenCaseDetail}
+            style={styles.headerLinkBtn}
+            accessibilityRole="button"
+            accessibilityLabel="Voir le suivi et la carte"
+          >
+            <MaterialIcons name="map" size={22} color={colors.secondary} />
+          </TouchableOpacity>
         </View>
 
         <View style={styles.content}>{renderStepContent()}</View>
@@ -559,6 +571,14 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: "center",
     alignItems: "center",
+  },
+  headerLinkBtn: {
+    width: 44,
+    height: 44,
+    justifyContent: "center",
+    alignItems: "center",
+    borderRadius: 14,
+    backgroundColor: "rgba(56, 182, 255, 0.12)",
   },
   progressContainer: { flex: 1, alignItems: "center" },
   progressBarBg: {

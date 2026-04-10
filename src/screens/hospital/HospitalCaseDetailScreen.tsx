@@ -30,7 +30,8 @@ import {
   formatDistanceMeters,
   haversineMeters,
 } from '../../lib/mapbox';
-import type { EmergencyCase, UrgencyLevel, CaseStatus } from './HospitalDashboardTab';
+import type { EmergencyCase, UrgencyLevel } from './HospitalDashboardTab';
+import { POST_AMBULANCE_TRACKING_STATUSES } from '../../lib/hospitalNavigation';
 
 const { width, height } = Dimensions.get('window');
 /** Hauteur zone carte suivi : ratio écran, bornée pour petits / grands écrans */
@@ -85,8 +86,11 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     !caseData.hospitalStatus || caseData.hospitalStatus === 'pending';
   /** Pas de swipe Accepter/Refuser tant que l’unité est déjà en route vers la structure */
   const needsHospitalSwipe = isPendingHospitalResponse && !isEnRoute;
-  /** Carte + GPS dès acceptation (avec unité assignée), pas seulement en `en_route_hospital` */
-  const showAmbulanceTracking = hasHospitalAccepted && !!caseData.unitId;
+  /** Carte + GPS tant que le dossier n’a pas franchi l’admission administrative (statuts post-admission → CTA cliniques). */
+  const showAmbulanceTracking =
+    hasHospitalAccepted &&
+    !!caseData.unitId &&
+    !POST_AMBULANCE_TRACKING_STATUSES.includes(caseData.status);
 
   const hospitalCoord = useMemo((): [number, number] | null => {
     const lat = caseData.assignedStructureLat;
@@ -184,6 +188,18 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
 
   const handleGoToAdmission = () => {
     navigation.navigate('HospitalAdmission', { caseData });
+  };
+
+  const handleGoToTriage = () => {
+    navigation.navigate('HospitalTriage', { caseData });
+  };
+
+  const handleGoToPriseEnCharge = () => {
+    navigation.navigate('HospitalPriseEnCharge', { caseData });
+  };
+
+  const handleGoToMonitoring = () => {
+    navigation.navigate('HospitalMonitoring', { caseData });
   };
 
   // Realtime GPS Tracking State (pas de position par défaut : évite un faux tracé avant la 1re MàJ)
@@ -687,7 +703,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           </>
       </ScrollView>
 
-      {/* FOOTER ACTIONS */}
+      {/* FOOTER ACTIONS — ordre : swipe → étapes cliniques (status) → route → admission pré-hospitalière */}
       {needsHospitalSwipe ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <View style={styles.swipeContainer}>
@@ -696,6 +712,44 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           </View>
           <TouchableOpacity style={styles.refuseBtn} onPress={() => setShowRefusalModal(true)}>
             <Text style={styles.refuseText}>Refuser le cas</Text>
+          </TouchableOpacity>
+        </View>
+      ) : caseData.status === 'admis' ? (
+        <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <Text style={styles.postAcceptHint}>
+            Admission administrative enregistrée. Passez au triage clinique pour la suite du dossier.
+          </Text>
+          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToTriage}>
+            <MaterialIcons name="assignment" color="#000" size={24} />
+            <Text style={styles.admissionBtnText}>Continuer vers le triage</Text>
+          </TouchableOpacity>
+        </View>
+      ) : caseData.status === 'triage' ? (
+        <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <Text style={styles.postAcceptHint}>
+            Triage clinique enregistré. Poursuivez avec la prise en charge médicale.
+          </Text>
+          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToPriseEnCharge}>
+            <MaterialIcons name="medical-services" color="#000" size={24} />
+            <Text style={styles.admissionBtnText}>Continuer vers la prise en charge</Text>
+          </TouchableOpacity>
+        </View>
+      ) : caseData.status === 'prise_en_charge' ? (
+        <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <Text style={styles.postAcceptHint}>
+            Prise en charge active. Ouvrez la surveillance pour le suivi du patient.
+          </Text>
+          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToMonitoring}>
+            <MaterialIcons name="monitor-heart" color="#000" size={24} />
+            <Text style={styles.admissionBtnText}>Ouvrir la surveillance</Text>
+          </TouchableOpacity>
+        </View>
+      ) : caseData.status === 'monitoring' ? (
+        <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+          <Text style={styles.postAcceptHint}>Surveillance en cours pour ce dossier.</Text>
+          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToMonitoring}>
+            <MaterialIcons name="visibility" color="#000" size={24} />
+            <Text style={styles.admissionBtnText}>Voir la surveillance</Text>
           </TouchableOpacity>
         </View>
       ) : isEnRoute ? (
