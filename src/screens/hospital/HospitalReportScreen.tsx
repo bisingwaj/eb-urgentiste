@@ -5,11 +5,10 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Platform,
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { getTransportModeLabel } from '../../lib/transportMode';
@@ -22,6 +21,7 @@ export function HospitalReportScreen({ route, navigation }: any) {
     reportAlreadySent?: boolean;
   };
   const { sendHospitalReport } = useHospital();
+  const insets = useSafeAreaInsets();
   const [sending, setSending] = useState(false);
   const alreadySent = reportAlreadySentParam === true || caseData.reportSent === true;
 
@@ -56,7 +56,7 @@ export function HospitalReportScreen({ route, navigation }: any) {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* App bar */}
       <View style={styles.appBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -136,7 +136,7 @@ export function HospitalReportScreen({ route, navigation }: any) {
       </ScrollView>
 
       {/* Primary Action */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <TouchableOpacity
           style={[styles.sendBtn, sending && styles.sendBtnDisabled]}
           onPress={handleSendReport}
@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   itemTime: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
   itemCategory: { color: colors.secondary, fontSize: 13, fontWeight: '700' },
   itemDetail: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 34 : 20, paddingTop: 14, backgroundColor: colors.mainBackground, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 14, backgroundColor: colors.mainBackground, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
   sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16, borderRadius: 28, backgroundColor: colors.secondary },
   sendBtnDisabled: { opacity: 0.7 },
   sendBtnText: { color: '#FFF', fontWeight: '800', fontSize: 16 },

@@ -11,7 +11,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { supabase } from '../../lib/supabase';
@@ -41,6 +41,7 @@ type ConstraintRow = {
 };
 
 export function HospitalIssuesScreen({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { profile, session } = useAuth();
   const [selectedIssues, setSelectedIssues] = useState<string[]>([]);
   const [comment, setComment] = useState('');
@@ -151,7 +152,7 @@ export function HospitalIssuesScreen({ navigation }: any) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.appBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
@@ -256,7 +257,7 @@ export function HospitalIssuesScreen({ navigation }: any) {
         </View>
       </ScrollView>
 
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <TouchableOpacity
           style={[styles.submitBtn, (selectedIssues.length === 0 || submitting) && styles.disabledBtn]}
           onPress={handleSubmit}
@@ -322,7 +323,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     paddingTop: 14,
     backgroundColor: colors.mainBackground,
     borderTopWidth: 1,

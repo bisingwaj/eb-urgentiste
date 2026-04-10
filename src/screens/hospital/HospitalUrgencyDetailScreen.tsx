@@ -7,9 +7,8 @@ import {
   TouchableOpacity,
   Linking,
   Alert,
-  Platform,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 
@@ -109,6 +108,7 @@ const getStatusLabel = (status: string) => {
 };
 
 export function HospitalUrgencyDetailScreen({ route, navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { urgency } = route.params;
   const levelCfg = getLevelConfig(urgency.level);
   const timeline = getTimeline(urgency.status);
@@ -132,7 +132,7 @@ export function HospitalUrgencyDetailScreen({ route, navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* App bar */}
       <View style={styles.appBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -284,7 +284,7 @@ export function HospitalUrgencyDetailScreen({ route, navigation }: any) {
       </ScrollView>
 
       {/* Bottom Actions */}
-      <View style={styles.bottomBar}>
+      <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <TouchableOpacity style={styles.smsBtn} onPress={handleSMS}>
           <MaterialIcons name="message" color={colors.secondary} size={20} />
           <Text style={styles.smsBtnText}>SMS Normal</Text>
@@ -557,7 +557,6 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     paddingTop: 14,
     gap: 12,
     backgroundColor: colors.mainBackground,
