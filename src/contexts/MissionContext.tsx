@@ -11,17 +11,55 @@ function toNullableNumber(v: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function buildAssignedStructureFromDispatchRow(d: Record<string, unknown>): Mission['assigned_structure'] | null {
+interface SupabaseIncident {
+  id: string;
+  citizen_id: string | null;
+  caller_name: string | null;
+  caller_phone: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  location_address: string | null;
+  description: string | null;
+  type: string;
+  priority: Mission['priority'];
+  reference: string;
+  title: string;
+  status: string;
+  caller_realtime_lat: number | null;
+  caller_realtime_lng: number | null;
+  caller_realtime_updated_at: string | null;
+  commune: string | null;
+  recommended_facility: string | null;
+  created_at: string;
+}
+
+interface SupabaseDispatch {
+  id: string;
+  status: string;
+  unit_id: string;
+  incident_id: string;
+  assigned_structure_id: string | null;
+  assigned_structure_name: string | null;
+  assigned_structure_lat: number | null;
+  assigned_structure_lng: number | null;
+  assigned_structure_phone: string | null;
+  assigned_structure_address: string | null;
+  assigned_structure_type: string | null;
+  created_at: string;
+  incidents: SupabaseIncident;
+}
+
+function buildAssignedStructureFromDispatchRow(d: Partial<SupabaseDispatch>): Mission['assigned_structure'] | null {
   const id = d.assigned_structure_id;
   if (id == null || id === '') return null;
   return {
     id: String(id),
-    name: (d.assigned_structure_name as string) || 'Structure',
+    name: d.assigned_structure_name || 'Structure',
     lat: toNullableNumber(d.assigned_structure_lat),
     lng: toNullableNumber(d.assigned_structure_lng),
-    phone: (d.assigned_structure_phone as string | null) ?? null,
-    address: (d.assigned_structure_address as string | null) ?? null,
-    type: (d.assigned_structure_type as string) || 'hopital',
+    phone: d.assigned_structure_phone ?? null,
+    address: d.assigned_structure_address ?? null,
+    type: d.assigned_structure_type || 'hopital',
   };
 }
 
@@ -136,17 +174,17 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       } | null;
 
       if (dispatch && dispatch.incidents) {
-        const incident = dispatch.incidents as any;
+        const incident = dispatch.incidents as unknown as SupabaseIncident;
         // Priorité : position temps réel > position initiale
         const lat = incident.caller_realtime_lat ?? incident.location_lat;
         const lng = incident.caller_realtime_lng ?? incident.location_lng;
-        console.log(`📍 [POSITION VICTIME] lat: ${lat}, lng: ${lng}, adresse: ${incident.location_address || 'NULL'}, commune: ${incident.commune || 'NULL'}`);
-        const d = dispatch as any;
-        const assignedStructure = buildAssignedStructureFromDispatchRow(d as Record<string, unknown>);
+        console.log(`📍 [POSITION VICTIME] lat: ${lat}, lng: ${lng}, adresse: ${incident.location_address || 'NULL'}`);
+
+        const assignedStructure = buildAssignedStructureFromDispatchRow(dispatch as Partial<SupabaseDispatch>);
 
         if (assignedStructure) {
           console.log(`🏥 [STRUCTURE ASSIGNÉE] ${assignedStructure.name} — lat: ${assignedStructure.lat}, lng: ${assignedStructure.lng}`);
-          logStructureGps('fetchActiveMission', d as Record<string, unknown>);
+          logStructureGps('fetchActiveMission', dispatch as unknown as Record<string, unknown>);
         }
 
         setActiveMission({
@@ -159,7 +197,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           description: incident.description,
           priority: incident.priority,
           incident_status: incident.status,
-          dispatch_status: dispatch.status as any,
+          dispatch_status: dispatch.status as Mission['dispatch_status'],
           location: {
             lat,
             lng,
@@ -171,7 +209,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
             phone: incident.caller_phone || '-',
           },
           assigned_structure: assignedStructure,
-          destination: incident.recommended_facility,
+          destination: incident.recommended_facility ?? undefined,
           created_at: incident.created_at,
         });
       } else {
@@ -193,7 +231,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     }, 120);
   }, [fetchActiveMission]);
 
-  const mergeDispatchUpdateIntoState = useCallback((payload: { new?: Record<string, unknown> }) => {
+  const mergeDispatchUpdateIntoState = useCallback((payload: { new?: Partial<SupabaseDispatch> }) => {
     const n = payload.new;
     if (!n?.id) return;
     setActiveMission((prev) => {

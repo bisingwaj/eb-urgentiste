@@ -20,6 +20,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import Mapbox from "@rnmapbox/maps";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { colors } from "../../theme/colors";
+import { TRANSPORT_MODE_OPTIONS, transportModeAccentColor } from "../../lib/transportMode";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from "../../lib/mapbox";
@@ -1792,85 +1793,40 @@ export function SignalementScreen({ navigation, route }: any) {
                      {renderStepInlineHeader()}
                      <Text style={styles.stepSectionHeading}>Mode de transport</Text>
                      <View style={styles.aidGrid}>
-                        <TouchableOpacity
-                           style={styles.aidCardGrid}
-                           onPress={() => handleSelectTransportMode("AMBULANCE")}
-                        >
-                           <View
-                              style={[
-                                 styles.aidIconWrapper,
-                                 { backgroundColor: colors.secondary + "10" },
-                              ]}
-                           >
-                              <MaterialCommunityIcons
-                                 name="ambulance"
-                                 size={22}
-                                 color={colors.secondary}
-                              />
-                           </View>
-                           <Text style={styles.aidLabelGrid}>Ambulance standard</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                           style={[
-                              styles.aidCardGrid,
-                              { borderColor: colors.primary + "40" },
-                           ]}
-                           onPress={() => handleSelectTransportMode("SMUR")}
-                        >
-                           <View
-                              style={[
-                                 styles.aidIconWrapper,
-                                 { backgroundColor: colors.primary + "10" },
-                              ]}
-                           >
-                              <MaterialCommunityIcons
-                                 name="truck-plus"
-                                 size={22}
-                                 color={colors.primary}
-                              />
-                           </View>
-                           <Text
-                              style={[styles.aidLabelGrid, { color: colors.primary }]}
-                           >
-                              Unité SMUR / Réa
-                           </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                           style={styles.aidCardGrid}
-                           onPress={() => handleSelectTransportMode("MOTO")}
-                        >
-                           <View
-                              style={[
-                                 styles.aidIconWrapper,
-                                 { backgroundColor: colors.secondary + "10" },
-                              ]}
-                           >
-                              <MaterialCommunityIcons
-                                 name="moped"
-                                 size={22}
-                                 color={colors.secondary}
-                              />
-                           </View>
-                           <Text style={styles.aidLabelGrid}>Moto intervention</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                           style={styles.aidCardGrid}
-                           onPress={() => handleSelectTransportMode("PERSONNEL")}
-                        >
-                           <View
-                              style={[
-                                 styles.aidIconWrapper,
-                                 { backgroundColor: colors.success + "10" },
-                              ]}
-                           >
-                              <MaterialCommunityIcons
-                                 name="car-side"
-                                 size={22}
-                                 color={colors.success}
-                              />
-                           </View>
-                           <Text style={styles.aidLabelGrid}>Transport perso</Text>
-                        </TouchableOpacity>
+                        {TRANSPORT_MODE_OPTIONS.map((opt) => {
+                           const accent = transportModeAccentColor(opt.accent);
+                           return (
+                              <TouchableOpacity
+                                 key={opt.key}
+                                 style={[
+                                    styles.aidCardGrid,
+                                    opt.emphasizeBorder && { borderColor: colors.primary + "40" },
+                                 ]}
+                                 onPress={() => handleSelectTransportMode(opt.key)}
+                              >
+                                 <View
+                                    style={[
+                                       styles.aidIconWrapper,
+                                       { backgroundColor: accent + "10" },
+                                    ]}
+                                 >
+                                    <MaterialCommunityIcons
+                                       name={opt.icon as any}
+                                       size={22}
+                                       color={accent}
+                                    />
+                                 </View>
+                                 <Text
+                                    style={[
+                                       styles.aidLabelGrid,
+                                       opt.accent === "primary" && { color: colors.primary },
+                                    ]}
+                                 >
+                                    {opt.label}
+                                 </Text>
+                              </TouchableOpacity>
+                           );
+                        })}
                      </View>
                   </View>
                )}

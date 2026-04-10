@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -7,21 +7,42 @@ import {
   TouchableOpacity,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import { getTransportModeLabel } from '../../lib/transportMode';
 import type { EmergencyCase } from './HospitalDashboardTab';
+import { useHospital } from '../../contexts/HospitalContext';
 
 export function HospitalReportScreen({ route, navigation }: any) {
-  const { caseData } = route.params as { caseData: EmergencyCase };
+  const { caseData, reportAlreadySent: reportAlreadySentParam } = route.params as {
+    caseData: EmergencyCase;
+    reportAlreadySent?: boolean;
+  };
+  const { sendHospitalReport } = useHospital();
+  const [sending, setSending] = useState(false);
+  const alreadySent = reportAlreadySentParam === true || caseData.reportSent === true;
 
-  const handleSendReport = () => {
-    Alert.alert(
-      'Envoyer le rapport',
-      'Le rapport a été transmis au centre d\'urgence central avec succès.',
-      [{ text: 'Terminer', onPress: () => navigation.getParent()?.reset({ index: 0, routes: [{ name: 'HospitalTabs' }] }) }]
-    );
+  const finishToTabs = () => navigation.getParent()?.reset({ index: 0, routes: [{ name: 'HospitalTabs' }] });
+
+  const handleSendReport = async () => {
+    if (alreadySent) {
+      finishToTabs();
+      return;
+    }
+    setSending(true);
+    try {
+      await sendHospitalReport(caseData);
+      Alert.alert('Rapport transmis', 'Le rapport a été enregistré et transmis au centre.', [
+        { text: 'Terminer', onPress: finishToTabs },
+      ]);
+    } catch (e: any) {
+      Alert.alert('Erreur', e?.message ?? 'Impossible d’envoyer le rapport. Réessayez.');
+    } finally {
+      setSending(false);
+    }
   };
 
   const SummaryItem = ({ label, value, icon, color }: any) => (
@@ -69,7 +90,7 @@ export function HospitalReportScreen({ route, navigation }: any) {
             <SummaryItem label="Âge / Sexe" value={`${caseData.age} ans · ${caseData.sex}`} icon="info" />
             <SummaryItem label="Type d'urgence" value={caseData.typeUrgence} icon="medical-services" color={colors.primary} />
             <SummaryItem label="Heure d'arrivée" value={caseData.arrivalTime} icon="schedule" />
-            <SummaryItem label="Mode d'arrivée" value={caseData.arrivalMode} icon="local-shipping" />
+            <SummaryItem label="Mode d'arrivée" value={getTransportModeLabel(caseData.arrivalMode)} icon="local-shipping" />
           </View>
         </View>
 
@@ -116,9 +137,21 @@ export function HospitalReportScreen({ route, navigation }: any) {
 
       {/* Primary Action */}
       <View style={styles.bottomBar}>
-        <TouchableOpacity style={styles.sendBtn} onPress={handleSendReport}>
-          <Text style={styles.sendBtnText}>Transmettre au Centre Central</Text>
-          <MaterialIcons name="send" color="#FFF" size={24} />
+        <TouchableOpacity
+          style={[styles.sendBtn, sending && styles.sendBtnDisabled]}
+          onPress={handleSendReport}
+          disabled={sending}
+        >
+          {sending ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <>
+              <Text style={styles.sendBtnText}>
+                {alreadySent ? 'Terminer' : 'Transmettre au Centre Central'}
+              </Text>
+              <MaterialIcons name={alreadySent ? 'check' : 'send'} color="#FFF" size={24} />
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -156,5 +189,6 @@ const styles = StyleSheet.create({
   itemDetail: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 34 : 20, paddingTop: 14, backgroundColor: colors.mainBackground, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
   sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16, borderRadius: 28, backgroundColor: colors.secondary },
+  sendBtnDisabled: { opacity: 0.7 },
   sendBtnText: { color: '#FFF', fontWeight: '800', fontSize: 16 },
 });

@@ -1,20 +1,56 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform,Switch } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ActivityIndicator, Alert } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { useAppLock } from '../../contexts/AppLockContext';
+import { useAuth } from '../../contexts/AuthContext';
 
-export function HospitalProfileTab({ navigation }: any) {
+export function HospitalProfileTab(_props: { navigation: unknown }) {
   const { appLockEnabled, setAppLockEnabled, biometricAvailable, nativeModuleLinked } = useAppLock();
+  const { profile, signOut } = useAuth();
 
   const handleLogout = () => {
-    navigation.getParent()?.reset({
-      index: 0,
-      routes: [{ name: 'RoleSelection' }],
-    });
+    Alert.alert(
+      'Déconnexion',
+      'Voulez-vous vous déconnecter ?',
+      [
+        { text: 'Annuler', style: 'cancel' },
+        {
+          text: 'Se déconnecter',
+          style: 'destructive',
+          onPress: () => {
+            void signOut();
+          },
+        },
+      ],
+    );
   };
+
+  const displayName =
+    profile?.first_name || profile?.last_name
+      ? `${profile?.first_name ?? ''} ${profile?.last_name ?? ''}`.trim()
+      : 'Structure sanitaire';
+
+  const displayId =
+    profile?.agent_login_id != null && String(profile.agent_login_id).length > 0
+      ? `Identifiant: ${profile.agent_login_id}`
+      : profile?.matricule != null && String(profile.matricule).length > 0
+        ? `Matricule: ${profile.matricule}`
+        : profile?.id != null
+          ? `ID: ${profile.id.slice(0, 8)}…`
+          : '';
+
+  const statusLabel =
+    profile?.status === 'online'
+      ? 'En ligne'
+      : profile?.status === 'active'
+        ? 'Actif'
+        : profile?.status === 'busy'
+          ? 'Occupé'
+          : profile?.status === 'offline'
+            ? 'Hors ligne'
+            : profile?.status ?? '—';
 
   return (
     <TabScreenSafeArea style={styles.safeArea}>
@@ -29,16 +65,40 @@ export function HospitalProfileTab({ navigation }: any) {
             <MaterialIcons name="local-hospital" size={40} color={colors.secondary} />
           </View>
         </View>
-        <Text style={styles.hospitalName}>Hôpital Général de Kinshasa</Text>
-        <Text style={styles.hospitalId}>ID: HGK-001</Text>
+        {!profile ? (
+          <ActivityIndicator color={colors.secondary} style={{ marginVertical: 24 }} />
+        ) : (
+          <>
+        <Text style={styles.hospitalName}>{displayName}</Text>
+        {displayId ? <Text style={styles.hospitalId}>{displayId}</Text> : null}
 
         {/* Info cards */}
         <View style={styles.infoList}>
           {[
-            { icon: 'location-on' as const, label: 'Adresse', value: 'Ave de l\'Hôpital, Gombe, Kinshasa', color: colors.primary },
-            { icon: 'phone' as const, label: 'Téléphone', value: '+243 815 000 000', color: colors.success },
-            { icon: 'local-hotel' as const, label: 'Lits disponibles', value: '12 / 50', color: colors.secondary },
-            { icon: 'medical-services' as const, label: 'Service d\'urgence', value: 'Opérationnel', color: '#EF6C00' },
+            {
+              icon: 'location-on' as const,
+              label: 'Adresse',
+              value: profile.address?.trim() || 'Non renseignée',
+              color: colors.primary,
+            },
+            {
+              icon: 'phone' as const,
+              label: 'Téléphone',
+              value: profile.phone?.trim() || 'Non renseigné',
+              color: colors.success,
+            },
+            {
+              icon: 'map' as const,
+              label: 'Zone',
+              value: profile.zone?.trim() || '—',
+              color: colors.secondary,
+            },
+            {
+              icon: 'medical-services' as const,
+              label: 'Statut compte',
+              value: statusLabel,
+              color: '#EF6C00',
+            },
           ].map((item, i) => (
             <View key={i} style={styles.infoCard}>
               <View style={[styles.infoIcon, { backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
@@ -48,13 +108,15 @@ export function HospitalProfileTab({ navigation }: any) {
                 <Text style={styles.infoLabel}>{item.label}</Text>
                 <Text style={[
                   styles.infoValue,
-                  item.label === 'Service d\'urgence' && { color: colors.success },
+                  item.label === 'Statut compte' && profile?.status === 'online' && { color: colors.success },
                 ]}>{item.value}</Text>
               </View>
               <MaterialIcons name="chevron-right" color="rgba(255, 255, 255, 0.2)" size={20} />
             </View>
           ))}
         </View>
+          </>
+        )}
 
         <View style={styles.securityCard}>
           <MaterialIcons name="fingerprint" size={22} color={colors.secondary} />

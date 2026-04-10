@@ -14,6 +14,7 @@
 		3E461D99554A48A4959DE609 /* SplashScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */; };
 		8CDFF8964F8CE9CA3A6E1DC8 /* libPods-appsv2.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 62BCE87D68D49C40AFBD146C /* libPods-appsv2.a */; };
 		BB2F792D24A3F905000567C9 /* Expo.plist in Resources */ = {isa = PBXBuildFile; fileRef = BB2F792C24A3F905000567C9 /* Expo.plist */; };
+		BCCB77E197D747FE812DDF2A /* incoming_call_ring.wav in Resources */ = {isa = PBXBuildFile; fileRef = 5A522B0DEB85401F894C6F27 /* incoming_call_ring.wav */; };
 		F11748422D0307B40044C1D9 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11748412D0307B40044C1D9 /* AppDelegate.swift */; };
 		03F5C2D3E6804C4D8903D7B1 /* incoming_call_ring.wav in Resources */ = {isa = PBXBuildFile; fileRef = 20CE1F59DA1148C0BDFB6F39 /* incoming_call_ring.wav */; };
 /* End PBXBuildFile section */
@@ -30,7 +31,11 @@
 		AA286B85B6C04FC6940260E9 /* SplashScreen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; name = SplashScreen.storyboard; path = appsv2/SplashScreen.storyboard; sourceTree = "<group>"; };
 		BB00AE96E6E0C9D0F1E27FC3 /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-appsv2/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		BB2F792C24A3F905000567C9 /* Expo.plist */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.plist.xml; path = Expo.plist; sourceTree = "<group>"; };
+		CE880E9C19944CD103101A96 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; includeInIndex = 1; name = PrivacyInfo.xcprivacy; path = appsv2/PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		D15D79C94DEEC4787FDD7A61 /* libPods-appsv2.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-appsv2.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		EA53D924889D4B5CB7434A7E /* alarm_alert.wav */ = {isa = PBXFileReference; explicitFileType = undefined; fileEncoding = undefined; includeInIndex = 0; lastKnownFileType = unknown; name = alarm_alert.wav; path = appsv2/alarm_alert.wav; sourceTree = "<group>"; };
 		ED297162215061F000B7C4FE /* JavaScriptCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = JavaScriptCore.framework; path = System/Library/Frameworks/JavaScriptCore.framework; sourceTree = SDKROOT; };
+		F05FE9DF307968A51855C38D /* ExpoModulesProvider.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = ExpoModulesProvider.swift; path = "Pods/Target Support Files/Pods-appsv2/ExpoModulesProvider.swift"; sourceTree = "<group>"; };
 		F11748412D0307B40044C1D9 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = AppDelegate.swift; path = appsv2/AppDelegate.swift; sourceTree = "<group>"; };
 		F11748442D0722820044C1D9 /* appsv2-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = "appsv2-Bridging-Header.h"; path = "appsv2/appsv2-Bridging-Header.h"; sourceTree = "<group>"; };
 		20CE1F59DA1148C0BDFB6F39 /* incoming_call_ring.wav */ = {isa = PBXFileReference; name = "incoming_call_ring.wav"; path = "appsv2/incoming_call_ring.wav"; sourceTree = "<group>"; fileEncoding = undefined; lastKnownFileType = unknown; explicitFileType = undefined; includeInIndex = 0; };
@@ -434,7 +439,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_DEBUG";
 				PRODUCT_BUNDLE_IDENTIFIER = com.eburgentiste.app;
-				PRODUCT_NAME = "appsv2";
+				PRODUCT_NAME = appsv2;
 				SWIFT_OBJC_BRIDGING_HEADER = "appsv2/appsv2-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 				SWIFT_VERSION = 5.0;
@@ -465,7 +470,7 @@
 				);
 				OTHER_SWIFT_FLAGS = "$(inherited) -D EXPO_CONFIGURATION_RELEASE";
 				PRODUCT_BUNDLE_IDENTIFIER = com.eburgentiste.app;
-				PRODUCT_NAME = "appsv2";
+				PRODUCT_NAME = appsv2;
 				SWIFT_OBJC_BRIDGING_HEADER = "appsv2/appsv2-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

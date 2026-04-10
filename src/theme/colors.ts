@@ -10,8 +10,17 @@ export const colors = {
   text: '#FFFFFF',
   textMuted: 'rgba(255, 255, 255, 0.54)',
   success: '#69F0AE',
+  warning: '#FFC107',
+  error: '#FF5252',
+  
   /** Lignes fines type Swiss UI */
   borderHairline: 'rgba(255, 255, 255, 0.08)',
+  borderLight: 'rgba(255, 255, 255, 0.12)',
+  
+  /** Glassmorphism */
+  glassBackground: 'rgba(26, 26, 26, 0.85)',
+  glassBorder: 'rgba(255, 255, 255, 0.1)',
+  
   /** Carte : tracé principal / alternatif */
   routePrimary: '#5C9CE6',
   routeAlt: 'rgba(92, 156, 230, 0.35)',

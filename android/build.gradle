@@ -25,6 +25,16 @@ allprojects {
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
+
+// @generated begin notifee-repository - expo prebuild
+allprojects {
+  repositories {
+    maven {
+      url "$rootDir/../node_modules/@notifee/react-native/android/libs"
+    }
+  }
+}
+// @generated end notifee-repository
 // @generated begin @rnmapbox/maps-v2-maven - expo prebuild (DO NOT MODIFY) sync-d4ccbfdff48fdba3138b02a8ba41b9722af001d8
 
 allprojects {

@@ -12,16 +12,18 @@ import {
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
-import { MOCK_CASES, getLevelConfig, getStatusConfig } from './HospitalDashboardTab';
+import { useHospital } from '../../contexts/HospitalContext';
+import { getLevelConfig, getStatusConfig } from './HospitalDashboardTab';
 
 const { width } = Dimensions.get('window');
 
 export function HospitalAdmissionsListScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState('');
+  const { activeCases } = useHospital();
 
   // Filter only admitted cases (in route, triage, or actively being treated)
-  const admittedCases = MOCK_CASES.filter(c =>
-    ['admis', 'triage', 'prise_en_charge', 'en_cours'].includes(c.status) &&
+  const admittedCases = activeCases.filter(c =>
+    ['admis', 'triage', 'prise_en_charge', 'en_cours', 'monitoring'].includes(c.status) &&
     (c.victimName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       c.id.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -78,9 +80,10 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
                 key={item.id}
                 style={styles.alertCard}
                 onPress={() => {
-                  // Navigate to appropriate screen based on status
                   if (item.status === 'en_cours') {
                     navigation.navigate('HospitalCaseDetail', { caseData: item });
+                  } else if (item.status === 'monitoring') {
+                    navigation.navigate('HospitalMonitoring', { caseData: item });
                   } else if (item.status === 'admis' || item.status === 'triage') {
                     navigation.navigate('HospitalTriage', { caseData: item });
                   } else {

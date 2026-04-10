@@ -1,18 +1,22 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Platform,
-  Alert,
   StatusBar,
   Dimensions,
+  ActivityIndicator,
+  RefreshControl,
+  Platform,
 } from "react-native";
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
+import type { TransportModeCode } from "../../lib/transportMode";
+import { useAuth } from "../../contexts/AuthContext";
+import { useHospital } from "../../contexts/HospitalContext";
 
 const { width } = Dimensions.get("window");
 
@@ -23,7 +27,23 @@ export type CaseStatus =
   | "admis"
   | "triage"
   | "prise_en_charge"
+  | "monitoring"
   | "termine";
+
+/** Valeurs `hospital_data.monitoringStatus` (spec Lovable) */
+export type MonitoringPatientStatus = "amelioration" | "stable" | "degradation";
+
+/** Sortie patient — spec Lovable (`hospital_data.dischargeType`) */
+export type LovableDischargeType =
+  | "guerison"
+  | "transfert"
+  | "deces"
+  | "sortie_contre_avis";
+
+export type HospitalStatus = 
+  | "pending"
+  | "accepted"
+  | "refused";
 
 export interface EmergencyCase {
   id: string;
@@ -38,28 +58,105 @@ export interface EmergencyCase {
   status: CaseStatus;
   address: string;
   timestamp: string;
-  typeUrgence: string;
-  // Admission fields
+  typeUrgence: string; // Ex: Traumatisme, Cardiaque, Obstétrique
+  unitId?: string;
+  /** Valeur brute `dispatches.status` (ex. `en_route_hospital`) — utile pour l’UI et le debug */
+  dispatchStatus?: string;
+  /** `dispatches.completed_at` — tri / KPIs historique */
+  completedAt?: string;
+  /** `dispatches.created_at` ISO — durée de prise en charge */
+  dispatchCreatedAt?: string;
+  /** Coordonnées de la structure assignée (`dispatches.assigned_structure_*`) — destination carte / itinéraire */
+  assignedStructureLat?: number;
+  assignedStructureLng?: number;
+  /** `dispatches.assigned_structure_name` — libellé carte / UI */
+  assignedStructureName?: string;
+
+  /** `incidents.id` — FK pour rapports / historique */
+  incidentId?: string;
+  /** Référence métier (`incidents.reference`) */
+  incidentReference?: string;
+  /** Téléphone laissé au signalement (`incidents.caller_phone`) */
+  callerPhone?: string;
+  /** Contact GSM unité — renseigné si la colonne existe côté Supabase (sinon UI sans numéro unité) */
+  unitPhone?: string;
+  unitVehicleType?: string;
+  unitVehiclePlate?: string;
+  /** Agent principal renseigné sur l’unité (`units.agent_name`) */
+  unitAgentName?: string;
+
+  // Hospital Assignment fields
+  hospitalStatus?: HospitalStatus;
+  hospitalNotes?: string;
+  hospitalRespondedAt?: string;
+
+  // Patient Profile Extended details
+  patientProfile?: {
+    bloodType?: string;
+    allergies?: string[];
+    medicalHistory?: string[];
+    medications?: string[];
+    emergencyContactName?: string;
+    emergencyContactPhone?: string;
+    dateOfBirth?: string;
+  };
+
+  // SOS Questionnaire responses
+  sosResponses?: Array<{
+    questionText: string;
+    answer: string;
+    gravityScore: number;
+    gravityLevel: string;
+  }>;
+  gravityScore?: number;
+  
+  // Clinical data (hData)fields
   arrivalTime?: string;
-  arrivalMode?: "ambulance" | "transport_prive" | "";
+  /** Aligné sur les codes « mode de transport » urgentiste (`AMBULANCE` | `SMUR` | `MOTO` | `PERSONNEL`) */
+  arrivalMode?: TransportModeCode | "";
   arrivalState?: "stable" | "critique" | "inconscient" | "";
   admissionService?: "urgence_generale" | "trauma" | "pediatrie" | "";
   // Triage fields
   triageLevel?: "rouge" | "orange" | "jaune" | "vert" | "";
   vitals?: {
-    tension: string;
-    heartRate: string;
-    temperature: string;
-    satO2: string;
+    tension?: string;
+    heartRate?: string;
+    temperature?: string;
+    satO2?: string;
+    bloodPressure?: string;
+    spO2?: string;
+    respiratoryRate?: string;
+    glasgowScore?: string;
+    painScore?: string;
+    weight?: string;
   };
-  symptoms?: string;
+  /** Symptômes — chaîne ou liste (JSON `hospital_data`) */
+  symptoms?: string | string[];
   provisionalDiagnosis?: string;
-  // Prise en charge
+  triageNotes?: string;
+  triageRecordedAt?: string;
+  // Prise en charge (JSON `hospital_data` — tableaux persistés par `HospitalPriseEnChargeScreen`)
+  observations?: unknown[];
+  treatments?: unknown[];
+  exams?: unknown[];
+  timeline?: unknown[];
+  /** Résumés dashboard Lovable (`treatment` / `notes` dans `hospital_data`) */
+  pecTreatmentSummary?: string;
+  pecNotesSummary?: string;
+  /** Suivi monitoring (`hospital_data` — spec Lovable) */
+  monitoringStatus?: MonitoringPatientStatus;
+  monitoringNotes?: string;
+  transferTarget?: string | null;
   interventions?: Intervention[];
   // Closure
   outcome?: "hospitalise" | "sorti" | "decede" | string;
+  /** Spec Lovable — prioritaire sur `outcome` pour le dashboard */
+  dischargeType?: LovableDischargeType;
+  dischargedAt?: string;
   finalDiagnosis?: string;
   closureTime?: string;
+  reportSent?: boolean;
+  reportSentAt?: string;
 }
 
 export interface Intervention {
@@ -180,7 +277,7 @@ export const MOCK_CASES: EmergencyCase[] = [
     timestamp: "11:05",
     typeUrgence: "Inconscience",
     arrivalTime: "11:15",
-    arrivalMode: "ambulance",
+    arrivalMode: "AMBULANCE",
     vitals: { tension: "90/60", heartRate: "120", temperature: "36.2", satO2: "88" },
     interventions: [
       { id: "i5", type: "acte_medical", category: "Urgence", detail: "Intubation et Ventilation Assistée", time: "11:20", by: "Dr. Lelo" },
@@ -201,7 +298,7 @@ export const MOCK_CASES: EmergencyCase[] = [
     timestamp: "23:15",
     typeUrgence: "Brûlure",
     arrivalTime: "23:25",
-    arrivalMode: "ambulance",
+    arrivalMode: "AMBULANCE",
     arrivalState: "stable",
     admissionService: "trauma",
     interventions: [
@@ -238,7 +335,7 @@ export const MOCK_CASES: EmergencyCase[] = [
     timestamp: "11:30",
     typeUrgence: "Traumatisme",
     arrivalTime: "11:45",
-    arrivalMode: "ambulance",
+    arrivalMode: "AMBULANCE",
     interventions: [
       { id: "i6", type: "examen", category: "Imagerie", detail: "Scanner Corps Entier demandé", time: "11:55", by: "Dr. Zola" },
     ],
@@ -308,6 +405,13 @@ export const getStatusConfig = (status: CaseStatus) => {
         label: "Soin",
         icon: "medical-services" as const,
       };
+    case "monitoring":
+      return {
+        color: "#B388FF",
+        bg: "rgba(179, 136, 255, 0.15)",
+        label: "Suivi",
+        icon: "favorite" as const,
+      };
     case "termine":
       return {
         color: colors.textMuted,
@@ -319,20 +423,59 @@ export const getStatusConfig = (status: CaseStatus) => {
 };
 
 export function HospitalDashboardTab({ navigation }: any) {
+  const { profile } = useAuth();
+  const { activeCases, isLoading, listBlocker, lastFetchError, refresh } = useHospital();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useMemo(
+    () => async () => {
+      setRefreshing(true);
+      try {
+        await refresh();
+      } finally {
+        setRefreshing(false);
+      }
+    },
+    [refresh],
+  );
+
+  const { displayName, displayIdLine } = useMemo(() => {
+    const name =
+      profile?.first_name || profile?.last_name
+        ? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim()
+        : "";
+    const displayNameResolved = name.length > 0 ? name : "Structure sanitaire";
+    const displayIdLineResolved =
+      profile?.agent_login_id != null &&
+      String(profile.agent_login_id).length > 0
+        ? `Identifiant : ${profile.agent_login_id}`
+        : profile?.matricule != null && String(profile.matricule).length > 0
+          ? `Matricule : ${profile.matricule}`
+          : profile?.id != null
+            ? `ID : ${profile.id.slice(0, 8)}…`
+            : null;
+    return { displayName: displayNameResolved, displayIdLine: displayIdLineResolved };
+  }, [profile]);
+
   const [filter, setFilter] = useState<
     "all" | "en_attente" | "en_cours" | "termine"
   >("all");
 
-  const filteredCases = MOCK_CASES.filter((c) => {
-    if (filter === "all") return c.status !== "termine";
+  const isCaseClosed = (c: EmergencyCase) =>
+    c.status === "termine" ||
+    c.dispatchStatus === "completed" ||
+    c.dispatchStatus === "cancelled";
+
+  const filteredCases = activeCases.filter((c) => {
+    if (filter === "all") return !isCaseClosed(c);
     return c.status === filter;
   });
 
-  const criticalCount = MOCK_CASES.filter(
-    (c) => c.level === "critique" && c.status !== "termine",
+  const criticalCount = activeCases.filter(
+    (c) => c.level === "critique" && !isCaseClosed(c)
   ).length;
-  const activeCount = MOCK_CASES.filter((c) =>
-    ["en_cours", "triage", "prise_en_charge"].includes(c.status),
+  const activeCount = activeCases.filter((c) =>
+    ["en_cours", "triage", "prise_en_charge", "monitoring"].includes(c.status)
   ).length;
 
   return (
@@ -341,9 +484,55 @@ export function HospitalDashboardTab({ navigation }: any) {
 
       <View style={styles.topHeader}>
         <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.greetingText}>Centre Hospitalier</Text>
-            <Text style={styles.hospitalName}>H. Central Kinshasa</Text>
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.greetingText}>Centre hospitalier</Text>
+            {!profile ? (
+              <ActivityIndicator
+                color={colors.secondary}
+                style={{ marginTop: 14, alignSelf: "flex-start" }}
+              />
+            ) : (
+              <>
+                <Text style={styles.hospitalName} numberOfLines={2}>
+                  {displayName}
+                </Text>
+                {displayIdLine ? (
+                  <Text style={styles.headerIdLine}>{displayIdLine}</Text>
+                ) : null}
+                {profile.address?.trim() ? (
+                  <View style={styles.headerMetaRow}>
+                    <MaterialIcons
+                      name="location-on"
+                      size={15}
+                      color={colors.secondary}
+                    />
+                    <Text style={styles.headerMetaText} numberOfLines={2}>
+                      {profile.address.trim()}
+                    </Text>
+                  </View>
+                ) : null}
+                {profile.phone?.trim() ? (
+                  <View style={styles.headerMetaRow}>
+                    <MaterialIcons
+                      name="phone"
+                      size={15}
+                      color={colors.success}
+                    />
+                    <Text style={styles.headerMetaText} numberOfLines={1}>
+                      {profile.phone.trim()}
+                    </Text>
+                  </View>
+                ) : null}
+                {profile.zone?.trim() ? (
+                  <View style={styles.headerMetaRow}>
+                    <MaterialIcons name="map" size={15} color="#90CAF9" />
+                    <Text style={styles.headerMetaText} numberOfLines={1}>
+                      {profile.zone.trim()}
+                    </Text>
+                  </View>
+                ) : null}
+              </>
+            )}
           </View>
           <TouchableOpacity style={styles.notifBtn}>
             <MaterialCommunityIcons name="bell-badge-outline" color="#FFF" size={26} />
@@ -371,7 +560,41 @@ export function HospitalDashboardTab({ navigation }: any) {
         </View>
       </View>
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 24 }}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.secondary}
+          />
+        }
+      >
+        {listBlocker === "no_structure_link" && profile?.role === "hopital" ? (
+          <View style={styles.configBanner}>
+            <MaterialIcons name="link-off" size={22} color="#FFB74D" />
+            <Text style={styles.configBannerText}>
+              Aucune structure n’est liée à votre compte. Vérifiez en base que la ligne{" "}
+              <Text style={styles.configBannerMono}>health_structures</Text> a{" "}
+              <Text style={styles.configBannerMono}>linked_user_id</Text> égal à votre{" "}
+              <Text style={styles.configBannerMono}>users_directory.id</Text> (ou à votre{" "}
+              <Text style={styles.configBannerMono}>auth_user_id</Text> selon votre schéma). La centrale doit
+              renseigner <Text style={styles.configBannerMono}>dispatches.assigned_structure_id</Text> avec le{" "}
+              <Text style={styles.configBannerMono}>id</Text> de cette même structure.
+            </Text>
+          </View>
+        ) : null}
+        {listBlocker === "supabase_error" && lastFetchError ? (
+          <View style={[styles.configBanner, { borderColor: "rgba(255,82,82,0.4)" }]}>
+            <MaterialIcons name="error-outline" size={22} color="#FF5252" />
+            <Text style={styles.configBannerText}>
+              Impossible de charger les dispatches ({lastFetchError}). Vérifiez les droits RLS (rôle hopital) et la
+              connexion.
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Alertes récentes</Text>
           <View style={styles.filterOptions}>
@@ -380,29 +603,44 @@ export function HospitalDashboardTab({ navigation }: any) {
           </View>
         </View>
 
-        {filteredCases.map((caseItem) => {
-          const lCfg = getLevelConfig(caseItem.level);
-          const sCfg = getStatusConfig(caseItem.status);
-          return (
-            <TouchableOpacity key={caseItem.id} style={styles.alertCard} onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })} activeOpacity={0.9}>
-              <View style={styles.cardInfo}>
-                <View style={styles.cardHeaderRow}>
-                  <View style={styles.timePill}><MaterialCommunityIcons name="clock-outline" color="rgba(255,255,255,0.4)" size={14} /><Text style={styles.timeText}>{caseItem.timestamp}</Text></View>
-                  <View style={[styles.levelTag, { borderColor: lCfg.color }]}><Text style={[styles.levelLabelText, { color: lCfg.color }]}>{lCfg.label}</Text></View>
+        {isLoading ? (
+          <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
+        ) : filteredCases.length === 0 ? (
+          <View style={{ alignItems: "center", marginTop: 40, paddingHorizontal: 24 }}>
+            <MaterialIcons name="inbox" size={48} color="rgba(255,255,255,0.2)" />
+            <Text style={{ color: "rgba(255,255,255,0.4)", marginTop: 16, textAlign: "center" }}>
+              {listBlocker === "no_structure_link"
+                ? "Corrigez la liaison structure ci-dessus pour voir les alertes."
+                : listBlocker === "supabase_error"
+                  ? "Erreur de chargement."
+                  : "Aucune alerte assignée à votre structure pour l’instant. Vérifiez que la centrale a bien renseigné assigned_structure_id sur le dispatch."}
+            </Text>
+          </View>
+        ) : (
+          filteredCases.map((caseItem) => {
+            const lCfg = getLevelConfig(caseItem.level);
+            const sCfg = getStatusConfig(caseItem.status);
+            return (
+              <TouchableOpacity key={caseItem.id} style={styles.alertCard} onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })} activeOpacity={0.9}>
+                <View style={styles.cardInfo}>
+                  <View style={styles.cardHeaderRow}>
+                    <View style={styles.timePill}><MaterialCommunityIcons name="clock-outline" color="rgba(255,255,255,0.4)" size={14} /><Text style={styles.timeText}>{caseItem.timestamp}</Text></View>
+                    <View style={[styles.levelTag, { borderColor: lCfg?.color }]}><Text style={[styles.levelLabelText, { color: lCfg?.color }]}>{lCfg?.label}</Text></View>
+                  </View>
+                  <Text style={styles.victimName}>{caseItem.victimName}</Text>
+                  <Text style={styles.urgencyType}>{caseItem.typeUrgence?.toUpperCase()}</Text>
+                  <View style={styles.locationInfo}><MaterialIcons name="location-on" color={colors.secondary} size={16} /><Text style={styles.addressText} numberOfLines={1}>{caseItem.address}</Text></View>
+                  <View style={styles.cardDivider} />
+                  <View style={styles.cardFooterRow}>
+                    {sCfg && <View style={[styles.statusBadge, { backgroundColor: sCfg.bg }]}><MaterialIcons name={sCfg.icon} color={sCfg.color} size={14} /><Text style={[styles.statusBadgeText, { color: sCfg.color }]}>{sCfg.label}</Text></View>}
+                    <View style={styles.etaContainer}><Text style={styles.etaLabel}>Arrivée : </Text><Text style={styles.etaValue}>{caseItem.eta}</Text></View>
+                  </View>
                 </View>
-                <Text style={styles.victimName}>{caseItem.victimName}</Text>
-                <Text style={styles.urgencyType}>{caseItem.typeUrgence.toUpperCase()}</Text>
-                <View style={styles.locationInfo}><MaterialIcons name="location-on" color={colors.secondary} size={16} /><Text style={styles.addressText} numberOfLines={1}>{caseItem.address}</Text></View>
-                <View style={styles.cardDivider} />
-                <View style={styles.cardFooterRow}>
-                  <View style={[styles.statusBadge, { backgroundColor: sCfg.bg }]}><MaterialIcons name={sCfg.icon} color={sCfg.color} size={14} /><Text style={[styles.statusBadgeText, { color: sCfg.color }]}>{sCfg.label}</Text></View>
-                  <View style={styles.etaContainer}><Text style={styles.etaLabel}>Arrivée : </Text><Text style={styles.etaValue}>{caseItem.eta}</Text></View>
-                </View>
-              </View>
-              <View style={styles.arrowContainer}><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={24} /></View>
-            </TouchableOpacity>
-          );
-        })}
+                <View style={styles.arrowContainer}><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={24} /></View>
+              </TouchableOpacity>
+            );
+          })
+        )}
       </ScrollView>
     </TabScreenSafeArea>
   );
@@ -411,9 +649,30 @@ export function HospitalDashboardTab({ navigation }: any) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.mainBackground },
   topHeader: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24, borderBottomLeftRadius: 36, borderBottomRightRadius: 36, backgroundColor: "#0A0A0A" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 24 },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
+  headerTextBlock: { flex: 1, paddingRight: 12 },
   greetingText: { color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: "800", letterSpacing: 0.5 },
   hospitalName: { color: "#FFF", fontSize: 24, fontWeight: "700", marginTop: 4 },
+  headerIdLine: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 12,
+    fontWeight: "600",
+    marginTop: 6,
+  },
+  headerMetaRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginTop: 8,
+    maxWidth: "100%",
+  },
+  headerMetaText: {
+    flex: 1,
+    color: "rgba(255,255,255,0.75)",
+    fontSize: 13,
+    fontWeight: "600",
+    lineHeight: 18,
+  },
   notifBtn: { width: 50, height: 50, borderRadius: 18, backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   notifBadge: { position: "absolute", top: 14, right: 14, width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF5252", borderWidth: 2, borderColor: "#1A1A1A" },
   summaryContainer: { flexDirection: "row", gap: 12 },
@@ -423,6 +682,31 @@ const styles = StyleSheet.create({
   summaryNumber: { color: "#FFF", fontSize: 36, fontWeight: "900" },
   cardGlow: { position: "absolute", right: -20, bottom: -20, width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.15)" },
   scrollView: { flex: 1 },
+  configBanner: {
+    marginHorizontal: 20,
+    marginTop: 12,
+    marginBottom: 4,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: "rgba(255, 183, 77, 0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 183, 77, 0.25)",
+    flexDirection: "row",
+    gap: 12,
+    alignItems: "flex-start",
+  },
+  configBannerText: {
+    flex: 1,
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "600",
+  },
+  configBannerMono: {
+    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    color: "#FFB74D",
+    fontWeight: "700",
+  },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, marginVertical: 20 },
   sectionTitle: { color: "#FFF", fontSize: 18, fontWeight: "600" },
   filterOptions: { flexDirection: "row", gap: 16 },

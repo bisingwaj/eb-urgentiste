@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
+import type { EmergencyCase } from "./HospitalDashboardTab";
 
 const { width, height } = Dimensions.get("window");
 
@@ -53,8 +54,11 @@ interface Treatment {
 type TabType = "PC" | "EXAMENS" | "TIMELINE";
 type ModalType = "note" | "exam_add" | "exam_edit" | "treatment_add";
 
+import { useHospital } from '../../contexts/HospitalContext';
+
 export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
-  const { caseData } = route.params;
+  const { caseData } = route.params as { caseData: EmergencyCase };
+  const { updateCaseStatus } = useHospital();
   const insets = useSafeAreaInsets();
   const scrollRef = useRef<ScrollView>(null);
 
@@ -68,29 +72,21 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
   const [noteStatus, setNoteStatus] = useState<"Amélioration" | "Stable" | "Aggravation">("Stable");
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
 
-  const [observations, setObservations] = useState<Observation[]>([
-    { id: "1", time: "11:20", text: "Reprise d'une conscience partielle, répond aux ordres simples.", status: "Amélioration" },
-    { id: "2", time: "11:05", text: "Paramètres stables sous monitoring.", status: "Stable" },
-    { id: "3", time: "10:50", text: "Détresse respiratoire augmentée, tirage sus-sternal.", status: "Aggravation" },
-  ]);
+  const [observations, setObservations] = useState<Observation[]>(() =>
+    Array.isArray(caseData.observations) ? (caseData.observations as Observation[]) : [],
+  );
 
-  const [treatments, setTreatments] = useState<Treatment[]>([
-    { id: "t1", name: "Morphine 5mg IVD", time: "11:05", user: "Dr. Kabamba" },
-    { id: "t2", name: "NaCl 0.9% 500ml", time: "10:50", user: "Inf. Sarah" },
-  ]);
+  const [treatments, setTreatments] = useState<Treatment[]>(() =>
+    Array.isArray(caseData.treatments) ? (caseData.treatments as Treatment[]) : [],
+  );
 
-  const [exams, setExams] = useState<Exam[]>([
-    { id: "e1", label: "NFS, Iono, Glycémie", status: "Fait", result: "Hb: 12.4, Gluc: 1.1g/l", time: "10:45" },
-    { id: "e2", label: "Scanner Cérébral sans injection", status: "En cours", time: "11:05" },
-    { id: "e3", label: "ECG 12 dérivations", status: "Fait", result: "Tachycardie Sinusale", time: "10:55" },
-  ]);
+  const [exams, setExams] = useState<Exam[]>(() =>
+    Array.isArray(caseData.exams) ? (caseData.exams as Exam[]) : [],
+  );
 
-  const [timeline, setTimeline] = useState<TimelineEntry[]>([
-    { id: "4", time: "11:15", action: "Ringer Lactate 500ml IV", user: "Inf. Sarah", type: "medication" },
-    { id: "3", time: "11:05", action: "Scanner Cérébral demandé", user: "Dr. Kabamba", type: "test" },
-    { id: "2", time: "10:55", action: "VVP 18G posée", user: "Inf. Sarah", type: "action" },
-    { id: "1", time: "10:45", action: "Triage Complété - Niveau 1", user: "Dr. Lelo", type: "status" },
-  ]);
+  const [timeline, setTimeline] = useState<TimelineEntry[]>(() =>
+    Array.isArray(caseData.timeline) ? (caseData.timeline as TimelineEntry[]) : [],
+  );
 
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -109,35 +105,108 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
     return `${min}:${sec < 10 ? "0" : ""}${sec}`;
   };
 
+  const syncDataToDB = async (newData: any) => {
+    try {
+      setIsSyncing(true);
+      const mergedObs = Array.isArray(newData.observations) ? newData.observations : observations;
+      const mergedTreatments = Array.isArray(newData.treatments) ? newData.treatments : treatments;
+      const treatmentSummary = mergedTreatments.map((t: Treatment) => t.name).filter(Boolean).join(' · ');
+      const notesSummary = (mergedObs[0] as Observation | undefined)?.text?.trim() ?? '';
+      await updateCaseStatus(caseData.id, {
+        status: 'prise_en_charge',
+        data: {
+          ...newData,
+          ...(treatmentSummary ? { treatment: treatmentSummary.slice(0, 4000) } : {}),
+          ...(notesSummary ? { notes: notesSummary.slice(0, 4000) } : {}),
+        },
+      });
+    } catch (err) {
+      console.error('Erreur synchronisation', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const addTimelineEntry = (action: string, type: TimelineEntry["type"], isTreatment = false) => {
     const now = new Date();
     const timeStr = `${now.getHours()}:${now.getMinutes() < 10 ? "0" : ""}${now.getMinutes()}`;
-    setTimeline([{ id: Math.random().toString(), time: timeStr, action, user: "Dr. Kabamba", type, isTreatment }, ...timeline]);
-    setIsSyncing(true);
-    setTimeout(() => setIsSyncing(false), 600);
+    const newEntry = { id: Math.random().toString(), time: timeStr, action, user: "Dr. Kabamba", type, isTreatment };
+    const newTimeline = [newEntry, ...timeline];
+    setTimeline(newTimeline);
+    syncDataToDB({ timeline: newTimeline });
   };
 
   const handleSave = () => {
     if (!newText.trim() && modalType !== "exam_edit") return;
     const now = new Date();
     const timeStr = `${now.getHours()}:${now.getMinutes() < 10 ? "0" : ""}${now.getMinutes()}`;
+    const updatePayload: Record<string, unknown> = {};
 
     if (modalType === "note") {
       const newObs: Observation = { id: Math.random().toString(), time: timeStr, text: newText, status: noteStatus };
-      setObservations([newObs, ...observations]);
-      addTimelineEntry(`Note: ${noteStatus}`, "status");
+      const updatedObs = [newObs, ...observations];
+      setObservations(updatedObs);
+      updatePayload.observations = updatedObs;
+      const entry: TimelineEntry = {
+        id: Math.random().toString(),
+        time: timeStr,
+        action: `Note: ${noteStatus}`,
+        user: "Dr. Kabamba",
+        type: "status",
+      };
+      const newTimeline = [entry, ...timeline];
+      setTimeline(newTimeline);
+      updatePayload.timeline = newTimeline;
     } else if (modalType === "exam_add") {
       const newE: Exam = { id: Math.random().toString(), label: newText, status: examStatus, time: timeStr };
-      setExams([newE, ...exams]);
-      addTimelineEntry(`Exam demandé: ${newText}`, "test");
+      const updatedExams = [newE, ...exams];
+      setExams(updatedExams);
+      updatePayload.exams = updatedExams;
+      const entry: TimelineEntry = {
+        id: Math.random().toString(),
+        time: timeStr,
+        action: `Exam demandé: ${newText}`,
+        user: "Dr. Kabamba",
+        type: "test",
+      };
+      const newTimeline = [entry, ...timeline];
+      setTimeline(newTimeline);
+      updatePayload.timeline = newTimeline;
     } else if (modalType === "exam_edit" && selectedExam) {
-      setExams(exams.map(e => e.id === selectedExam.id ? { ...e, status: examStatus, result: newText || e.result } : e));
-      addTimelineEntry(`Exam mis à jour: ${selectedExam.label}`, "test");
+      const updatedExams = exams.map((e) =>
+        e.id === selectedExam.id ? { ...e, status: examStatus, result: newText || e.result } : e,
+      );
+      setExams(updatedExams);
+      updatePayload.exams = updatedExams;
+      const entry: TimelineEntry = {
+        id: Math.random().toString(),
+        time: timeStr,
+        action: `Exam mis à jour: ${selectedExam.label}`,
+        user: "Dr. Kabamba",
+        type: "test",
+      };
+      const newTimeline = [entry, ...timeline];
+      setTimeline(newTimeline);
+      updatePayload.timeline = newTimeline;
     } else if (modalType === "treatment_add") {
       const newT: Treatment = { id: Math.random().toString(), name: newText, time: timeStr, user: "Dr. Kabamba" };
-      setTreatments([newT, ...treatments]);
-      addTimelineEntry(`Traitement: ${newText}`, "medication", true);
+      const updatedT = [newT, ...treatments];
+      setTreatments(updatedT);
+      updatePayload.treatments = updatedT;
+      const entry: TimelineEntry = {
+        id: Math.random().toString(),
+        time: timeStr,
+        action: `Traitement: ${newText}`,
+        user: "Dr. Kabamba",
+        type: "medication",
+        isTreatment: true,
+      };
+      const newTimeline = [entry, ...timeline];
+      setTimeline(newTimeline);
+      updatePayload.timeline = newTimeline;
     }
+
+    void syncDataToDB(updatePayload);
 
     setNewText("");
     setModalType(null);
@@ -198,7 +267,10 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={[styles.scrollContent, { paddingBottom: Math.max(insets.bottom, 16) + 24 }]}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 88 },
+        ]}
       >
         {activeTab === "PC" && (
           <View style={styles.tabContent}>
@@ -295,6 +367,18 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
         )}
       </ScrollView>
 
+      <View style={[styles.pecBottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <TouchableOpacity
+          style={styles.pecNextBtn}
+          onPress={() => navigation.navigate('HospitalMonitoring', { caseData })}
+          activeOpacity={0.9}
+        >
+          <MaterialCommunityIcons name="heart-pulse" color="#000" size={22} />
+          <Text style={styles.pecNextBtnText}>Passer au monitoring patient</Text>
+          <MaterialIcons name="chevron-right" color="#000" size={24} />
+        </TouchableOpacity>
+      </View>
+
       {/* 📝 MODAL */}
       <Modal visible={modalType !== null} animationType="slide" transparent={true} onRequestClose={() => setModalType(null)}>
         <View style={styles.modalOverlay}>
@@ -387,6 +471,27 @@ const getCol = (type: string) => type === "action" ? colors.secondary : type ===
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.mainBackground },
+  pecBottomBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    backgroundColor: colors.mainBackground,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  pecNextBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 28,
+    backgroundColor: colors.secondary,
+  },
+  pecNextBtnText: { color: '#000', fontWeight: '900', fontSize: 15, textAlign: 'center', paddingHorizontal: 8 },
   header: { backgroundColor: "#000", paddingHorizontal: 20, paddingBottom: 16 },
   headerRow: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
   closeBtn: { width: 32, height: 32, justifyContent: "center" },

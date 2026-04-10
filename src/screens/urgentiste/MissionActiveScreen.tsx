@@ -296,33 +296,38 @@ export function MissionActiveScreen({ navigation }: any) {
             )}
           </MapboxMapView>
 
-          {/* HUD Overlay — sous les boutons flottants */}
-          <View style={[styles.hudOverlay, { top: insets.top + 56 }]}>
+          {/* HUD Overlay — high-tech floating panel */}
+          <View style={[styles.hudOverlay, { top: insets.top + 64 }]}>
             <View style={styles.hudLeft}>
-               <Text style={styles.victimLabel}>{activeMission.caller?.name !== 'Anonyme' ? 'VICTIME IDENTIFIÉE' : 'VICTIME ANONYME'}</Text>
+               <View style={styles.hudStatusBadge}>
+                 <View style={[styles.priorityDot, { backgroundColor: priority.color }]} />
+                 <Text style={[styles.hudStatusText, { color: priority.color }]}>{priority.label}</Text>
+               </View>
                <Text style={styles.victimName}>{activeMission.caller?.name || 'Inconnu'}</Text>
-               {canCallVictim &&
-                 activeMission.caller?.phone &&
-                 activeMission.caller.phone !== '-' && (
-                 <TouchableOpacity onPress={callVictim} style={styles.phoneChip}>
-                   <MaterialIcons name="phone" color="#30D158" size={12} />
-                   <Text style={styles.phoneText}>{activeMission.caller.phone}</Text>
-                 </TouchableOpacity>
-               )}
+               <Text style={styles.victimLabel}>{activeMission.caller?.name !== 'Anonyme' ? 'VICTIME IDENTIFIÉE' : 'VICTIME ANONYME'}</Text>
             </View>
-            <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-               <Text style={styles.hudDistanceText}>{distance || '—'}</Text>
-               <Text style={styles.hudDistanceLabel}>{eta ? `KM • ${eta}` : 'KM'}</Text>
+            <View style={styles.hudRight}>
+               <View style={styles.distanceContainer}>
+                 <Text style={styles.hudDistanceText}>{distance || '—'}</Text>
+                 <Text style={styles.hudDistanceLabel}>KM</Text>
+               </View>
+               {eta && (
+                 <View style={styles.etaBadge}>
+                   <MaterialIcons name="access-time" color={colors.secondary} size={10} />
+                   <Text style={styles.etaText}>{eta}</Text>
+                 </View>
+               )}
             </View>
           </View>
         </View>
 
         {/* BOTTOM PANEL */}
         <View style={styles.bottomControls}>
+          <View style={styles.dragHandle} />
           <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 12 }}
+            contentContainerStyle={{ paddingBottom: 30 }}
           >
           {/* Status Progress */}
           <View style={styles.statusProgress}>
@@ -345,25 +350,33 @@ export function MissionActiveScreen({ navigation }: any) {
             ))}
           </View>
 
-          {/* Location info */}
-          <View style={styles.locationInfo}>
-            <MaterialIcons name="place" size={16} color="rgba(255,255,255,0.4)" style={{ marginTop: 2 }} />
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.siteAffectationLabel}>Site d'affectation</Text>
-              <Text style={styles.locationText} numberOfLines={4}>
-                {siteAddress || 'Adresse non disponible'}
-              </Text>
+          {/* Description Section (Always visible but compact) */}
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+               <MaterialIcons name="info-outline" size={14} color={colors.textMuted} />
+               <Text style={styles.sectionTitle}>MOTIF ET DÉTAILS</Text>
             </View>
-          </View>
-
-          {/* Description */}
-          {activeMission.description && (
             <View style={styles.descriptionBox}>
-              {formatDescriptionLines(activeMission.description).map((line, i) => (
+              <Text style={styles.missionTitle}>{activeMission.title}</Text>
+              {activeMission.description && formatDescriptionLines(activeMission.description).map((line, i) => (
                 <Text key={i} style={styles.descriptionText}>{"\u2022  "}{line}</Text>
               ))}
             </View>
-          )}
+          </View>
+
+          {/* Location Section */}
+          <View style={styles.sectionContainer}>
+            <View style={styles.sectionHeader}>
+               <MaterialIcons name="place" size={14} color={colors.textMuted} />
+               <Text style={styles.sectionTitle}>SITE D'INTERVENTION</Text>
+            </View>
+            <View style={styles.locationCard}>
+              <Text style={styles.locationText}>{siteAddress || 'Adresse non disponible'}</Text>
+              <TouchableOpacity style={styles.gpsSmallBtn} onPress={openNavigation}>
+                <MaterialIcons name="navigation" color={colors.secondary} size={20} />
+              </TouchableOpacity>
+            </View>
+          </View>
 
           {/* Journal */}
           {notes.length > 0 && (
@@ -394,29 +407,42 @@ export function MissionActiveScreen({ navigation }: any) {
             </TouchableOpacity>
           </View>
 
-          {/* Action Buttons */}
-          <View style={styles.actionGrid}>
-            {canCallVictim && (
-            <TouchableOpacity style={styles.roundActionBtn} onPress={callVictim}>
-               <MaterialIcons name="phone" color="#30D158" size={24} />
-               <Text style={styles.actionLabel}>Appeler</Text>
-            </TouchableOpacity>
-            )}
-
-            <TouchableOpacity style={styles.roundActionBtn} onPress={openNavigation}>
-               <MaterialIcons name="navigation" color={colors.secondary} size={24} />
-               <Text style={styles.actionLabel}>GPS</Text>
-            </TouchableOpacity>
+          {/* Contextual Actions Bar */}
+          <View style={styles.unifiedActionBar}>
+            <View style={styles.auxActions}>
+              {canCallVictim && (
+                <TouchableOpacity style={styles.auxBtn} onPress={callVictim}>
+                  <MaterialIcons name="phone" color={colors.success} size={22} />
+                </TouchableOpacity>
+              )}
+              {activeMission.citizen_id && canCallVictim && (
+                <TouchableOpacity style={styles.auxBtn} onPress={callVictimVoip} disabled={voipLoading}>
+                  {voipLoading ? (
+                    <ActivityIndicator size="small" color={colors.secondary} />
+                  ) : (
+                    <MaterialIcons name="phone-in-talk" color={colors.secondary} size={22} />
+                  )}
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.auxBtn} onPress={openNavigation}>
+                <MaterialIcons name="navigation" color="#FFF" size={22} />
+              </TouchableOpacity>
+            </View>
 
             {activeMission.dispatch_status !== 'completed' && (
               <TouchableOpacity
-                style={[styles.mainActionBtn, isUpdating && { opacity: 0.5 }]}
+                style={[styles.primaryActionBtn, isUpdating && { opacity: 0.6 }]}
                 onPress={handleNextStatus}
                 disabled={isUpdating}
               >
-                <Text style={styles.mainActionText}>
-                  {nextStatusLabel[activeMission.dispatch_status] || '✅  TERMINÉ'}
-                </Text>
+                {isUpdating ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.primaryActionText}>
+                    {nextStatusLabel[activeMission.dispatch_status] || 'TERMINER'}
+                  </Text>
+                )}
+                <MaterialIcons name="chevron-right" size={24} color="#FFF" />
               </TouchableOpacity>
             )}
           </View>
@@ -452,135 +478,139 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.mainBackground },
   floatingBack: {
     position: 'absolute',
-    left: 12,
-    zIndex: 20,
+    left: 16,
+    zIndex: 30,
     width: 44,
     height: 44,
     borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(10,10,10,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    borderColor: colors.glassBorder,
   },
   floatingPriorityChip: {
     position: 'absolute',
-    right: 12,
-    zIndex: 20,
+    right: 16,
+    zIndex: 30,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 12,
-    gap: 6,
-    maxWidth: '62%',
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    gap: 8,
+    backgroundColor: 'rgba(10,10,10,0.8)',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.glassBorder,
   },
-  priorityDot: { width: 6, height: 6, borderRadius: 3 },
-  priorityChipText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5, flexShrink: 1 },
+  priorityDot: { width: 8, height: 8, borderRadius: 4 },
+  priorityChipText: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
 
-  mapContainer: { flex: 1, minHeight: 200 },
+  mapContainer: { flex: 1, minHeight: 250 },
   map: { width: '100%', height: '100%' },
   myMarker: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(21,100,191,0.25)',
+    backgroundColor: 'rgba(68,138,255,0.2)',
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2, borderColor: '#1564bf',
+    borderWidth: 2, borderColor: colors.secondary,
   },
   myMarkerDot: {
-    width: 14, height: 14, borderRadius: 7, backgroundColor: '#1564bf',
+    width: 12, height: 12, borderRadius: 6, backgroundColor: colors.secondary,
   },
   incidentMarker: {
     width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(255,59,48,0.25)',
+    backgroundColor: 'rgba(255,82,82,0.2)',
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2, borderColor: '#FF3B30',
+    borderWidth: 2, borderColor: colors.primary,
   },
   incidentMarkerDot: {
-    width: 14, height: 14, borderRadius: 7, backgroundColor: '#FF3B30',
+    width: 12, height: 12, borderRadius: 6, backgroundColor: colors.primary,
   },
 
   hudOverlay: { 
     position: 'absolute', left: 16, right: 16, 
-    backgroundColor: 'rgba(10,10,10,0.92)', padding: 18, borderRadius: 24,
-    flexDirection: 'row', justifyContent: 'space-between',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: colors.glassBackground, padding: 16, borderRadius: 24,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    borderWidth: 1, borderColor: colors.glassBorder,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 15,
+    zIndex: 20,
   },
   hudLeft: { flex: 1 },
-  victimLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '800', letterSpacing: 1.5, marginBottom: 4 },
-  victimName: { color: '#FFF', fontWeight: '900', fontSize: 17 },
-  phoneChip: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8 },
-  phoneText: { color: '#30D158', fontSize: 12, fontWeight: '700' },
-  hudDistanceText: { color: colors.secondary, fontSize: 30, fontWeight: '900' },
-  hudDistanceLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: '800', marginTop: 2 },
+  hudStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  hudStatusText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  victimName: { color: '#FFF', fontWeight: '900', fontSize: 20, marginBottom: 2 },
+  victimLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  
+  hudRight: { alignItems: 'flex-end' },
+  distanceContainer: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
+  hudDistanceText: { color: colors.secondary, fontSize: 28, fontWeight: '900' },
+  hudDistanceLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '800' },
+  etaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.secondary + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginTop: 4 },
+  etaText: { color: colors.secondary, fontSize: 11, fontWeight: '800' },
 
   bottomControls: { 
     flexShrink: 0,
-    maxHeight: '52%',
-    backgroundColor: '#0F0F0F', 
-    borderTopLeftRadius: 32, borderTopRightRadius: 32,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)',
-    paddingTop: 16, paddingHorizontal: 16,
+    maxHeight: '48%',
+    backgroundColor: '#0D0D0D', 
+    borderTopLeftRadius: 36, borderTopRightRadius: 36,
+    borderWidth: 1, borderColor: colors.glassBorder,
+    paddingHorizontal: 20,
   },
+  dragHandle: { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 16 },
 
   // Status progress
-  statusProgress: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
+  statusProgress: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingHorizontal: 10 },
   stepItem: { alignItems: 'center', flex: 1, position: 'relative' },
-  stepDot: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
-  stepLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
-  stepLine: { position: 'absolute', top: 14, left: '60%', right: '-40%', height: 2 },
+  stepDot: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 6, zIndex: 2 },
+  stepLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.2, textTransform: 'uppercase' },
+  stepLine: { position: 'absolute', top: 12, left: '50%', right: '-50%', height: 2, zIndex: 1 },
 
-  locationInfo: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: 12, paddingHorizontal: 4 },
-  siteAffectationLabel: {
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 4,
-    textTransform: 'uppercase',
+  sectionContainer: { marginBottom: 20 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  sectionTitle: { color: colors.textMuted, fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
+  
+  descriptionBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.borderHairline },
+  missionTitle: { color: '#FFF', fontSize: 17, fontWeight: '900', marginBottom: 10 },
+  descriptionText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '500', lineHeight: 20, marginBottom: 4 },
+
+  locationCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.borderHairline },
+  locationText: { flex: 1, color: '#FFF', fontSize: 14, fontWeight: '700', lineHeight: 20 },
+  gpsSmallBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.secondary + '15', justifyContent: 'center', alignItems: 'center' },
+
+  unifiedActionBar: { 
+    flexDirection: 'row', gap: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.borderHairline, paddingTop: 20,
   },
-  locationText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '600', lineHeight: 18 },
+  auxActions: { flexDirection: 'row', gap: 8 },
+  auxBtn: { width: 52, height: 52, borderRadius: 18, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.borderHairline },
+  primaryActionBtn: {
+    flex: 1, height: 56, borderRadius: 18, backgroundColor: colors.secondary,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20,
+    shadowColor: colors.secondary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10,
+  },
+  primaryActionText: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
 
-  descriptionBox: { backgroundColor: '#1A1A1A', borderRadius: 16, padding: 14, marginBottom: 12 },
-  descriptionText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '500', lineHeight: 19 },
+  inputBox: { flexDirection: 'row', gap: 8, marginTop: 10 },
+  textInput: { flex: 1, backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, height: 44, color: '#FFF', fontSize: 13, fontWeight: '600', borderWidth: 1, borderColor: colors.borderHairline },
+  sendBtn: { width: 44, height: 44, borderRadius: 16, backgroundColor: colors.surfaceElevated, justifyContent: 'center', alignItems: 'center' },
 
-  journalContainer: { backgroundColor: '#1A1A1A', borderRadius: 16, padding: 14, marginBottom: 12 },
-  journalHeader: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
-  noteItem: { flexDirection: 'row', gap: 10, marginBottom: 6 },
-  noteTime: { color: 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: '700', width: 42 },
-  noteBody: { color: 'rgba(255,255,255,0.7)', fontSize: 13, fontWeight: '500', flex: 1 },
+  journalContainer: { marginBottom: 16 },
+  journalHeader: { color: colors.textMuted, fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
+  noteItem: { marginBottom: 8 },
+  noteTime: { color: colors.secondary, fontSize: 11, fontWeight: '800' },
+  noteBody: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 2 },
 
-  inputBox: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  textInput: { flex: 1, backgroundColor: '#1A1A1A', borderRadius: 16, paddingHorizontal: 16, height: 44, color: '#FFF', fontSize: 13, fontWeight: '600' },
-  sendBtn: { width: 44, height: 44, borderRadius: 16, backgroundColor: colors.secondary, justifyContent: 'center', alignItems: 'center' },
-
-  voipBlock: { marginBottom: 16 },
-  voipTitle: { color: 'rgba(255,255,255,0.45)', fontSize: 11, fontWeight: '800', letterSpacing: 0.8, marginBottom: 10 },
+  voipBlock: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.borderHairline },
+  voipTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 10 },
   voipBtnFull: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    height: 48,
     borderRadius: 16,
-    backgroundColor: '#1A1A1A',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: colors.borderHairline,
   },
   voipBtnText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
-
-  actionGrid: { flexDirection: 'row', gap: 10, paddingBottom: 20, alignItems: 'center' },
-  roundActionBtn: { 
-    width: 64, height: 64, borderRadius: 20, backgroundColor: '#1A1A1A',
-    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)',
-  },
-  actionLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 11, fontWeight: '700', marginTop: 4 },
-  mainActionBtn: {
-    flex: 1, height: 56, borderRadius: 20, backgroundColor: colors.secondary,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  mainActionText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 0.5 },
 });

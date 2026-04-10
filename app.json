@@ -48,6 +48,7 @@
       "expo-build-properties",
       "@rnmapbox/maps",
       "expo-secure-store",
+      "./plugins/with-notifee-repository",
       [
         "expo-local-authentication",
         {

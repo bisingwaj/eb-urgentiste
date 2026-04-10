@@ -22,20 +22,30 @@ const TRIAGE_LEVELS = [
   { key: 'vert', label: 'Vert', sublabel: 'Non urgent', color: '#69F0AE', icon: 'check-circle' as const },
 ];
 
+import { useHospital } from '../../contexts/HospitalContext';
+
 export function HospitalTriageScreen({ route, navigation }: any) {
   const { caseData } = route.params as { caseData: EmergencyCase };
+  const { updateCaseStatus } = useHospital();
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState(1);
   const [triageLevel, setTriageLevel] = useState(caseData.triageLevel || '');
   const [vitals, setVitals] = useState({
-    tension: caseData.vitals?.tension || '',
+    tension: caseData.vitals?.tension || caseData.vitals?.bloodPressure || '',
     heartRate: caseData.vitals?.heartRate || '',
     temperature: caseData.vitals?.temperature || '',
-    satO2: caseData.vitals?.satO2 || '',
+    satO2: caseData.vitals?.satO2 || caseData.vitals?.spO2 || '',
+    respiratoryRate: caseData.vitals?.respiratoryRate || '',
+    glasgowScore: caseData.vitals?.glasgowScore || '',
+    painScore: caseData.vitals?.painScore || '',
+    weight: caseData.vitals?.weight || '',
   });
-  const [symptoms, setSymptoms] = useState(caseData.symptoms || '');
+  const [symptoms, setSymptoms] = useState(
+    Array.isArray(caseData.symptoms) ? caseData.symptoms.join('\n') : caseData.symptoms || '',
+  );
   const [diagnosis, setDiagnosis] = useState(caseData.provisionalDiagnosis || '');
+  const [triageNotes, setTriageNotes] = useState(caseData.triageNotes || '');
 
   const totalSteps = 3;
 
@@ -67,17 +77,48 @@ export function HospitalTriageScreen({ route, navigation }: any) {
         { text: 'Annuler', style: 'cancel' },
         {
           text: 'Valider',
-          onPress: () => {
-            navigation.navigate('HospitalPriseEnCharge', {
-              caseData: {
-                ...caseData,
-                status: 'triage' as const,
-                triageLevel,
-                vitals,
-                symptoms,
-                provisionalDiagnosis: diagnosis,
-              }
-            });
+          onPress: async () => {
+            try {
+              const triageRecordedAt = new Date().toISOString();
+              const vitalsForDb = {
+                ...vitals,
+                bloodPressure: vitals.tension,
+                spO2: vitals.satO2,
+              };
+              const symptomLines = symptoms
+                .split('\n')
+                .map((s) => s.trim())
+                .filter(Boolean);
+              const symptomsPayload: string | string[] =
+                symptomLines.length === 0 ? '' : symptomLines.length === 1 ? symptomLines[0]! : symptomLines;
+
+              await updateCaseStatus(caseData.id, {
+                status: 'triage',
+                data: {
+                  triageLevel,
+                  vitals: vitalsForDb,
+                  symptoms: symptomsPayload,
+                  provisionalDiagnosis: diagnosis,
+                  triageNotes: triageNotes.trim() || undefined,
+                  triageRecordedAt,
+                },
+              });
+
+              navigation.navigate('HospitalPriseEnCharge', {
+                caseData: {
+                  ...caseData,
+                  status: 'triage' as const,
+                  triageLevel,
+                  vitals: vitalsForDb,
+                  symptoms: symptomsPayload,
+                  provisionalDiagnosis: diagnosis,
+                  triageNotes: triageNotes.trim() || undefined,
+                  triageRecordedAt,
+                },
+              });
+            } catch (err) {
+              Alert.alert('Erreur', 'Impossible de sauvegarder le triage.');
+            }
           },
         },
       ]
@@ -121,11 +162,10 @@ export function HospitalTriageScreen({ route, navigation }: any) {
         );
       case 2:
         return (
-          <View style={styles.stepContent}>
+          <ScrollView style={styles.stepContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             <Text style={styles.stepTitle}>Signes vitaux</Text>
             <Text style={styles.stepSubtitle}>Constantes physiologiques du patient</Text>
             <View style={styles.vitalsGrid}>
-              {/* 2x2 GRID of cards */}
               <View style={styles.vitalCard}>
                 <View style={styles.vitalHeader}>
                   <MaterialIcons name="speed" color="#FF5252" size={20} />
@@ -186,8 +226,68 @@ export function HospitalTriageScreen({ route, navigation }: any) {
                 />
                 <Text style={styles.vitalUnit}>°C</Text>
               </View>
+              <View style={styles.vitalCard}>
+                <View style={styles.vitalHeader}>
+                  <MaterialIcons name="waves" color="#69F0AE" size={20} />
+                  <Text style={styles.vitalLabel}>Fréq. resp.</Text>
+                </View>
+                <TextInput
+                  style={styles.vitalInput}
+                  value={vitals.respiratoryRate}
+                  onChangeText={(v) => updateVital('respiratoryRate', v)}
+                  placeholder="16"
+                  placeholderTextColor="rgba(255,255,255,0.2)"
+                  keyboardType="numeric"
+                />
+                <Text style={styles.vitalUnit}>cycles/min</Text>
+              </View>
+              <View style={styles.vitalCard}>
+                <View style={styles.vitalHeader}>
+                  <MaterialIcons name="psychology" color="#E1BEE7" size={20} />
+                  <Text style={styles.vitalLabel}>Glasgow</Text>
+                </View>
+                <TextInput
+                  style={styles.vitalInput}
+                  value={vitals.glasgowScore}
+                  onChangeText={(v) => updateVital('glasgowScore', v)}
+                  placeholder="15"
+                  placeholderTextColor="rgba(255,255,255,0.2)"
+                  keyboardType="numeric"
+                />
+                <Text style={styles.vitalUnit}>/15</Text>
+              </View>
+              <View style={styles.vitalCard}>
+                <View style={styles.vitalHeader}>
+                  <MaterialIcons name="sentiment-dissatisfied" color="#FF9800" size={20} />
+                  <Text style={styles.vitalLabel}>Douleur</Text>
+                </View>
+                <TextInput
+                  style={styles.vitalInput}
+                  value={vitals.painScore}
+                  onChangeText={(v) => updateVital('painScore', v)}
+                  placeholder="0–10"
+                  placeholderTextColor="rgba(255,255,255,0.2)"
+                  keyboardType="numeric"
+                />
+                <Text style={styles.vitalUnit}>/10</Text>
+              </View>
+              <View style={styles.vitalCard}>
+                <View style={styles.vitalHeader}>
+                  <MaterialIcons name="monitor-weight" color="#90CAF9" size={20} />
+                  <Text style={styles.vitalLabel}>Poids</Text>
+                </View>
+                <TextInput
+                  style={styles.vitalInput}
+                  value={vitals.weight}
+                  onChangeText={(v) => updateVital('weight', v)}
+                  placeholder="70"
+                  placeholderTextColor="rgba(255,255,255,0.2)"
+                  keyboardType="decimal-pad"
+                />
+                <Text style={styles.vitalUnit}>kg</Text>
+              </View>
             </View>
-          </View>
+          </ScrollView>
         );
       case 3:
         return (
@@ -213,6 +313,18 @@ export function HospitalTriageScreen({ route, navigation }: any) {
                 value={diagnosis}
                 onChangeText={setDiagnosis}
                 placeholder="Entrez le diagnostic de triage..."
+                placeholderTextColor="rgba(255,255,255,0.2)"
+                multiline
+                numberOfLines={3}
+              />
+            </View>
+            <View style={styles.formGroup}>
+              <Text style={styles.inputLabel}>Notes de triage</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={triageNotes}
+                onChangeText={setTriageNotes}
+                placeholder="Contexte, allergies relevées, particularités…"
                 placeholderTextColor="rgba(255,255,255,0.2)"
                 multiline
                 numberOfLines={3}
