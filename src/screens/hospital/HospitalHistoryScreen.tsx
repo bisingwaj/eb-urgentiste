@@ -15,20 +15,16 @@ import { colors } from '../../theme/colors';
 import { useAuth } from '../../contexts/AuthContext';
 import { useHospital } from '../../contexts/HospitalContext';
 import { supabase } from '../../lib/supabase';
+import {
+  computeRolling30dKpis,
+  filterPastCases,
+} from '../../lib/hospitalStats';
 type ReportRow = {
   id: string;
   dispatch_id: string;
   summary: string | null;
   sent_at: string;
 };
-
-function formatDurationMinutes(created?: string, completed?: string): number | null {
-  if (!created || !completed) return null;
-  const a = new Date(created).getTime();
-  const b = new Date(completed).getTime();
-  if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a) return null;
-  return Math.round((b - a) / 60000);
-}
 
 export function HospitalHistoryScreen({ navigation }: any) {
   const { profile } = useAuth();
@@ -40,9 +36,7 @@ export function HospitalHistoryScreen({ navigation }: any) {
   const structureId = profile?.health_structure_id;
 
   const pastCases = useMemo(() => {
-    const list = activeCases.filter(
-      (c) => c.dispatchStatus === 'completed' || c.dispatchStatus === 'cancelled',
-    );
+    const list = filterPastCases(activeCases);
     return [...list].sort((a, b) => {
       const ta = a.completedAt ? new Date(a.completedAt).getTime() : 0;
       const tb = b.completedAt ? new Date(b.completedAt).getTime() : 0;
@@ -50,26 +44,7 @@ export function HospitalHistoryScreen({ navigation }: any) {
     });
   }, [activeCases]);
 
-  const kpis = useMemo(() => {
-    const now = Date.now();
-    const monthMs = 30 * 24 * 60 * 60 * 1000;
-    const completed = pastCases.filter((c) => c.dispatchStatus === 'completed');
-    const inMonth = completed.filter((c) => {
-      if (!c.completedAt) return false;
-      return now - new Date(c.completedAt).getTime() <= monthMs;
-    });
-    const total = inMonth.length;
-    const durations = inMonth
-      .map((c) => formatDurationMinutes(c.dispatchCreatedAt, c.completedAt))
-      .filter((n): n is number => n != null);
-    const avgMin =
-      durations.length > 0 ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length) : null;
-    const guerisons = inMonth.filter((c) => c.dischargeType === 'guerison').length;
-    const tauxGuerison = total > 0 ? Math.round((guerisons / total) * 100) : 0;
-    const deces = inMonth.filter((c) => c.dischargeType === 'deces').length;
-    const tauxDeces = total > 0 ? Math.round((deces / total) * 100) : 0;
-    return { total, avgMin, tauxGuerison, tauxDeces };
-  }, [pastCases]);
+  const kpis = useMemo(() => computeRolling30dKpis(pastCases), [pastCases]);
 
   const loadReports = useCallback(async () => {
     if (!structureId) return;

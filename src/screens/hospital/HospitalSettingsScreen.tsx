@@ -31,7 +31,7 @@ const SETTINGS_GROUPS = [
         label: "Statistiques du service",
         icon: "chart-box-outline",
         color: "#69F0AE",
-        route: null,
+        route: "HospitalStats",
       },
     ],
   },

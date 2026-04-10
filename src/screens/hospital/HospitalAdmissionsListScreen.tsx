@@ -17,6 +17,7 @@ import { colors } from '../../theme/colors';
 import { useHospital } from '../../contexts/HospitalContext';
 import { getLevelConfig, getStatusConfig } from './HospitalDashboardTab';
 import { navigateFromHospitalAdmissionsList } from '../../lib/hospitalNavigation';
+import { ACTIVE_ADMISSION_STATUSES, isCaseClosed } from '../../lib/hospitalStats';
 
 const { width } = Dimensions.get('window');
 
@@ -25,10 +26,12 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
   const { activeCases } = useHospital();
 
   // Filter only admitted cases (in route, triage, or actively being treated)
-  const admittedCases = activeCases.filter(c =>
-    ['admis', 'triage', 'prise_en_charge', 'en_cours', 'monitoring'].includes(c.status) &&
-    (c.victimName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      c.id.toLowerCase().includes(searchQuery.toLowerCase()))
+  const admittedCases = activeCases.filter(
+    (c) =>
+      !isCaseClosed(c) &&
+      ACTIVE_ADMISSION_STATUSES.includes(c.status) &&
+      (c.victimName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        c.id.toLowerCase().includes(searchQuery.toLowerCase())),
   );
 
   return (

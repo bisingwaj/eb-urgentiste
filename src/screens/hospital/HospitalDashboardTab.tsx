@@ -18,6 +18,12 @@ import { colors } from "../../theme/colors";
 import type { TransportModeCode } from "../../lib/transportMode";
 import { useAuth } from "../../contexts/AuthContext";
 import { useHospital } from "../../contexts/HospitalContext";
+import {
+  countActiveAdmissions,
+  countCriticalOpen,
+  countPendingHospital,
+  isCaseClosed,
+} from "../../lib/hospitalStats";
 
 const { width } = Dimensions.get("window");
 
@@ -482,11 +488,6 @@ export function HospitalDashboardTab({ navigation }: any) {
     "all" | "en_attente" | "en_cours" | "termine"
   >("all");
 
-  const isCaseClosed = (c: EmergencyCase) =>
-    c.status === "termine" ||
-    c.dispatchStatus === "completed" ||
-    c.dispatchStatus === "cancelled";
-
   const filteredCases = activeCases.filter((c) => {
     if (filter === "all") return !isCaseClosed(c);
     return c.status === filter;
@@ -504,15 +505,17 @@ export function HospitalDashboardTab({ navigation }: any) {
     return list;
   }, [filteredCases]);
 
-  const criticalCount = activeCases.filter(
-    (c) => c.level === "critique" && !isCaseClosed(c)
-  ).length;
-  const activeCount = activeCases.filter((c) =>
-    ["en_cours", "triage", "prise_en_charge", "monitoring"].includes(c.status)
-  ).length;
+  const criticalCount = useMemo(
+    () => countCriticalOpen(activeCases),
+    [activeCases],
+  );
+  const activeCount = useMemo(
+    () => countActiveAdmissions(activeCases),
+    [activeCases],
+  );
 
   const pendingHospitalCount = useMemo(
-    () => activeCases.filter((c) => c.hospitalStatus === "pending").length,
+    () => countPendingHospital(activeCases),
     [activeCases],
   );
 

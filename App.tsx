@@ -44,6 +44,7 @@ import { HospitalClosureScreen } from './src/screens/hospital/HospitalClosureScr
 import { HospitalReportScreen } from './src/screens/hospital/HospitalReportScreen';
 import { HospitalIssuesScreen } from './src/screens/hospital/HospitalIssuesScreen';
 import { HospitalHistoryScreen } from './src/screens/hospital/HospitalHistoryScreen';
+import { HospitalStatsScreen } from './src/screens/hospital/HospitalStatsScreen';
 import { HospitalSettingsScreen } from './src/screens/hospital/HospitalSettingsScreen';
 import { HospitalAdmissionsListScreen } from './src/screens/hospital/HospitalAdmissionsListScreen';
 
@@ -164,6 +165,7 @@ function RootNavigator() {
           <Stack.Screen name="HospitalReport" component={HospitalReportScreen} />
           <Stack.Screen name="HospitalIssues" component={HospitalIssuesScreen} />
           <Stack.Screen name="HospitalHistory" component={HospitalHistoryScreen} />
+          <Stack.Screen name="HospitalStats" component={HospitalStatsScreen} />
           <Stack.Screen name="HospitalSettings" component={HospitalSettingsScreen} />
           <Stack.Screen name="HospitalAdmissionsList" component={HospitalAdmissionsListScreen} />
           <Stack.Screen name="HospitalUrgencyDetail" component={HospitalUrgencyDetailScreen} />
