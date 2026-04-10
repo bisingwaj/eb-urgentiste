@@ -23,6 +23,7 @@ import { HospitalProvider } from './src/contexts/HospitalContext';
 import { CallSessionProvider } from './src/contexts/CallSessionContext';
 import { GlobalAlert } from './src/components/shared/GlobalAlert';
 import { AlertAlarmManager } from './src/components/alerts/AlertAlarmManager';
+import { HospitalAlertManager } from './src/components/alerts/HospitalAlertManager';
 import { BrandedSplashScreen } from './src/components/splash/BrandedSplashScreen';
 
 // Shared entry screens
@@ -240,6 +241,7 @@ export default function App() {
                   <IncomingCallNotificationHandler />
                   <GlobalAlert />
                   <AlertAlarmManager />
+                  <HospitalAlertManager />
                 </CallSessionProvider>
               </NavigationContainer>
             </SafeAreaProvider>

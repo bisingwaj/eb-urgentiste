@@ -511,6 +511,11 @@ export function HospitalDashboardTab({ navigation }: any) {
     ["en_cours", "triage", "prise_en_charge", "monitoring"].includes(c.status)
   ).length;
 
+  const pendingHospitalCount = useMemo(
+    () => activeCases.filter((c) => c.hospitalStatus === "pending").length,
+    [activeCases],
+  );
+
   return (
     <TabScreenSafeArea style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
@@ -567,9 +572,19 @@ export function HospitalDashboardTab({ navigation }: any) {
               </>
             )}
           </View>
-          <TouchableOpacity style={styles.notifBtn}>
+          <TouchableOpacity
+            style={styles.notifBtn}
+            onPress={() => navigation.navigate("Notifications")}
+            accessibilityLabel="Notifications"
+          >
             <MaterialCommunityIcons name="bell-badge-outline" color="#FFF" size={26} />
-            <View style={styles.notifBadge} />
+            {pendingHospitalCount > 0 ? (
+              <View style={styles.notifBadge}>
+                <Text style={styles.notifBadgeText}>
+                  {pendingHospitalCount > 9 ? "9+" : pendingHospitalCount}
+                </Text>
+              </View>
+            ) : null}
           </TouchableOpacity>
         </View>
 
@@ -714,7 +729,21 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   notifBtn: { width: 50, height: 50, borderRadius: 18, backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
-  notifBadge: { position: "absolute", top: 14, right: 14, width: 10, height: 10, borderRadius: 5, backgroundColor: "#FF5252", borderWidth: 2, borderColor: "#1A1A1A" },
+  notifBadge: {
+    position: "absolute",
+    top: 6,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#FF5252",
+    borderWidth: 2,
+    borderColor: "#1A1A1A",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 3,
+  },
+  notifBadgeText: { color: "#FFF", fontSize: 11, fontWeight: "900" },
   summaryContainer: { flexDirection: "row", gap: 12 },
   mainSummaryCard: { flex: 1, height: 110, borderRadius: 28, padding: 20, overflow: "hidden", justifyContent: "center" },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },

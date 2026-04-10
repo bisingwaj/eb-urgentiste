@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import {
@@ -9,6 +10,46 @@ import {
 import { mergeHospitalDataPartial } from '../lib/hospitalMerge';
 import { mapDispatchRowToEmergencyCase } from '../lib/hospitalCaseMapping';
 import { buildHospitalReportPayload } from '../lib/hospitalReportPayload';
+
+/** Émis quand un dispatch assigné à la structure exige une réponse hôpital (alignement urgentiste → HospitalAlertManager). */
+export const NEW_HOSPITAL_ALERT = 'NEW_HOSPITAL_ALERT';
+
+/**
+ * Détermine si l’événement Realtime correspond à une **nouvelle** alerte à traiter (évite spam sur chaque UPDATE).
+ */
+function getDispatchIdForHospitalAlert(structureId: string, payload: {
+  eventType?: string;
+  new?: Record<string, unknown> | null;
+  old?: Record<string, unknown> | null;
+}): string | null {
+  const n = payload.new;
+  if (!n || String(n.assigned_structure_id ?? '') !== structureId) return null;
+
+  const hs = n.hospital_status;
+  const isPending = hs === 'pending' || hs == null || hs === undefined;
+  if (!isPending) return null;
+
+  const id = typeof n.id === 'string' ? n.id : null;
+  if (!id) return null;
+
+  if (payload.eventType === 'INSERT') return id;
+
+  if (payload.eventType === 'UPDATE') {
+    const o = payload.old ?? {};
+    if (Object.keys(o).length === 0) return null;
+
+    const oldStruct = String(o.assigned_structure_id ?? '');
+    const oldHs = o.hospital_status;
+
+    if (oldStruct !== structureId) return id;
+
+    const wasPending = oldHs === 'pending' || oldHs == null || oldHs === undefined;
+    if (!wasPending) return id;
+    return null;
+  }
+
+  return null;
+}
 
 /** Pourquoi la liste peut être vide malgré une affectation côté centrale */
 export type HospitalListBlocker =
@@ -257,8 +298,12 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'dispatches', filter: `assigned_structure_id=eq.${structureId}` },
-        () => {
+        (payload: { eventType?: string; new?: Record<string, unknown> | null; old?: Record<string, unknown> | null }) => {
           console.log('[HospitalContext] Dispatch updated, refreshing cases...');
+          const dispatchId = getDispatchIdForHospitalAlert(structureId, payload);
+          if (dispatchId) {
+            DeviceEventEmitter.emit(NEW_HOSPITAL_ALERT, { dispatchId });
+          }
           fetchCases();
         },
       )

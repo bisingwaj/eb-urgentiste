@@ -52,6 +52,18 @@ class NotificationServiceClass {
       enableLights: true,
     });
 
+    await Notifications.setNotificationChannelAsync('hopital_alertes', {
+      name: 'Alertes hôpital',
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 500, 200, 500],
+      lightColor: '#1564bf',
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+      bypassDnd: true,
+      sound: 'alarm_alert.wav',
+      enableVibrate: true,
+      enableLights: true,
+    });
+
     await Notifications.setNotificationChannelAsync('incoming_calls', {
       name: 'Appels entrants',
       importance: Notifications.AndroidImportance.MAX,
@@ -173,6 +185,42 @@ class NotificationServiceClass {
       console.log('[NotificationService] ✅ Notification mission envoyée');
     } catch (err) {
       console.error('[NotificationService] ❌ Erreur envoi notification:', err);
+    }
+  }
+
+  /**
+   * Notification locale — nouvelle alerte assignée à la structure (réponse hôpital attendue).
+   */
+  async sendHospitalAlert(options?: {
+    title?: string;
+    body?: string;
+    data?: Record<string, unknown>;
+  }): Promise<void> {
+    const title = options?.title ?? 'NOUVELLE ALERTE HÔPITAL';
+    const body =
+      options?.body ??
+      'Un dossier vous est assigné. Réponse de la structure attendue. Ouvrez l’application.';
+    const data = { type: 'hospital_alert', ...(options?.data ?? {}) };
+
+    try {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          data,
+          sound: Platform.OS === 'android' ? 'alarm_alert.wav' : true,
+          priority: Notifications.AndroidNotificationPriority.MAX,
+          sticky: true,
+          ...(Platform.OS === 'android' && { channelId: 'hopital_alertes' }),
+          categoryIdentifier: 'hospital_alert',
+          badge: 1,
+        },
+        trigger: null,
+      });
+
+      console.log('[NotificationService] ✅ Notification hôpital envoyée');
+    } catch (err) {
+      console.error('[NotificationService] ❌ Erreur notification hôpital:', err);
     }
   }
 
