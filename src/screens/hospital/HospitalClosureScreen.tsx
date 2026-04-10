@@ -14,6 +14,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import type { EmergencyCase } from './HospitalDashboardTab';
 import { useHospital } from '../../contexts/HospitalContext';
+import { outcomeKeyToDischargeType } from '../../lib/hospitalReportPayload';
 
 const OUTCOME_OPTIONS = [
   { key: 'hospitalise', label: 'Hospitalisé', icon: 'local-hospital' as const, color: colors.secondary },
@@ -21,15 +22,9 @@ const OUTCOME_OPTIONS = [
   { key: 'decede', label: 'Décédé', icon: 'sentiment-very-dissatisfied' as const, color: colors.primary },
 ];
 
-function mapOutcomeToDischargeType(outcomeKey: string): 'hospitalisation' | 'sortie' | 'deces' {
-  if (outcomeKey === 'hospitalise') return 'hospitalisation';
-  if (outcomeKey === 'decede') return 'deces';
-  return 'sortie';
-}
-
 export function HospitalClosureScreen({ route, navigation }: any) {
   const { caseData } = route.params as { caseData: EmergencyCase };
-  const { updateCaseStatus } = useHospital();
+  const { updateCaseStatus, sendHospitalReport } = useHospital();
   const [outcome, setOutcome] = useState('');
   const [finalDiagnosis, setFinalDiagnosis] = useState('');
   const [closureTime] = useState(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
@@ -49,7 +44,7 @@ export function HospitalClosureScreen({ route, navigation }: any) {
           text: 'Clôturer',
           onPress: async () => {
             try {
-              const dischargeType = mapOutcomeToDischargeType(outcome);
+              const dischargeType = outcomeKeyToDischargeType(outcome);
               const dischargedAt = new Date().toISOString();
               await updateCaseStatus(caseData.id, {
                 status: 'termine',
@@ -62,8 +57,28 @@ export function HospitalClosureScreen({ route, navigation }: any) {
                   closureTime,
                 },
               });
+              const mergedCase: EmergencyCase = {
+                ...caseData,
+                status: 'termine',
+                dischargeType,
+                dischargedAt,
+                finalDiagnosis,
+                outcome,
+                closureTime,
+              };
+              let reportAlreadySent = false;
+              try {
+                await sendHospitalReport(mergedCase);
+                reportAlreadySent = true;
+              } catch (repErr) {
+                console.warn('[HospitalClosure] Rapport non envoyé, réessai possible depuis l’écran suivant.', repErr);
+              }
               navigation.navigate('HospitalReport', {
-                caseData: { ...caseData, status: 'termine', finalDiagnosis, outcome, closureTime },
+                reportAlreadySent,
+                caseData: {
+                  ...mergedCase,
+                  ...(reportAlreadySent ? { reportSent: true, reportSentAt: new Date().toISOString() } : {}),
+                },
               });
             } catch {
               Alert.alert('Erreur', 'Impossible de clôturer le dossier sur le serveur.');

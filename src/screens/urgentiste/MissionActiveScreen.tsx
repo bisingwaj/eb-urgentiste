@@ -592,4 +592,25 @@ const styles = StyleSheet.create({
   inputBox: { flexDirection: 'row', gap: 8, marginTop: 10 },
   textInput: { flex: 1, backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, height: 44, color: '#FFF', fontSize: 13, fontWeight: '600', borderWidth: 1, borderColor: colors.borderHairline },
   sendBtn: { width: 44, height: 44, borderRadius: 16, backgroundColor: colors.surfaceElevated, justifyContent: 'center', alignItems: 'center' },
+
+  journalContainer: { marginBottom: 16 },
+  journalHeader: { color: colors.textMuted, fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
+  noteItem: { marginBottom: 8 },
+  noteTime: { color: colors.secondary, fontSize: 11, fontWeight: '800' },
+  noteBody: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 2 },
+
+  voipBlock: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.borderHairline },
+  voipTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 10 },
+  voipBtnFull: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.borderHairline,
+  },
+  voipBtnText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
 });

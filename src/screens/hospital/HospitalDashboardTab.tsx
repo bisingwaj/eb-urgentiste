@@ -33,6 +33,13 @@ export type CaseStatus =
 /** Valeurs `hospital_data.monitoringStatus` (spec Lovable) */
 export type MonitoringPatientStatus = "amelioration" | "stable" | "degradation";
 
+/** Sortie patient — spec Lovable (`hospital_data.dischargeType`) */
+export type LovableDischargeType =
+  | "guerison"
+  | "transfert"
+  | "deces"
+  | "sortie_contre_avis";
+
 export type HospitalStatus = 
   | "pending"
   | "accepted"
@@ -55,12 +62,18 @@ export interface EmergencyCase {
   unitId?: string;
   /** Valeur brute `dispatches.status` (ex. `en_route_hospital`) — utile pour l’UI et le debug */
   dispatchStatus?: string;
+  /** `dispatches.completed_at` — tri / KPIs historique */
+  completedAt?: string;
+  /** `dispatches.created_at` ISO — durée de prise en charge */
+  dispatchCreatedAt?: string;
   /** Coordonnées de la structure assignée (`dispatches.assigned_structure_*`) — destination carte / itinéraire */
   assignedStructureLat?: number;
   assignedStructureLng?: number;
   /** `dispatches.assigned_structure_name` — libellé carte / UI */
   assignedStructureName?: string;
 
+  /** `incidents.id` — FK pour rapports / historique */
+  incidentId?: string;
   /** Référence métier (`incidents.reference`) */
   incidentReference?: string;
   /** Téléphone laissé au signalement (`incidents.caller_phone`) */
@@ -106,13 +119,22 @@ export interface EmergencyCase {
   // Triage fields
   triageLevel?: "rouge" | "orange" | "jaune" | "vert" | "";
   vitals?: {
-    tension: string;
-    heartRate: string;
-    temperature: string;
-    satO2: string;
+    tension?: string;
+    heartRate?: string;
+    temperature?: string;
+    satO2?: string;
+    bloodPressure?: string;
+    spO2?: string;
+    respiratoryRate?: string;
+    glasgowScore?: string;
+    painScore?: string;
+    weight?: string;
   };
-  symptoms?: string;
+  /** Symptômes — chaîne ou liste (JSON `hospital_data`) */
+  symptoms?: string | string[];
   provisionalDiagnosis?: string;
+  triageNotes?: string;
+  triageRecordedAt?: string;
   // Prise en charge (JSON `hospital_data` — tableaux persistés par `HospitalPriseEnChargeScreen`)
   observations?: unknown[];
   treatments?: unknown[];
@@ -128,8 +150,13 @@ export interface EmergencyCase {
   interventions?: Intervention[];
   // Closure
   outcome?: "hospitalise" | "sorti" | "decede" | string;
+  /** Spec Lovable — prioritaire sur `outcome` pour le dashboard */
+  dischargeType?: LovableDischargeType;
+  dischargedAt?: string;
   finalDiagnosis?: string;
   closureTime?: string;
+  reportSent?: boolean;
+  reportSentAt?: string;
 }
 
 export interface Intervention {

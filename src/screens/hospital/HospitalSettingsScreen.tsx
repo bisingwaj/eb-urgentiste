@@ -94,7 +94,14 @@ export function HospitalSettingsScreen({ navigation }: any) {
       ]);
       return;
     }
-    if (item.route) navigation.navigate(item.route);
+    if (item.route) {
+      navigation.navigate(item.route);
+      return;
+    }
+    Alert.alert(
+      "Bientôt disponible",
+      "Cette section n’est pas encore disponible dans cette version de l’application.",
+    );
   };
 
   const footerLabel = profile
@@ -125,11 +132,7 @@ export function HospitalSettingsScreen({ navigation }: any) {
             <View style={styles.groupCard}>
               {group.items.map((item, itemIdx) => (
                 <View key={item.id}>
-                  <TouchableOpacity
-                    style={styles.settingItem}
-                    onPress={() => onSettingPress(item)}
-                    disabled={!item.route && !("logout" in item && item.logout)}
-                  >
+                  <TouchableOpacity style={styles.settingItem} onPress={() => onSettingPress(item)}>
                     <View
                       style={[
                         styles.iconBg,

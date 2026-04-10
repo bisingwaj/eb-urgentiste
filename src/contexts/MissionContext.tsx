@@ -174,17 +174,17 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       } | null;
 
       if (dispatch && dispatch.incidents) {
-        const incident = dispatch.incidents;
+        const incident = dispatch.incidents as unknown as SupabaseIncident;
         // Priorité : position temps réel > position initiale
         const lat = incident.caller_realtime_lat ?? incident.location_lat;
         const lng = incident.caller_realtime_lng ?? incident.location_lng;
         console.log(`📍 [POSITION VICTIME] lat: ${lat}, lng: ${lng}, adresse: ${incident.location_address || 'NULL'}`);
-        
-        const assignedStructure = buildAssignedStructureFromDispatchRow(dispatch as any);
+
+        const assignedStructure = buildAssignedStructureFromDispatchRow(dispatch as Partial<SupabaseDispatch>);
 
         if (assignedStructure) {
           console.log(`🏥 [STRUCTURE ASSIGNÉE] ${assignedStructure.name} — lat: ${assignedStructure.lat}, lng: ${assignedStructure.lng}`);
-          logStructureGps('fetchActiveMission', d as Record<string, unknown>);
+          logStructureGps('fetchActiveMission', dispatch as unknown as Record<string, unknown>);
         }
 
         setActiveMission({
@@ -197,7 +197,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           description: incident.description,
           priority: incident.priority,
           incident_status: incident.status,
-          dispatch_status: dispatch.status as any,
+          dispatch_status: dispatch.status as Mission['dispatch_status'],
           location: {
             lat,
             lng,
@@ -209,7 +209,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
             phone: incident.caller_phone || '-',
           },
           assigned_structure: assignedStructure,
-          destination: incident.recommended_facility,
+          destination: incident.recommended_facility ?? undefined,
           created_at: incident.created_at,
         });
       } else {

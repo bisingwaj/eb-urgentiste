@@ -603,7 +603,10 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                   {(caseData.description || caseData.symptoms) && (
                     <View>
                       <Text style={styles.label}>Notes secouriste / Symptômes</Text>
-                      <Text style={styles.descText}>{caseData.description} {caseData.symptoms}</Text>
+                      <Text style={styles.descText}>
+                        {caseData.description}{' '}
+                        {Array.isArray(caseData.symptoms) ? caseData.symptoms.join(', ') : caseData.symptoms}
+                      </Text>
                     </View>
                   )}
                   {caseData.vitals && (
