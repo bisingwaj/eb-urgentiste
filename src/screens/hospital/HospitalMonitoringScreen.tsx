@@ -9,6 +9,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -108,7 +109,8 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.appBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
@@ -120,7 +122,8 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 140 }}
       >
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>État actuel du patient</Text>
@@ -247,7 +250,8 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
           )}
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 

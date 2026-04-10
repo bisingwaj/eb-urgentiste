@@ -8,6 +8,8 @@ import {
   TextInput,
   StatusBar,
   Dimensions,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -29,7 +31,8 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
   );
 
   return (
-    <TabScreenSafeArea style={styles.safeArea}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <TabScreenSafeArea style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
 
       {/* 🔝 Premium Header with Search */}
@@ -58,7 +61,8 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 140 }}
       >
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionLabel}>LISTE DES PATIENTS PRÉSENTS</Text>
@@ -132,7 +136,8 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
           })
         )}
       </ScrollView>
-    </TabScreenSafeArea>
+      </TabScreenSafeArea>
+    </KeyboardAvoidingView>
   );
 }
 

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import type { EmergencyCase } from "./HospitalDashboardTab";
+import { useHospital } from "../../contexts/HospitalContext";
 
 const { width, height } = Dimensions.get("window");
 
@@ -53,8 +54,6 @@ interface Treatment {
 
 type TabType = "PC" | "EXAMENS" | "TIMELINE";
 type ModalType = "note" | "exam_add" | "exam_edit" | "treatment_add";
-
-import { useHospital } from '../../contexts/HospitalContext';
 
 export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
   const { caseData } = route.params as { caseData: EmergencyCase };
@@ -231,6 +230,7 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
   };
 
   return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
 
@@ -267,6 +267,7 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
       <ScrollView
         ref={scrollRef}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={[
           styles.scrollContent,
           { paddingBottom: Math.max(insets.bottom, 16) + 88 },
@@ -420,6 +421,7 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
         </View>
       </Modal>
     </View>
+    </KeyboardAvoidingView>
   );
 }
 

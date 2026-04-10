@@ -729,7 +729,12 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
             </View>
             <Text style={styles.modalSub}>Veuillez indiquer pourquoi vous ne pouvez pas recevoir ce patient.</Text>
 
-            <ScrollView showsVerticalScrollIndicator={false} style={styles.reasonsList}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.reasonsList}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+            >
               {REFUSAL_REASONS.map((r, i) => (
                 <TouchableOpacity key={i} style={[styles.reasonItem, selectedReason === r && styles.reasonItemActive]} onPress={() => setSelectedReason(r)}>
                   <Text style={[styles.reasonText, selectedReason === r && styles.reasonTextActive]}>{r}</Text>

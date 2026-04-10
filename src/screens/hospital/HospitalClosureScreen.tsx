@@ -8,6 +8,7 @@ import {
   TextInput,
   Platform,
   Alert,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -90,7 +91,8 @@ export function HospitalClosureScreen({ route, navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       {/* App bar */}
       <View style={styles.appBar}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
@@ -103,7 +105,8 @@ export function HospitalClosureScreen({ route, navigation }: any) {
       <ScrollView
         style={styles.scroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 140 }}
       >
         {/* Outcome Selector */}
         <View style={styles.section}>
@@ -163,7 +166,8 @@ export function HospitalClosureScreen({ route, navigation }: any) {
           <MaterialIcons name="description" color="#FFF" size={24} />
         </TouchableOpacity>
       </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
