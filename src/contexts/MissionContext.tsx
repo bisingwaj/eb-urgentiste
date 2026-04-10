@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { Alert, Vibration, DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
-import { Mission } from '../hooks/useActiveMission';
+import { Mission, normalizeHospitalStatus } from '../hooks/useActiveMission';
 
 /** PostgREST / JSON peuvent renvoyer des nombres en string */
 function toNullableNumber(v: unknown): number | null {
@@ -45,18 +45,24 @@ interface SupabaseDispatch {
   assigned_structure_phone: string | null;
   assigned_structure_address: string | null;
   assigned_structure_type: string | null;
+  hospital_status?: string | null;
+  hospital_notes?: string | null;
+  hospital_data?: unknown;
   created_at: string;
   incidents: SupabaseIncident;
 }
 
+/** Coordonnées structure : seulement si `hospital_status === 'accepted'` (contrat Lovable). */
 function buildAssignedStructureFromDispatchRow(d: Partial<SupabaseDispatch>): Mission['assigned_structure'] | null {
   const id = d.assigned_structure_id;
   if (id == null || id === '') return null;
+  const hs = normalizeHospitalStatus(d.hospital_status);
+  const revealCoords = hs === 'accepted';
   return {
     id: String(id),
     name: d.assigned_structure_name || 'Structure',
-    lat: toNullableNumber(d.assigned_structure_lat),
-    lng: toNullableNumber(d.assigned_structure_lng),
+    lat: revealCoords ? toNullableNumber(d.assigned_structure_lat) : null,
+    lng: revealCoords ? toNullableNumber(d.assigned_structure_lng) : null,
     phone: d.assigned_structure_phone ?? null,
     address: d.assigned_structure_address ?? null,
     type: d.assigned_structure_type || 'hopital',
@@ -105,8 +111,11 @@ interface MissionContextType {
   error: string | null;
   /** Recharge le dispatch depuis Supabase sans spinner (Realtime / polling) */
   refresh: () => Promise<void>;
-  updateDispatchStatus: (status: 'en_route' | 'on_scene' | 'en_route_hospital' | 'arrived_hospital' | 'completed') => Promise<void>;
+  updateDispatchStatus: (
+    status: 'en_route' | 'on_scene' | 'en_route_hospital' | 'arrived_hospital' | 'mission_end' | 'completed',
+  ) => Promise<void>;
   updateMissionDetails: (details: Partial<Mission> & { assessment?: any }) => Promise<void>;
+  /** Désactivé pour l’urgentiste (affectation via `dispatches.assigned_structure_*` uniquement). */
   fetchHospitals: () => Promise<Hospital[]>;
 }
 
@@ -180,10 +189,28 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         const lng = incident.caller_realtime_lng ?? incident.location_lng;
         console.log(`📍 [POSITION VICTIME] lat: ${lat}, lng: ${lng}, adresse: ${incident.location_address || 'NULL'}`);
 
-        const assignedStructure = buildAssignedStructureFromDispatchRow(dispatch as Partial<SupabaseDispatch>);
+        const row = dispatch as unknown as Record<string, unknown>;
+        const hospital_status = normalizeHospitalStatus(row.hospital_status);
+        const hospital_notes =
+          row.hospital_notes === null || typeof row.hospital_notes === 'string'
+            ? (row.hospital_notes as string | null)
+            : null;
+        const hospital_data =
+          row.hospital_data !== null &&
+          typeof row.hospital_data === 'object' &&
+          !Array.isArray(row.hospital_data)
+            ? (row.hospital_data as Record<string, unknown>)
+            : null;
+
+        const assignedStructure = buildAssignedStructureFromDispatchRow({
+          ...(dispatch as Partial<SupabaseDispatch>),
+          hospital_status: hospital_status ?? undefined,
+        });
 
         if (assignedStructure) {
-          console.log(`🏥 [STRUCTURE ASSIGNÉE] ${assignedStructure.name} — lat: ${assignedStructure.lat}, lng: ${assignedStructure.lng}`);
+          console.log(
+            `🏥 [STRUCTURE ASSIGNÉE] ${assignedStructure.name} — hospital_status=${hospital_status ?? 'null'} — coords ${assignedStructure.lat != null ? 'visibles' : 'masquées'}`,
+          );
           logStructureGps('fetchActiveMission', dispatch as unknown as Record<string, unknown>);
         }
 
@@ -211,6 +238,9 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           assigned_structure: assignedStructure,
           destination: incident.recommended_facility ?? undefined,
           created_at: incident.created_at,
+          hospital_status,
+          hospital_notes,
+          hospital_data,
         });
       } else {
         setActiveMission(null);
@@ -231,16 +261,35 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     }, 120);
   }, [fetchActiveMission]);
 
-  const mergeDispatchUpdateIntoState = useCallback((payload: { new?: Partial<SupabaseDispatch> }) => {
+  /** Fusion légère : statuts / hôpital : `assigned_structure` est recalculé au `scheduleSilentRefetch` (évite payloads partiels). */
+  const mergeDispatchUpdateIntoState = useCallback((payload: { new?: Record<string, unknown> }) => {
     const n = payload.new;
     if (!n?.id) return;
     setActiveMission((prev) => {
       if (!prev || String(prev.id) !== String(n.id)) return prev;
-      const hasAssignment = n.assigned_structure_id != null && String(n.assigned_structure_id) !== '';
+      const hospital_status =
+        n.hospital_status !== undefined ? normalizeHospitalStatus(n.hospital_status) : prev.hospital_status;
+      const hospital_notes =
+        n.hospital_notes !== undefined
+          ? n.hospital_notes === null || typeof n.hospital_notes === 'string'
+            ? (n.hospital_notes as string | null)
+            : prev.hospital_notes
+          : prev.hospital_notes;
+      const hospital_data =
+        n.hospital_data !== undefined
+          ? n.hospital_data !== null &&
+            typeof n.hospital_data === 'object' &&
+            !Array.isArray(n.hospital_data)
+            ? (n.hospital_data as Record<string, unknown>)
+            : null
+          : prev.hospital_data;
+      const dispatch_status = (n.status as Mission['dispatch_status']) ?? prev.dispatch_status;
       return {
         ...prev,
-        dispatch_status: (n.status as Mission['dispatch_status']) ?? prev.dispatch_status,
-        assigned_structure: hasAssignment ? buildAssignedStructureFromDispatchRow(n) : null,
+        dispatch_status,
+        hospital_status: hospital_status ?? prev.hospital_status,
+        hospital_notes,
+        hospital_data,
       };
     });
   }, []);
@@ -389,11 +438,21 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     };
   }, [activeMission?.incident_id]);
 
-  const updateDispatchStatus = async (status: 'en_route' | 'on_scene' | 'en_route_hospital' | 'arrived_hospital' | 'completed') => {
+  const updateDispatchStatus = async (
+    status: 'en_route' | 'on_scene' | 'en_route_hospital' | 'arrived_hospital' | 'mission_end' | 'completed',
+  ) => {
     if (!activeMission) return;
 
+    if (status === 'en_route_hospital' && activeMission.hospital_status !== 'accepted') {
+      Alert.alert(
+        'Hôpital non confirmé',
+        "L'établissement doit d'abord accepter la prise en charge avant le départ vers l'hôpital.",
+      );
+      return;
+    }
+
     try {
-      const updateData: any = { status };
+      const updateData: Record<string, unknown> = { status };
       if (status === 'on_scene') updateData.arrived_at = new Date().toISOString();
       if (status === 'arrived_hospital') updateData.arrived_at = new Date().toISOString();
       if (status === 'completed') updateData.completed_at = new Date().toISOString();
@@ -411,13 +470,13 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       }
       console.log('[Mission] ✅ Step 1 — dispatch updated');
       
-      // 2. Update incident status for the Admin dashboard
-      // dispatches uses 'on_scene' but incidents enum uses 'arrived'
+      // 2. incidents.status — aligné PROMPT_CURSOR_URGENTISTE_WORKFLOW §8 + NOTE_LOVABLE (ex. mission_end → ended).
       const incidentStatusMap: Record<string, string> = {
         en_route: 'en_route',
         on_scene: 'arrived',
         en_route_hospital: 'en_route_hospital',
         arrived_hospital: 'arrived_hospital',
+        mission_end: 'ended',
         completed: 'resolved',
       };
       const incidentStatus = incidentStatusMap[status] || status;
@@ -433,12 +492,13 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       if (incidentError) console.error('[Mission] ⚠️ Step 2 — incident update failed:', incidentError.message);
       else console.log(`[Mission] ✅ Step 2 — incident → ${incidentStatus}`);
 
-      // 3. Sync active_rescuers.status → trigger → units.status
+      // 3. Sync active_rescuers.status → trigger → units.status (tableau workflow PROMPT_CURSOR_URGENTISTE)
       const rescuerStatusMap: Record<string, string> = {
         en_route: 'en_route',
         on_scene: 'on_scene',
         en_route_hospital: 'en_route',
         arrived_hospital: 'on_scene',
+        mission_end: 'active',
         completed: 'active',
       };
       const rescuerStatus = rescuerStatusMap[status] || 'active';
@@ -458,7 +518,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         // Mission terminée → vider immédiatement pour que le HomeTab affiche "Standby"
         setActiveMission(null);
       } else {
-        setActiveMission(prev => prev ? { ...prev, dispatch_status: status } : null);
+        setActiveMission(prev => (prev ? { ...prev, dispatch_status: status } : null));
       }
     } catch (err: any) {
       console.error('[MissionProvider] Update error:', err.message);
@@ -492,28 +552,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchHospitals = async (): Promise<Hospital[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('health_structures')
-        .select('*')
-        .limit(20);
-
-      if (error) throw error;
-
-      return (data || []).map(h => ({
-        id: h.id,
-        name: h.name,
-        specialty: h.category,
-        address: h.address,
-        coords: { 
-          latitude: h.location_lat || -4.32, 
-          longitude: h.location_lng || 15.3 
-        }
-      }));
-    } catch (err: any) {
-      console.error('[MissionProvider] Fetch hospitals error:', err.message);
-      return [];
-    }
+    /** L’urgentiste n’utilise pas `health_structures` pour l’affectation (voir workflow Lovable). */
+    return [];
   };
 
   return (

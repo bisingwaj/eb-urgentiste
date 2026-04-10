@@ -19,6 +19,7 @@ const STATUS_STEPS = [
   { key: 'on_scene', label: 'Sur zone', icon: 'place', color: '#FF3B30' },
   { key: 'en_route_hospital', label: 'Vers hôpital', icon: 'local-hospital', color: '#FF9500' },
   { key: 'arrived_hospital', label: 'À l\'hôpital', icon: 'domain', color: '#30D158' },
+  { key: 'mission_end', label: 'Relais', icon: 'swap-horiz', color: '#30D158' },
   { key: 'completed', label: 'Terminé', icon: 'check-circle', color: '#30D158' },
 ] as const;
 
@@ -163,12 +164,13 @@ export function MissionActiveScreen({ navigation }: any) {
   };
 
   const handleNextStatus = async () => {
-    const nextStatuses: Record<string, 'en_route' | 'on_scene' | 'en_route_hospital' | 'arrived_hospital' | 'completed'> = {
+    const nextStatuses: Record<string, 'en_route' | 'on_scene' | 'en_route_hospital' | 'arrived_hospital' | 'mission_end' | 'completed'> = {
       dispatched: 'en_route',
       en_route: 'on_scene',
       on_scene: 'completed',
       en_route_hospital: 'arrived_hospital',
-      arrived_hospital: 'completed',
+      arrived_hospital: 'mission_end',
+      mission_end: 'completed',
     };
     const next = nextStatuses[activeMission.dispatch_status];
     if (!next) return;
@@ -178,6 +180,7 @@ export function MissionActiveScreen({ navigation }: any) {
       on_scene: "Confirmer l'arrivée sur zone ?",
       completed: 'Marquer la mission comme terminée ?',
       arrived_hospital: "Confirmer l'arrivée à l'hôpital ?",
+      mission_end: 'Confirmer la fin de mission (relais à l\'établissement) ?',
     };
 
     Alert.alert('Changement de statut', labels[next], [
@@ -235,7 +238,8 @@ export function MissionActiveScreen({ navigation }: any) {
     en_route: '📍  ARRIVÉ SUR ZONE',
     on_scene: '✅  MISSION TERMINÉE',
     en_route_hospital: '🏥  ARRIVÉ À L\'HÔPITAL',
-    arrived_hospital: '✅  CLÔTURER LA MISSION',
+    arrived_hospital: '🔁  RELAIS / FIN DE MISSION',
+    mission_end: '✅  CLÔTURER LA MISSION',
   };
 
   return (
