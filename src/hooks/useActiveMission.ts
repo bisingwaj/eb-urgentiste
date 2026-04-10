@@ -1,5 +1,18 @@
 import { useMission } from '../contexts/MissionContext';
 
+/** Aligné sur `dispatches.hospital_status` (Lovable / workflow urgentiste). */
+export type HospitalStatus = 'pending' | 'accepted' | 'refused';
+
+export function normalizeHospitalStatus(v: unknown): HospitalStatus | null {
+  if (v === 'pending' || v === 'accepted' || v === 'refused') return v;
+  return null;
+}
+
+/** Coordonnées hôpital : uniquement après acceptation par la structure. */
+export function canShowHospitalCoordinates(m: { hospital_status?: HospitalStatus | null } | null): boolean {
+  return m?.hospital_status === 'accepted';
+}
+
 export interface AssignedStructure {
   id: string;
   name: string;
@@ -61,6 +74,10 @@ export interface Mission {
   battery_level?: string | null;
   network_state?: string | null;
   incident_updated_at?: string | null;
+  /** `dispatches.hospital_status` — GPS / nav hôpital uniquement si `accepted`. */
+  hospital_status?: HospitalStatus | null;
+  hospital_notes?: string | null;
+  hospital_data?: Record<string, unknown> | null;
 }
 
 export function useActiveMission() {

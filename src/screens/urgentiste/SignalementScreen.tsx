@@ -42,7 +42,8 @@ function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon
 }
 import { useFocusEffect } from "@react-navigation/native";
 import { useActiveMission } from "../../hooks/useActiveMission";
-import { useMission, Hospital } from "../../contexts/MissionContext";
+import { useMission } from "../../contexts/MissionContext";
+import type { Hospital } from "../../contexts/MissionContext";
 import { alertVoipError, startRescuerToCitizenVoipCall } from "../../lib/rescuerCallCitizen";
 import { canOfferVictimContactCalls } from "../../lib/missionVictimCall";
 
@@ -100,42 +101,10 @@ interface AlertData {
    };
 }
 
-// ── Mock Data ──
-const MOCK_ALERTS: AlertData[] = [
-   {
-      id: "AL-902",
-      time: "2 min",
-      type: "ACCIDENT ROUTE",
-      typeIcon: "directions-car",
-      location: "Limete, Boulevard Lumumba",
-      description:
-         "Collision deux véhicules. Victime coincée. Fracture ouverte jambe gauche suspectée.",
-      priority: "CRITIQUE",
-      coordinates: { latitude: -4.34, longitude: 15.33 },
-      patient: {
-         nom: "JEAN KABEYA",
-         age: 42,
-         sexe: "Masculin",
-         groupeSanguin: "O+",
-      },
-   },
-];
-
-const HOSPITALS = [
-   {
-      id: "H1",
-      name: "Hôpital HJ Kinshasa",
-      distance: "1.2 km",
-      capacity: "Haute",
-      specialty: "Cardiologie",
-      coords: { latitude: -4.32, longitude: 15.3 },
-   },
-];
-
 export function SignalementScreen({ navigation, route }: any) {
    const insets = useSafeAreaInsets();
    const { activeMission, isLoading: missionLoading, updateDispatchStatus, refresh } = useActiveMission();
-   const { fetchHospitals, updateMissionDetails } = useMission();
+   const { updateMissionDetails } = useMission();
    const initialMission = route?.params?.mission || activeMission;
    
    const getInitialStep = (): MissionStep => {
@@ -147,6 +116,7 @@ export function SignalementScreen({ navigation, route }: any) {
          case 'on_scene': return 'assessment';
          case 'en_route_hospital': return 'transport';
          case 'arrived_hospital': return 'closure';
+         case 'mission_end': return 'closure';
          default: return 'reception';
       }
    };
@@ -154,8 +124,8 @@ export function SignalementScreen({ navigation, route }: any) {
    const [step, setStep] = useState<MissionStep>(getInitialStep);
    const [stateRestored, setStateRestored] = useState(false);
    const [selectedMission, setSelectedMission] = useState<any>(initialMission);
-   const [hospitals, setHospitals] = useState<Hospital[]>([]);
    const missionRef = useRef<any>(null);
+   const closureFinalizeRef = useRef(false);
 
    useEffect(() => {
       missionRef.current = selectedMission;
@@ -405,6 +375,8 @@ export function SignalementScreen({ navigation, route }: any) {
       specialty?: string;
       address?: string;
       phone?: string;
+      refused?: boolean;
+      refusalNotes?: string;
    } | null>(null);
    const [departingEnRoute, setDepartingEnRoute] = useState(false);
    const structureTimelineLoggedRef = useRef<string | null>(null);
@@ -522,12 +494,6 @@ export function SignalementScreen({ navigation, route }: any) {
    ).current;
 
     useEffect(() => {
-       const loadHospitals = async () => {
-         const data = await fetchHospitals();
-         setHospitals(data);
-       };
-       loadHospitals();
-
        setTimeout(() => setIsLoading(false), 1000);
       Animated.loop(
          Animated.sequence([
@@ -543,21 +509,6 @@ export function SignalementScreen({ navigation, route }: any) {
             }),
          ]),
       ).start();
-
-      const timer = setTimeout(() => {
-         if (step === "standby" && !activeMission && !selectedMission && !missionLoading) {
-            setSelectedMission(MOCK_ALERTS[0]);
-            setIsAssigned(true);
-            Animated.spring(notifyAnim, {
-               toValue: 1,
-               useNativeDriver: true,
-               tension: 50,
-               friction: 7,
-            }).start();
-         }
-      }, 4000);
-
-      return () => clearTimeout(timer);
    }, [step]);
 
    const addTimelineEvent = (label: string, icon: string, status?: string) => {
@@ -569,10 +520,33 @@ export function SignalementScreen({ navigation, route }: any) {
       ]);
    };
 
-   /** Affectation structure (STRUCTURE_ASSIGNMENT_MOBILE_GUIDE.md) — temps réel + fetch */
+   /** Affectation structure — coords uniquement si `hospital_status === 'accepted'` (MissionContext). */
    useEffect(() => {
+      const mergedHs =
+         activeMission?.hospital_status ?? selectedMission?.hospital_status ?? null;
       const struct = activeMission?.assigned_structure || selectedMission?.assigned_structure;
       const missionKey = activeMission?.id ?? selectedMission?.id ?? "";
+
+      if (mergedHs === "refused" && struct?.id) {
+         setTargetHospital(null);
+         setPendingStructureInfo({
+            id: struct.id,
+            name: struct.name,
+            specialty: struct.type,
+            address: struct.address ?? undefined,
+            phone: struct.phone ?? undefined,
+            refused: true,
+            refusalNotes:
+               activeMission?.hospital_notes ?? selectedMission?.hospital_notes ?? undefined,
+         });
+         const tlKey = `${missionKey}:${struct.id}:refused`;
+         if (structureTimelineLoggedRef.current !== tlKey) {
+            structureTimelineLoggedRef.current = tlKey;
+            addTimelineEvent("Structure a refusé la prise en charge", "cancel", struct.name);
+         }
+         return;
+      }
+
       if (!struct?.id) {
          setPendingStructureInfo(null);
          if (activeMission != null && !activeMission.assigned_structure?.id) {
@@ -591,12 +565,13 @@ export function SignalementScreen({ navigation, route }: any) {
             specialty: struct.type,
             address: struct.address ?? undefined,
             phone: struct.phone ?? undefined,
+            refused: false,
          });
          setTargetHospital(null);
-         const tlKey = `${missionKey}:${struct.id}`;
+         const tlKey = `${missionKey}:${struct.id}:pending`;
          if (structureTimelineLoggedRef.current !== tlKey) {
             structureTimelineLoggedRef.current = tlKey;
-            addTimelineEvent("Structure assignée par la centrale", "local-hospital", struct.name);
+            addTimelineEvent("En attente de réponse de l'établissement", "local-hospital", struct.name);
          }
          return;
       }
@@ -624,18 +599,49 @@ export function SignalementScreen({ navigation, route }: any) {
          return next;
       });
 
-      const tlKey = `${missionKey}:${struct.id}`;
+      const tlKey = `${missionKey}:${struct.id}:accepted`;
       if (structureTimelineLoggedRef.current !== tlKey) {
          structureTimelineLoggedRef.current = tlKey;
-         addTimelineEvent("Structure assignée par la centrale", "local-hospital", struct.name);
+         addTimelineEvent("Établissement accepté — coordonnées disponibles", "local-hospital", struct.name);
       }
    }, [
       step,
       activeMission?.assigned_structure,
       activeMission?.id,
+      activeMission?.hospital_status,
+      activeMission?.hospital_notes,
       selectedMission?.assigned_structure,
       selectedMission?.id,
+      selectedMission?.hospital_status,
+      selectedMission?.hospital_notes,
    ]);
+
+   /** Après arrivée hôpital : `mission_end` puis `completed` (workflow Lovable §10–11). */
+   useEffect(() => {
+      if (step !== "closure") {
+         closureFinalizeRef.current = false;
+         return;
+      }
+      if (!activeMission) return;
+      if (activeMission.dispatch_status !== "arrived_hospital") return;
+      if (closureFinalizeRef.current) return;
+
+      closureFinalizeRef.current = true;
+      void (async () => {
+         try {
+            await updateDispatchStatus("mission_end");
+            await updateDispatchStatus("completed");
+            await clearMissionState();
+            addTimelineEvent("Mission clôturée", "check-circle");
+         } catch {
+            closureFinalizeRef.current = false;
+            Alert.alert(
+               "Erreur",
+               "Impossible de finaliser la mission (mission_end / completed). Réessayez.",
+            );
+         }
+      })();
+   }, [step, activeMission?.dispatch_status, activeMission?.id, updateDispatchStatus, clearMissionState]);
 
    useEffect(() => {
       if (!urgentisteLoc || !targetHospital?.coords) return;
@@ -777,10 +783,8 @@ export function SignalementScreen({ navigation, route }: any) {
     const handleArrivedAtHospital = async () => {
        try {
           await updateDispatchStatus('arrived_hospital');
-          await updateDispatchStatus('completed');
-          clearMissionState();
+          addTimelineEvent("Arrivée à l'hôpital — relais à l'établissement", "local-hospital");
           transitionTo("closure");
-          addTimelineEvent("Arrivée à l'hôpital — Mission terminée", "check-circle");
        } catch (err) {
           console.error("Failed to arrive at hospital", err);
        }
@@ -1621,7 +1625,23 @@ export function SignalementScreen({ navigation, route }: any) {
                {step === "assignment" && (
                   <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
                      <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</View>
-                     {!targetHospital && !pendingStructureInfo ? (
+                     {pendingStructureInfo?.refused ? (
+                        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 28 }}>
+                           <MaterialIcons name="cancel" size={48} color="#FF3B30" />
+                           <Text style={[styles.standbyText, { marginTop: 16, textAlign: "center" }]}>
+                              {pendingStructureInfo.name}
+                           </Text>
+                           <Text style={[styles.standbySub, { marginTop: 12, textAlign: "center" }]}>
+                              Cet établissement a refusé la prise en charge. En attente de réassignation par la centrale.
+                           </Text>
+                           {pendingStructureInfo.refusalNotes ? (
+                              <Text style={[styles.standbySub, { marginTop: 16, textAlign: "center", color: "rgba(255,255,255,0.85)" }]}>
+                                 Motif : {pendingStructureInfo.refusalNotes}
+                              </Text>
+                           ) : null}
+                           <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 24 }} />
+                        </View>
+                     ) : !targetHospital && !pendingStructureInfo ? (
                         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
                            <ActivityIndicator size="large" color={colors.secondary} />
                            <Text style={[styles.standbyText, { marginTop: 20 }]}>
@@ -1638,7 +1658,7 @@ export function SignalementScreen({ navigation, route }: any) {
                               {pendingStructureInfo.name}
                            </Text>
                            <Text style={[styles.standbySub, { marginTop: 12, textAlign: "center" }]}>
-                              Structure reçue — en attente des coordonnées GPS (centrale).
+                              En attente de réponse de l'établissement — les coordonnées GPS seront affichées après acceptation.
                            </Text>
                            <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 20 }} />
                         </View>

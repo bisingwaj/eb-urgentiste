@@ -471,6 +471,18 @@ export function HospitalDashboardTab({ navigation }: any) {
     return c.status === filter;
   });
 
+  /** Alertes `hospital_status === 'pending'` en tête (workflow Lovable hôpital). */
+  const sortedFilteredCases = useMemo(() => {
+    const list = [...filteredCases];
+    list.sort((a, b) => {
+      const ap = a.hospitalStatus === "pending" ? 0 : 1;
+      const bp = b.hospitalStatus === "pending" ? 0 : 1;
+      if (ap !== bp) return ap - bp;
+      return 0;
+    });
+    return list;
+  }, [filteredCases]);
+
   const criticalCount = activeCases.filter(
     (c) => c.level === "critique" && !isCaseClosed(c)
   ).length;
@@ -605,7 +617,7 @@ export function HospitalDashboardTab({ navigation }: any) {
 
         {isLoading ? (
           <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
-        ) : filteredCases.length === 0 ? (
+        ) : sortedFilteredCases.length === 0 ? (
           <View style={{ alignItems: "center", marginTop: 40, paddingHorizontal: 24 }}>
             <MaterialIcons name="inbox" size={48} color="rgba(255,255,255,0.2)" />
             <Text style={{ color: "rgba(255,255,255,0.4)", marginTop: 16, textAlign: "center" }}>
@@ -617,9 +629,10 @@ export function HospitalDashboardTab({ navigation }: any) {
             </Text>
           </View>
         ) : (
-          filteredCases.map((caseItem) => {
+          sortedFilteredCases.map((caseItem) => {
             const lCfg = getLevelConfig(caseItem.level);
             const sCfg = getStatusConfig(caseItem.status);
+            const needsHospitalAnswer = caseItem.hospitalStatus === "pending";
             return (
               <TouchableOpacity key={caseItem.id} style={styles.alertCard} onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })} activeOpacity={0.9}>
                 <View style={styles.cardInfo}>
@@ -627,6 +640,12 @@ export function HospitalDashboardTab({ navigation }: any) {
                     <View style={styles.timePill}><MaterialCommunityIcons name="clock-outline" color="rgba(255,255,255,0.4)" size={14} /><Text style={styles.timeText}>{caseItem.timestamp}</Text></View>
                     <View style={[styles.levelTag, { borderColor: lCfg?.color }]}><Text style={[styles.levelLabelText, { color: lCfg?.color }]}>{lCfg?.label}</Text></View>
                   </View>
+                  {needsHospitalAnswer ? (
+                    <View style={styles.pendingHospitalBadge}>
+                      <MaterialIcons name="touch-app" size={14} color="#FFB74D" />
+                      <Text style={styles.pendingHospitalBadgeText}>Réponse requise — accepter ou refuser</Text>
+                    </View>
+                  ) : null}
                   <Text style={styles.victimName}>{caseItem.victimName}</Text>
                   <Text style={styles.urgencyType}>{caseItem.typeUrgence?.toUpperCase()}</Text>
                   <View style={styles.locationInfo}><MaterialIcons name="location-on" color={colors.secondary} size={16} /><Text style={styles.addressText} numberOfLines={1}>{caseItem.address}</Text></View>
@@ -715,6 +734,20 @@ const styles = StyleSheet.create({
   alertCard: { backgroundColor: "#1A1A1A", marginHorizontal: 20, borderRadius: 32, padding: 22, flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },
   cardInfo: { flex: 1 },
   cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  pendingHospitalBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    alignSelf: "flex-start",
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(255, 183, 77, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 183, 77, 0.35)",
+  },
+  pendingHospitalBadgeText: { color: "#FFB74D", fontSize: 12, fontWeight: "800", flex: 1 },
   timePill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.05)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
   timeText: { color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: "700" },
   levelTag: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },

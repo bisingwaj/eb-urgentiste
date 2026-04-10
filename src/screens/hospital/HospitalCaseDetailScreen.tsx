@@ -131,7 +131,11 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const handleAcceptCase = async () => {
     try {
       await updateCaseStatus(caseData.id, { hospitalStatus: 'accepted' });
-      setCaseData(prev => ({ ...prev, hospitalStatus: 'accepted' }));
+      setCaseData(prev => ({
+        ...prev,
+        hospitalStatus: 'accepted',
+        hospitalNotes: prev.hospitalNotes ?? "Accepté par l'établissement",
+      }));
     } catch (err) {
       Alert.alert('Erreur', 'Impossible d\'accepter le cas actuellement.');
     }
@@ -256,78 +260,122 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   useEffect(() => {
     if (!showAmbulanceTracking || !caseData.unitId) return;
 
-    let channel: any;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
     let isMounted = true;
 
     async function initTracking() {
-      // Find rescuers assigned to this unit
       const { data: rescuers } = await supabase
         .from('users_directory')
         .select('auth_user_id, first_name, last_name')
         .eq('assigned_unit_id', caseData.unitId);
 
       if (!rescuers || rescuers.length === 0) return;
-      
-      const rescuerIds = rescuers.map((r: any) => r.auth_user_id);
+
+      const rescuerIds = rescuers
+        .map((r: { auth_user_id?: string | null }) => r.auth_user_id)
+        .filter((id: string | null | undefined): id is string => id != null && String(id).length > 0);
+
       if (rescuers[0]?.first_name) {
         setRescuerName(`${rescuers[0].first_name} ${rescuers[0].last_name || ''}`.trim());
       }
 
-      // Fetch initial position
-      const { data: activeRescuers } = await supabase
-        .from('active_rescuers')
-        .select('lat, lng, speed, battery, heading, updated_at')
-        .in('user_id', rescuerIds)
-        .order('updated_at', { ascending: false })
-        .limit(1);
+      const applyActiveRescuerRow = (data: {
+        lat?: unknown;
+        lng?: unknown;
+        speed?: unknown;
+        battery?: unknown;
+        updated_at?: string;
+      }) => {
+        if (!isMounted) return;
+        if (data.lat != null) setAmbulanceLat(Number(data.lat));
+        if (data.lng != null) setAmbulanceLng(Number(data.lng));
+        setAmbulanceSpeed(data.speed != null ? Number(data.speed) : null);
+        setAmbulanceBattery(data.battery != null ? Number(data.battery) : null);
+        if (data.updated_at) setLastUpdate(new Date(data.updated_at));
+      };
 
-      if (activeRescuers && activeRescuers.length > 0 && isMounted) {
-        setAmbulanceLat(Number(activeRescuers[0].lat));
-        setAmbulanceLng(Number(activeRescuers[0].lng));
-        setAmbulanceSpeed(activeRescuers[0].speed);
-        setAmbulanceBattery(activeRescuers[0].battery);
-        setLastUpdate(new Date(activeRescuers[0].updated_at));
-      } else {
-        // Fallback to unit position if no active_rescuer found
+      let usedActiveRescuer = false;
+      if (rescuerIds.length > 0) {
+        const { data: activeRescuers } = await supabase
+          .from('active_rescuers')
+          .select('lat, lng, speed, battery, heading, updated_at')
+          .in('user_id', rescuerIds)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+
+        const row = activeRescuers?.[0];
+        if (
+          row &&
+          row.lat != null &&
+          row.lng != null &&
+          isMounted
+        ) {
+          applyActiveRescuerRow(row);
+          usedActiveRescuer = true;
+        }
+      }
+
+      if (!usedActiveRescuer) {
         const { data: unitData } = await supabase
           .from('units')
-          .select('location_lat, location_lng, agent_name')
+          .select('location_lat, location_lng, agent_name, last_location_update')
           .eq('id', caseData.unitId)
           .single();
         if (unitData && isMounted) {
           if (unitData.location_lat != null) setAmbulanceLat(Number(unitData.location_lat));
           if (unitData.location_lng != null) setAmbulanceLng(Number(unitData.location_lng));
           if (unitData.agent_name) setRescuerName(unitData.agent_name);
+          if (unitData.last_location_update) setLastUpdate(new Date(unitData.last_location_update));
         }
       }
 
-      channel = supabase.channel(`hospital-unit-tracking-${caseData.unitId}`)
-        .on(
+      /** PROMPT_CURSOR_HOPITAL_WORKFLOW §3 : un listener filtré par secouriste + repli flotte `units`. */
+      let ch = supabase.channel(`hospital-track-${caseData.unitId}`);
+      for (const uid of rescuerIds) {
+        ch = ch.on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'active_rescuers' },
-          (payload: any) => {
+          {
+            event: '*',
+            schema: 'public',
+            table: 'active_rescuers',
+            filter: `user_id=eq.${uid}`,
+          },
+          (payload: { new?: Record<string, unknown>; old?: Record<string, unknown> }) => {
             const data = payload.new || payload.old;
-            if (data && rescuerIds.includes(data.user_id)) {
-              if (isMounted) {
-                setAmbulanceLat(Number(data.lat));
-                setAmbulanceLng(Number(data.lng));
-                setAmbulanceSpeed(data.speed);
-                setAmbulanceBattery(data.battery);
-                setLastUpdate(new Date(data.updated_at));
-              }
-            }
+            if (!data || !isMounted) return;
+            applyActiveRescuerRow(data as Parameters<typeof applyActiveRescuerRow>[0]);
+          },
+        );
+      }
+      ch = ch.on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'units',
+          filter: `id=eq.${caseData.unitId}`,
+        },
+        (payload: { new?: Record<string, unknown> }) => {
+          const row = payload.new;
+          if (!row || !isMounted) return;
+          if (row.location_lat != null && row.location_lng != null) {
+            setAmbulanceLat(Number(row.location_lat));
+            setAmbulanceLng(Number(row.location_lng));
+            if (row.last_location_update) setLastUpdate(new Date(String(row.last_location_update)));
           }
-        )
-        .subscribe();
+        },
+      );
+      ch.subscribe();
+      channel = ch;
     }
 
-    initTracking();
+    void initTracking();
 
     return () => {
       isMounted = false;
       if (channel) supabase.removeChannel(channel);
     };
-  }, [showAmbulanceTracking, caseData.unitId]);
+  }, [showAmbulanceTracking, caseData.unitId, caseData.hospitalStatus]);
 
   const isSignalLost = lastUpdate 
     ? new Date().getTime() - lastUpdate.getTime() > 2 * 60 * 1000 

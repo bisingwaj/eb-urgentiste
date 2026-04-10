@@ -2,6 +2,30 @@ import { useEffect, useRef } from 'react';
 import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useMission } from '../contexts/MissionContext';
+import type { Mission } from './useActiveMission';
+
+/**
+ * Statut `active_rescuers.status` pour le ping GPS — aligné sur le dispatch actif (workflow Lovable §7–8).
+ */
+function rescuerGpsStatusFromDispatch(ds: Mission['dispatch_status'] | undefined): string {
+  if (!ds) return 'active';
+  switch (ds) {
+    case 'dispatched':
+      return 'en_intervention';
+    case 'en_route':
+    case 'en_route_hospital':
+      return 'en_route';
+    case 'on_scene':
+    case 'arrived_hospital':
+      return 'on_scene';
+    case 'mission_end':
+    case 'completed':
+      return 'active';
+    default:
+      return 'active';
+  }
+}
 
 /**
  * Hook pour suivre et synchroniser la position GPS de l'urgentiste
@@ -9,13 +33,17 @@ import { useAuth } from '../contexts/AuthContext';
  */
 export function useLocationTracking() {
   const { profile, isAuthenticated } = useAuth();
+  const { activeMission } = useMission();
   const subscriptionRef = useRef<Location.LocationSubscription | null>(null);
+  const dispatchStatusRef = useRef<Mission['dispatch_status'] | undefined>(activeMission?.dispatch_status);
+  dispatchStatusRef.current = activeMission?.dispatch_status;
 
   const updateLocationInSupabase = async (location: Location.LocationObject) => {
     if (!profile?.auth_user_id) return;
 
     const { latitude, longitude, accuracy, heading, speed } = location.coords;
     const batteryLevel = 100; // Placeholder, peut être enrichi avec expo-battery
+    const rescuerStatus = rescuerGpsStatusFromDispatch(dispatchStatusRef.current);
 
     try {
       // 1. Mise à jour de la table de tracking individuel (active_rescuers)
@@ -29,7 +57,7 @@ export function useLocationTracking() {
           heading,
           speed,
           battery: batteryLevel,
-          status: 'active',
+          status: rescuerStatus,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'user_id' });
 
