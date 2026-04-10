@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -17,7 +17,11 @@ import { colors } from '../../theme/colors';
 import { useHospital } from '../../contexts/HospitalContext';
 import { getLevelConfig, getStatusConfig } from './HospitalDashboardTab';
 import { navigateFromHospitalAdmissionsList } from '../../lib/hospitalNavigation';
-import { ACTIVE_ADMISSION_STATUSES, isCaseClosed } from '../../lib/hospitalStats';
+import {
+  ACTIVE_ADMISSION_STATUSES,
+  filterPastCases,
+  isCaseClosed,
+} from '../../lib/hospitalStats';
 
 const { width } = Dimensions.get('window');
 
@@ -33,6 +37,17 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
       (c.victimName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.id.toLowerCase().includes(searchQuery.toLowerCase())),
   );
+
+  const recentPastCases = useMemo(() => {
+    const list = filterPastCases(activeCases);
+    return [...list]
+      .sort((a, b) => {
+        const ta = a.completedAt ? new Date(a.completedAt).getTime() : 0;
+        const tb = b.completedAt ? new Date(b.completedAt).getTime() : 0;
+        return tb - ta;
+      })
+      .slice(0, 8);
+  }, [activeCases]);
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -61,6 +76,16 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
             onChangeText={setSearchQuery}
           />
         </View>
+
+        <TouchableOpacity
+          style={styles.historyLink}
+          onPress={() => navigation.navigate('HospitalHistory')}
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons name="history" color={colors.secondary} size={20} />
+          <Text style={styles.historyLinkText}>Historique complet</Text>
+          <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.35)" size={22} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -132,6 +157,56 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
             );
           })
         )}
+
+        <View style={[styles.sectionHeader, styles.historySectionHeader]}>
+          <Text style={styles.sectionLabel}>DERNIERS DOSSIERS CLÔTURÉS</Text>
+        </View>
+
+        {recentPastCases.length === 0 ? (
+          <View style={styles.historyEmptyWrap}>
+            <Text style={styles.historyEmptyText}>Aucun dossier clôturé récent.</Text>
+          </View>
+        ) : (
+          recentPastCases.map((item) => {
+            const lCfg = getLevelConfig(item.level);
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={styles.historyCard}
+                onPress={() =>
+                  navigation.navigate('HospitalReport', {
+                    caseData: item,
+                    reportAlreadySent: item.reportSent === true,
+                  })
+                }
+                activeOpacity={0.9}
+              >
+                <View style={styles.historyCardLeft}>
+                  <View style={styles.historyAvatar}>
+                    <Text style={styles.historyAvatarText}>{item.victimName.charAt(0)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.historyName} numberOfLines={1}>
+                      {item.victimName}
+                    </Text>
+                    <Text style={styles.historyMeta} numberOfLines={1}>
+                      {item.incidentReference || item.id.slice(0, 8)} ·{' '}
+                      {item.completedAt
+                        ? new Date(item.completedAt).toLocaleString('fr-FR')
+                        : item.timestamp}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.historyCardRight}>
+                  <View style={[styles.historyLevelPill, { borderColor: lCfg.color }]}>
+                    <Text style={[styles.historyLevelText, { color: lCfg.color }]}>{lCfg.label}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={20} />
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
       </ScrollView>
       </TabScreenSafeArea>
     </KeyboardAvoidingView>
@@ -148,7 +223,17 @@ const styles = StyleSheet.create({
   countText: { color: '#FFF', fontSize: 13, fontWeight: '900' },
   searchBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#141414', borderRadius: 20, height: 56, paddingHorizontal: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   searchInput: { flex: 1, color: '#FFF', fontSize: 15, marginLeft: 12, fontWeight: '600' },
+  historyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    gap: 8,
+  },
+  historyLinkText: { flex: 1, color: '#FFF', fontSize: 15, fontWeight: '700' },
   sectionHeader: { paddingHorizontal: 24, marginVertical: 20 },
+  historySectionHeader: { marginTop: 8, marginBottom: 12 },
   sectionLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
   emptyContainer: { alignItems: 'center', marginTop: 80 },
   emptyTitle: { color: 'rgba(255,255,255,0.2)', fontSize: 18, fontWeight: '800', marginTop: 20 },
@@ -181,4 +266,33 @@ const styles = StyleSheet.create({
   statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14 },
   statusBadgeText: { fontSize: 13, fontWeight: '800' },
   etaContainer: { flexDirection: 'row', alignItems: 'center' },
+  historyEmptyWrap: { paddingHorizontal: 24, paddingBottom: 8 },
+  historyEmptyText: { color: 'rgba(255,255,255,0.25)', fontSize: 14, fontWeight: '600' },
+  historyCard: {
+    backgroundColor: '#1A1A1A',
+    marginHorizontal: 20,
+    borderRadius: 20,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  historyCardLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
+  historyAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  historyAvatarText: { color: '#FFF', fontWeight: '800', fontSize: 16 },
+  historyName: { color: '#FFF', fontWeight: '700', fontSize: 15 },
+  historyMeta: { color: 'rgba(255,255,255,0.35)', fontSize: 12, marginTop: 2 },
+  historyCardRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  historyLevelPill: { borderWidth: 1, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  historyLevelText: { fontSize: 11, fontWeight: '800' },
 });

@@ -13,12 +13,18 @@ export const ACTIVE_ADMISSION_STATUSES: readonly CaseStatus[] = [
   'monitoring',
 ];
 
+/**
+ * Fermeture alignée sur le mapping dispatch / `hospital_data.status` :
+ * un dispatch `completed` peut encore correspondre à un statut clinique actif
+ * (voir `resolveCaseStatusFromRow` dans hospitalCaseMapping).
+ */
 export function isCaseClosed(c: EmergencyCase): boolean {
-  return (
-    c.status === 'termine' ||
-    c.dispatchStatus === 'completed' ||
-    c.dispatchStatus === 'cancelled'
-  );
+  if (c.status === 'termine') return true;
+  if (c.dispatchStatus === 'cancelled') return true;
+  if (c.dispatchStatus === 'completed') {
+    return !ACTIVE_ADMISSION_STATUSES.includes(c.status);
+  }
+  return false;
 }
 
 export function countPendingHospital(cases: EmergencyCase[]): number {
@@ -36,10 +42,12 @@ export function countActiveAdmissions(cases: EmergencyCase[]): number {
   ).length;
 }
 
+/** Dossiers réellement clos côté hôpital (exclut completed + statut encore actif). */
 export function filterPastCases(cases: EmergencyCase[]): EmergencyCase[] {
   return cases.filter(
     (c) =>
-      c.dispatchStatus === 'completed' || c.dispatchStatus === 'cancelled',
+      (c.dispatchStatus === 'completed' || c.dispatchStatus === 'cancelled') &&
+      isCaseClosed(c),
   );
 }
 
