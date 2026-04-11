@@ -46,6 +46,7 @@
     },
     "plugins": [
       "expo-build-properties",
+      "@react-native-community/datetimepicker",
       "@rnmapbox/maps",
       "expo-secure-store",
       "./plugins/with-notifee-repository",
