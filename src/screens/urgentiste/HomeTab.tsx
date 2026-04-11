@@ -384,7 +384,7 @@ export function HomeTab({ navigation }: any) {
                   <Text style={styles.shortcutDesc}>SMUR / SAMU</Text>
                 </TouchableOpacity>
   
-                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('SignalerProbleme')}>
+                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('SignalementHub')}>
                   <View style={[styles.shortcutIconBox, { backgroundColor: '#FF950015' }]}>
                     <EmergencyBellIcon color="#FF9500" size={28} />
                   </View>
