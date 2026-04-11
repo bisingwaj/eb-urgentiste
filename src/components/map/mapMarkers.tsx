@@ -93,9 +93,12 @@ export const HospitalMarker = memo(function HospitalMarker({
 export const UnitMarker = memo(function UnitMarker({
   status,
   onPress,
+  /** Si défini (nombre fini), flèche de cap type Google ; sinon icône ambulance seule. */
+  headingDeg,
 }: {
   status: string;
   onPress?: () => void;
+  headingDeg?: number | null;
 }) {
   const bg =
     status === 'en_route'
@@ -103,10 +106,18 @@ export const UnitMarker = memo(function UnitMarker({
       : status === 'on_scene' || status === 'en_intervention'
         ? colors.markerUnitBusy
         : colors.markerUnit;
+  const showDirection = headingDeg != null && Number.isFinite(headingDeg);
+  const iconSize = 19;
   return (
     <MarkerHost>
       <Pressable onPress={onPress} style={[styles.unit, { backgroundColor: bg, shadowColor: bg }]}>
-        <Ambulance size={19} color="#FFFFFF" strokeWidth={2.5} />
+        {showDirection ? (
+          <View style={{ transform: [{ rotate: `${headingDeg}deg` }] }}>
+            <Navigation2 size={iconSize} color="#FFFFFF" strokeWidth={2.5} />
+          </View>
+        ) : (
+          <Ambulance size={iconSize} color="#FFFFFF" strokeWidth={2.5} />
+        )}
       </Pressable>
     </MarkerHost>
   );

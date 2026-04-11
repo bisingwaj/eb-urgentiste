@@ -8,6 +8,8 @@ import { useActiveMission } from '../../hooks/useActiveMission';
 import * as Location from 'expo-location';
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from '../../lib/mapbox';
 import { MapboxMapView } from '../../components/map/MapboxMapView';
+import { MePuck } from '../../components/map/mapMarkers';
+import { useMapPuckHeading } from '../../hooks/useMapPuckHeading';
 import { openExternalDirections } from '../../utils/navigation';
 import { formatMissionAddress, formatDescriptionLines } from '../../utils/missionAddress';
 import { alertVoipError, startRescuerToCitizenVoipCall } from '../../lib/rescuerCallCitizen';
@@ -28,7 +30,8 @@ export function MissionActiveScreen({ navigation }: any) {
   const { activeMission, updateDispatchStatus } = useActiveMission();
   const [noteText, setNoteText] = useState('');
   const [notes, setNotes] = useState<{ text: string; time: string }[]>([]);
-  const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [myLocation, setMyLocation] = useState<Location.LocationObject | null>(null);
+  const myHeadingDeg = useMapPuckHeading(myLocation);
   const [isUpdating, setIsUpdating] = useState(false);
   const [voipLoading, setVoipLoading] = useState(false);
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -43,11 +46,11 @@ export function MissionActiveScreen({ navigation }: any) {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        setMyLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        setMyLocation(loc);
         sub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, distanceInterval: 10 },
           (newLoc) => {
-            setMyLocation({ latitude: newLoc.coords.latitude, longitude: newLoc.coords.longitude });
+            setMyLocation(newLoc);
           }
         );
       } catch (err) {
@@ -66,7 +69,7 @@ export function MissionActiveScreen({ navigation }: any) {
     if (now - lastRouteFetch.current < 15000 && routeGeoJSON) return;
     lastRouteFetch.current = now;
     getRoute(
-      [myLocation.longitude, myLocation.latitude],
+      [myLocation.coords.longitude, myLocation.coords.latitude],
       [missionLng, missionLat],
       { profile: 'driving-traffic' },
     ).then((result) => {
@@ -76,7 +79,7 @@ export function MissionActiveScreen({ navigation }: any) {
         setRouteDistance(result.distance);
       }
     });
-  }, [myLocation?.latitude, myLocation?.longitude, missionLat, missionLng]);
+  }, [myLocation?.coords.latitude, myLocation?.coords.longitude, missionLat, missionLng]);
 
   // Si pas de mission active, revenir en arrière
   useEffect(() => {
@@ -91,7 +94,11 @@ export function MissionActiveScreen({ navigation }: any) {
       ? { latitude: activeMission.location.lat, longitude: activeMission.location.lng }
       : null;
 
-  const mapCenter = incidentCoords || myLocation || { latitude: -4.3224, longitude: 15.3070 };
+  const mapCenter =
+    incidentCoords ||
+    (myLocation
+      ? { latitude: myLocation.coords.latitude, longitude: myLocation.coords.longitude }
+      : { latitude: -4.3224, longitude: 15.3070 });
 
   const routeCameraBounds = useMemo(() => {
     if (!routeGeoJSON?.features[0]?.geometry) return null;
@@ -102,11 +109,11 @@ export function MissionActiveScreen({ navigation }: any) {
     if (!myLocation || !incidentCoords) return null;
     const padding = 80;
     return {
-      ne: [Math.max(myLocation.longitude, incidentCoords.longitude), Math.max(myLocation.latitude, incidentCoords.latitude)] as [number, number],
-      sw: [Math.min(myLocation.longitude, incidentCoords.longitude), Math.min(myLocation.latitude, incidentCoords.latitude)] as [number, number],
+      ne: [Math.max(myLocation.coords.longitude, incidentCoords.longitude), Math.max(myLocation.coords.latitude, incidentCoords.latitude)] as [number, number],
+      sw: [Math.min(myLocation.coords.longitude, incidentCoords.longitude), Math.min(myLocation.coords.latitude, incidentCoords.latitude)] as [number, number],
       paddingTop: padding, paddingBottom: padding, paddingLeft: padding, paddingRight: padding,
     };
-  }, [myLocation?.latitude, myLocation?.longitude, incidentCoords?.latitude, incidentCoords?.longitude]);
+  }, [myLocation?.coords.latitude, myLocation?.coords.longitude, incidentCoords?.latitude, incidentCoords?.longitude]);
 
   const mapCameraBounds = useMemo(() => routeCameraBounds ?? cameraBounds, [routeCameraBounds, cameraBounds]);
 
@@ -138,10 +145,10 @@ export function MissionActiveScreen({ navigation }: any) {
   const getDistance = () => {
     if (!myLocation || !incidentCoords) return null;
     const R = 6371;
-    const dLat = (incidentCoords.latitude - myLocation.latitude) * Math.PI / 180;
-    const dLon = (incidentCoords.longitude - myLocation.longitude) * Math.PI / 180;
+    const dLat = (incidentCoords.latitude - myLocation.coords.latitude) * Math.PI / 180;
+    const dLon = (incidentCoords.longitude - myLocation.coords.longitude) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(myLocation.latitude * Math.PI / 180) * Math.cos(incidentCoords.latitude * Math.PI / 180) *
+      Math.cos(myLocation.coords.latitude * Math.PI / 180) * Math.cos(incidentCoords.latitude * Math.PI / 180) *
       Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return (R * c).toFixed(1);
@@ -286,10 +293,11 @@ export function MissionActiveScreen({ navigation }: any) {
             )}
 
             {myLocation && (
-              <Mapbox.PointAnnotation id="my-location" coordinate={[myLocation.longitude, myLocation.latitude]}>
-                <View style={styles.myMarker}>
-                  <View style={styles.myMarkerDot} />
-                </View>
+              <Mapbox.PointAnnotation
+                id="my-location"
+                coordinate={[myLocation.coords.longitude, myLocation.coords.latitude]}
+              >
+                <MePuck headingDeg={myHeadingDeg} size={34} />
               </Mapbox.PointAnnotation>
             )}
 

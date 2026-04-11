@@ -74,6 +74,8 @@ PODS:
     - Yoga
   - ExpoSecureStore (15.0.8):
     - ExpoModulesCore
+  - ExpoSensors (15.0.8):
+    - ExpoModulesCore
   - ExpoSpeech (14.0.8):
     - ExpoModulesCore
   - ExpoSystemUI (6.0.9):
@@ -1980,6 +1982,7 @@ DEPENDENCIES:
   - ExpoLocation (from `../node_modules/expo-location/ios`)
   - ExpoModulesCore (from `../node_modules/expo-modules-core`)
   - ExpoSecureStore (from `../node_modules/expo-secure-store/ios`)
+  - ExpoSensors (from `../node_modules/expo-sensors/ios`)
   - ExpoSpeech (from `../node_modules/expo-speech/ios`)
   - ExpoSystemUI (from `../node_modules/expo-system-ui/ios`)
   - EXTaskManager (from `../node_modules/expo-task-manager/ios`)
@@ -2098,6 +2101,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/expo-modules-core"
   ExpoSecureStore:
     :path: "../node_modules/expo-secure-store/ios"
+  ExpoSensors:
+    :path: "../node_modules/expo-sensors/ios"
   ExpoSpeech:
     :path: "../node_modules/expo-speech/ios"
   ExpoSystemUI:
@@ -2273,6 +2278,7 @@ SPEC CHECKSUMS:
   ExpoLocation: d5b61cb4970fa982e39ca94246a206a0c3b812ca
   ExpoModulesCore: f3da4f1ab5a8375d0beafab763739dbee8446583
   ExpoSecureStore: d32f751874a2ceb5aaeebeb3578e165c1ba2b24a
+  ExpoSensors: 8f9fe9a9ffd36ca9c2f0fe40dafc0a063f844420
   ExpoSpeech: d22b56570ccfab5a27112dc9691f1ac83537de26
   ExpoSystemUI: 2ad325f361a2fcd96a464e8574e19935c461c9cc
   EXTaskManager: 6f1a66e4c8cc6df6e24c3d90928704bc3013eae5

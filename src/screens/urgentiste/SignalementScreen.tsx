@@ -28,7 +28,9 @@ import { MapboxMapView } from "../../components/map/MapboxMapView";
 import { FullscreenMapModal } from "../../components/map/FullscreenMapModal";
 import { openExternalDirections } from "../../utils/navigation";
 import { formatMissionAddress, formatIncidentType, formatDescriptionLines } from "../../utils/missionAddress";
-import { HeartPulse, Ambulance, Hospital as HospitalIcon } from "lucide-react-native";
+import { HeartPulse, Hospital as HospitalIcon } from "lucide-react-native";
+import { MePuck } from "../../components/map/mapMarkers";
+import { useMapPuckHeading } from "../../hooks/useMapPuckHeading";
 
 // Helper for ETA and distance
 function getDistanceFromLatLonInKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -137,6 +139,7 @@ export function SignalementScreen({ navigation, route }: any) {
    const [isAssigned, setIsAssigned] = useState(false);
    const [elapsedSeconds, setElapsedSeconds] = useState(0);
    const [urgentisteLoc, setUrgentisteLoc] = useState<Location.LocationObject | null>(null);
+   const urgentisteHeadingDeg = useMapPuckHeading(urgentisteLoc);
    const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
    const [routeDuration, setRouteDuration] = useState<number | null>(null);
    const [routeDistance, setRouteDistance] = useState<number | null>(null);
@@ -425,9 +428,7 @@ export function SignalementScreen({ navigation, route }: any) {
                      id="my-unit-reception-fs"
                      coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}
                   >
-                     <View style={styles.urgentisteMarker}>
-                        <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
-                     </View>
+                     <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
                   </Mapbox.PointAnnotation>
                )}
                {routeGeoJSON && (
@@ -457,9 +458,7 @@ export function SignalementScreen({ navigation, route }: any) {
                      id="my-unit-arrival-fs"
                      coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}
                   >
-                     <View style={styles.urgentisteMarker}>
-                        <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
-                     </View>
+                     <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
                   </Mapbox.PointAnnotation>
                )}
                {routeGeoJSON && (
@@ -509,9 +508,7 @@ export function SignalementScreen({ navigation, route }: any) {
                      id="my-unit-assign-fs"
                      coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}
                   >
-                     <View style={styles.urgentisteMarker}>
-                        <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
-                     </View>
+                     <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
                   </Mapbox.PointAnnotation>
                )}
                {hospitalRouteGeoJSON && (
@@ -561,9 +558,7 @@ export function SignalementScreen({ navigation, route }: any) {
                      id="my-unit-transport-fs"
                      coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}
                   >
-                     <View style={styles.urgentisteMarker}>
-                        <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
-                     </View>
+                     <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
                   </Mapbox.PointAnnotation>
                )}
                {hospitalRouteGeoJSON && (
@@ -585,6 +580,7 @@ export function SignalementScreen({ navigation, route }: any) {
       targetHospital,
       hospitalRouteCameraBounds,
       hospitalRouteGeoJSON,
+      urgentisteHeadingDeg,
    ]);
 
    const fullscreenMapTopOverlay = useMemo(() => {
@@ -1311,9 +1307,7 @@ export function SignalementScreen({ navigation, route }: any) {
 
                            {urgentisteLoc && (
                               <Mapbox.PointAnnotation id="my-unit-reception" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
-                                 <View style={styles.urgentisteMarker}>
-                                    <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
-                                 </View>
+                                 <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
                               </Mapbox.PointAnnotation>
                            )}
 
@@ -1470,9 +1464,7 @@ export function SignalementScreen({ navigation, route }: any) {
 
                             {urgentisteLoc && (
                                <Mapbox.PointAnnotation id="my-unit-arrival" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
-                                  <View style={styles.urgentisteMarker}>
-                                     <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
-                                  </View>
+                                  <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
                                </Mapbox.PointAnnotation>
                             )}
 
@@ -1962,9 +1954,7 @@ export function SignalementScreen({ navigation, route }: any) {
 
                                  {urgentisteLoc && (
                                     <Mapbox.PointAnnotation id="my-unit-assign" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
-                                       <View style={styles.urgentisteMarker}>
-                                          <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
-                                       </View>
+                                       <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
                                     </Mapbox.PointAnnotation>
                                  )}
 
@@ -2168,9 +2158,7 @@ export function SignalementScreen({ navigation, route }: any) {
 
                            {urgentisteLoc && (
                               <Mapbox.PointAnnotation id="my-unit-transport" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
-                                 <View style={styles.urgentisteMarker}>
-                                    <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
-                                 </View>
+                                 <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
                               </Mapbox.PointAnnotation>
                            )}
 

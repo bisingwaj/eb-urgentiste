@@ -20,6 +20,7 @@ import Mapbox from '@rnmapbox/maps';
 import { MapboxMapView } from '../../components/map/MapboxMapView';
 import { FullscreenMapModal } from '../../components/map/FullscreenMapModal';
 import { HospitalMarker, UnitMarker } from '../../components/map/mapMarkers';
+import { useResolveHeadingFromRemotePosition } from '../../hooks/useResolveHeadingFromLocation';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { supabase } from '../../lib/supabase';
@@ -207,6 +208,8 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const [ambulanceLat, setAmbulanceLat] = useState<number | null>(null);
   const [ambulanceLng, setAmbulanceLng] = useState<number | null>(null);
   const [ambulanceSpeed, setAmbulanceSpeed] = useState<number | null>(null);
+  /** Cap brut depuis `active_rescuers.heading` (degrés), si disponible. */
+  const [ambulanceHeadingRaw, setAmbulanceHeadingRaw] = useState<number | null>(null);
   const [ambulanceBattery, setAmbulanceBattery] = useState<number | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [rescuerName, setRescuerName] = useState<string>('Unité');
@@ -301,6 +304,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
         lng?: unknown;
         speed?: unknown;
         battery?: unknown;
+        heading?: unknown;
         updated_at?: string;
       }) => {
         if (!isMounted) return;
@@ -308,6 +312,10 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
         if (data.lng != null) setAmbulanceLng(Number(data.lng));
         setAmbulanceSpeed(data.speed != null ? Number(data.speed) : null);
         setAmbulanceBattery(data.battery != null ? Number(data.battery) : null);
+        if (data.heading != null && Number.isFinite(Number(data.heading))) {
+          const hd = Number(data.heading);
+          setAmbulanceHeadingRaw(hd >= 0 ? hd : null);
+        }
         if (data.updated_at) setLastUpdate(new Date(data.updated_at));
       };
 
@@ -415,6 +423,13 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     [caseData.dispatchStatus],
   );
 
+  const ambulanceDirectionDeg = useResolveHeadingFromRemotePosition({
+    lat: ambulanceLat,
+    lng: ambulanceLng,
+    headingFromServer: ambulanceHeadingRaw,
+    speedMps: ambulanceSpeed,
+  });
+
   const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false);
 
   const hospitalFullscreenMapChildren = useMemo(() => {
@@ -444,6 +459,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           <Mapbox.MarkerView id="ambulance-unit-mv-fs" coordinate={[ambulanceLng!, ambulanceLat!]}>
             <UnitMarker
               status={unitMarkerStatus}
+              headingDeg={ambulanceDirectionDeg}
               onPress={() => Alert.alert('Unité', caseData.urgentisteName, [{ text: 'OK' }])}
             />
           </Mapbox.MarkerView>
@@ -474,6 +490,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     structureMapLabel,
     unitMarkerStatus,
     caseData.urgentisteName,
+    ambulanceDirectionDeg,
   ]);
 
   const hospitalFullscreenTopOverlay = useMemo(() => {
@@ -550,6 +567,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                   <Mapbox.MarkerView id="ambulance-unit-mv" coordinate={[ambulanceLng!, ambulanceLat!]}>
                     <UnitMarker
                       status={unitMarkerStatus}
+                      headingDeg={ambulanceDirectionDeg}
                       onPress={() =>
                         Alert.alert('Unité', caseData.urgentisteName, [{ text: 'OK' }])
                       }

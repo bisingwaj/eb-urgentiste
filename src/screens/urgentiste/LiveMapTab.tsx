@@ -47,6 +47,7 @@ import {
 } from "../../utils/navigation";
 import { spreadOverlappingMarkers } from "../../utils/mapMarkerLayout";
 import { MapboxMapView } from "../../components/map/MapboxMapView";
+import { useMapPuckHeading } from "../../hooks/useMapPuckHeading";
 import {
   MePuck,
   IncidentMarker,
@@ -220,8 +221,8 @@ export function LiveMapTab() {
   const [incidents, setIncidents] = useState<IncidentData[]>([]);
 
   const [speed, setSpeed] = useState(0);
-  const [heading, setHeading] = useState(0);
   const [accuracy, setAccuracy] = useState(0);
+  const headingResolved = useMapPuckHeading(myLocation);
   const [battery] = useState(87);
 
   const [selection, setSelection] = useState<PoiSelection | null>(null);
@@ -424,7 +425,6 @@ export function LiveMapTab() {
 
   const updateTelemetry = useCallback((loc: Location.LocationObject) => {
     setSpeed(Math.max(0, (loc.coords.speed || 0) * 3.6));
-    setHeading(loc.coords.heading || 0);
     setAccuracy(loc.coords.accuracy || 0);
   }, []);
 
@@ -886,7 +886,7 @@ export function LiveMapTab() {
               id="my-position"
               coordinate={[myCoords.longitude, myCoords.latitude]}
             >
-              <MePuck headingDeg={heading} />
+              <MePuck headingDeg={headingResolved} />
             </Mapbox.PointAnnotation>
 
             {rescuersForMapDisplay.map(({ item: r, displayCoord }) => (
@@ -897,6 +897,7 @@ export function LiveMapTab() {
               >
                 <UnitMarker
                   status={r.status}
+                  headingDeg={r.heading != null && r.heading >= 0 ? r.heading : undefined}
                   onPress={() => setSelection({ kind: "rescuer", data: r })}
                 />
               </Mapbox.MarkerView>
@@ -1015,7 +1016,7 @@ export function LiveMapTab() {
               <View style={styles.telRow}>
                 <MaterialIcons name="explore" color={colors.secondary} size={14} />
                 <Text style={styles.telLabel}>Cap</Text>
-                <Text style={styles.telValue} numberOfLines={1}>{heading.toFixed(0)}°</Text>
+                <Text style={styles.telValue} numberOfLines={1}>{headingResolved.toFixed(0)}°</Text>
               </View>
               <View style={styles.telRow}>
                 <MaterialIcons name="gps-fixed" color={accuracy < 25 ? colors.success : "#FF9F0A"} size={14} />
