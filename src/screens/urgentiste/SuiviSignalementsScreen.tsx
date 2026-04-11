@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,6 @@ import { colors } from '../../theme/colors';
 import { MaterialIcons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../contexts/AuthContext';
-import { useFocusEffect } from '@react-navigation/native';
 
 interface FieldReport {
   id: string;
@@ -65,20 +64,114 @@ function formatDate(isoString: string): string {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+// ══════════════════════════════════════════════════════
+// Module-level cache — survit au mount/unmount du composant
+// ══════════════════════════════════════════════════════
+let _cachedReports: FieldReport[] = [];
+let _cachedUserId: string | null = null;
+let _hasFetched = false;
+let _realtimeChannel: ReturnType<typeof supabase.channel> | null = null;
+const _listeners = new Set<(reports: FieldReport[]) => void>();
+
+function notifyListeners() {
+  _listeners.forEach(fn => fn([..._cachedReports]));
+}
+
+/** Fetch initial (une seule fois pour toute la vie de l'app) */
+async function ensureDataLoaded(): Promise<void> {
+  if (_hasFetched) return;
+  _hasFetched = true;
+
+  try {
+    const userId = (await supabase.auth.getUser()).data.user?.id;
+    if (!userId) return;
+    _cachedUserId = userId;
+
+    const { data, error } = await supabase
+      .from('field_reports')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (error) throw error;
+    _cachedReports = (data as FieldReport[]) || [];
+    notifyListeners();
+  } catch (err: any) {
+    console.error('[SuiviSignalements] Erreur fetch:', err.message);
+  }
+
+  // Démarrer le Realtime une seule fois
+  ensureRealtime();
+}
+
+/** Souscription Realtime permanente (jamais fermée sauf logout) */
+function ensureRealtime() {
+  if (_realtimeChannel) return;
+
+  _realtimeChannel = supabase
+    .channel('field-reports-live')
+    .on(
+      'postgres_changes',
+      { event: 'UPDATE', schema: 'public', table: 'field_reports' },
+      (payload: any) => {
+        const updated = payload.new;
+        if (!updated?.id || updated.user_id !== _cachedUserId) return;
+
+        _cachedReports = _cachedReports.map(r =>
+          r.id === updated.id ? { ...r, ...updated } : r,
+        );
+        notifyListeners();
+      },
+    )
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'field_reports' },
+      (payload: any) => {
+        const inserted = payload.new;
+        if (!inserted?.id || inserted.user_id !== _cachedUserId) return;
+        if (_cachedReports.some(r => r.id === inserted.id)) return;
+
+        _cachedReports = [inserted as FieldReport, ..._cachedReports];
+        notifyListeners();
+      },
+    );
+
+  _realtimeChannel.subscribe();
+}
+
+// ══════════════════════════════════════════════════════
+// Component — lecture du cache, zéro re-fetch au focus
+// ══════════════════════════════════════════════════════
+
 export function SuiviSignalementsScreen({ navigation }: any) {
   const { profile } = useAuth();
-  const [reports, setReports] = useState<FieldReport[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [reports, setReports] = useState<FieldReport[]>(_cachedReports);
+  const [isLoading, setIsLoading] = useState(!_hasFetched);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const userIdRef = useRef<string | null>(null);
 
-  const fetchReports = useCallback(async (silent = false) => {
-    if (!silent) setIsLoading(true);
+  // S'abonner aux mises à jour du cache module-level
+  useEffect(() => {
+    const listener = (updated: FieldReport[]) => {
+      setReports(updated);
+      setIsLoading(false);
+    };
+    _listeners.add(listener);
 
+    // Lancer le fetch + realtime si pas encore fait
+    ensureDataLoaded();
+
+    return () => {
+      _listeners.delete(listener);
+    };
+  }, []);
+
+  // Pull-to-refresh manuel
+  const onRefresh = useCallback(async () => {
+    setIsRefreshing(true);
     try {
-      const userId = (await supabase.auth.getUser()).data.user?.id;
+      const userId = _cachedUserId;
       if (!userId) return;
-      userIdRef.current = userId;
 
       const { data, error } = await supabase
         .from('field_reports')
@@ -88,91 +181,14 @@ export function SuiviSignalementsScreen({ navigation }: any) {
         .limit(50);
 
       if (error) throw error;
-      setReports((data as FieldReport[]) || []);
+      _cachedReports = (data as FieldReport[]) || [];
+      notifyListeners();
     } catch (err: any) {
-      console.error('[SuiviSignalements] Erreur:', err.message);
+      console.error('[SuiviSignalements] Erreur refresh:', err.message);
     } finally {
-      setIsLoading(false);
       setIsRefreshing(false);
     }
   }, []);
-
-  useEffect(() => {
-    fetchReports();
-  }, [fetchReports]);
-
-  // Rafraîchir à chaque retour sur l'écran
-  useFocusEffect(
-    useCallback(() => {
-      fetchReports(true);
-    }, [fetchReports]),
-  );
-
-  // ── Realtime : écouter les UPDATEs sur field_reports de l'utilisateur ──
-  useEffect(() => {
-    // On attend que le userId soit disponible
-    const timer = setTimeout(() => {
-      if (!userIdRef.current) return;
-
-      const channel = supabase
-        .channel('field-reports-list')
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'field_reports',
-          },
-          (payload: any) => {
-            const updated = payload.new;
-            if (!updated?.id) return;
-            // Seuls les rapports du user courant
-            if (updated.user_id !== userIdRef.current) return;
-
-            console.log('[SuiviSignalements] 📡 Realtime UPDATE', updated.id, updated.status);
-
-            setReports(prev =>
-              prev.map(r =>
-                r.id === updated.id
-                  ? {
-                      ...r,
-                      status: updated.status ?? r.status,
-                      resolution_notes: updated.resolution_notes ?? r.resolution_notes,
-                    }
-                  : r,
-              ),
-            );
-          },
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'field_reports',
-          },
-          (payload: any) => {
-            const inserted = payload.new;
-            if (!inserted?.id || inserted.user_id !== userIdRef.current) return;
-            // Ajouter en haut de la liste
-            setReports(prev => [inserted as FieldReport, ...prev]);
-          },
-        );
-
-      channel.subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, []);
-
-  const onRefresh = () => {
-    setIsRefreshing(true);
-    fetchReports(true);
-  };
 
   const renderItem = ({ item }: { item: FieldReport }) => {
     const cat = CATEGORY_MAP[item.category] || { label: item.category, icon: 'error' as const };
