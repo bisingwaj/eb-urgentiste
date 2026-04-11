@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
 Alert,
   ActivityIndicator} from 'react-native';
+import { CommonActions } from '@react-navigation/native';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -14,17 +15,105 @@ import { getTransportModeLabel } from '../../lib/transportMode';
 import type { EmergencyCase } from './HospitalDashboardTab';
 import { useHospital } from '../../contexts/HospitalContext';
 
+/** Aligné sur `HospitalPriseEnChargeScreen` — `hospital_data.timeline` */
+type PECTimelineEntry = {
+  id: string;
+  time: string;
+  action: string;
+  user: string;
+  type: string;
+  isTreatment?: boolean;
+};
+
+type UnifiedTimelineRow = {
+  key: string;
+  source: 'pec' | 'field';
+  time: string;
+  category: string;
+  detail: string;
+  sub?: string;
+};
+
+function parseTimeToMinutes(time: string): number {
+  const m = String(time).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return 0;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return 0;
+  return h * 60 + min;
+}
+
+function pecTypeLabel(type: string, isTreatment?: boolean): string {
+  if (isTreatment) return 'Traitement';
+  switch (type) {
+    case 'action':
+      return 'Action';
+    case 'test':
+      return 'Examen';
+    case 'medication':
+      return 'Médicament';
+    case 'status':
+      return 'Statut';
+    case 'alert':
+      return 'Alerte';
+    default:
+      return 'Événement';
+  }
+}
+
+function buildUnifiedTimeline(caseData: EmergencyCase): UnifiedTimelineRow[] {
+  const rows: UnifiedTimelineRow[] = [];
+  const raw = Array.isArray(caseData.timeline) ? caseData.timeline : [];
+  for (const e of raw) {
+    const t = e as PECTimelineEntry;
+    if (!t?.id || !t?.time) continue;
+    rows.push({
+      key: `pec-${t.id}`,
+      source: 'pec',
+      time: t.time,
+      category: pecTypeLabel(t.type, t.isTreatment),
+      detail: t.action,
+      sub: t.user,
+    });
+  }
+  for (const item of caseData.interventions ?? []) {
+    rows.push({
+      key: `field-${item.id}`,
+      source: 'field',
+      time: item.time,
+      category: item.category,
+      detail: item.detail,
+      sub: item.by,
+    });
+  }
+  rows.sort((a, b) => parseTimeToMinutes(a.time) - parseTimeToMinutes(b.time));
+  return rows;
+}
+
 export function HospitalReportScreen({ route, navigation }: any) {
   const { caseData, reportAlreadySent: reportAlreadySentParam } = route.params as {
     caseData: EmergencyCase;
     reportAlreadySent?: boolean;
   };
-  const { sendHospitalReport } = useHospital();
+  const { sendHospitalReport, refresh } = useHospital();
   const insets = useSafeAreaInsets();
   const [sending, setSending] = useState(false);
   const alreadySent = reportAlreadySentParam === true || caseData.reportSent === true;
 
-  const finishToTabs = () => navigation.getParent()?.reset({ index: 0, routes: [{ name: 'HospitalTabs' }] });
+  const timelineRows = useMemo(() => buildUnifiedTimeline(caseData), [caseData]);
+  const showTimelineSource =
+    timelineRows.some((r) => r.source === 'pec') && timelineRows.some((r) => r.source === 'field');
+
+  /** Revient à l’accueil hôpital et recharge les dossiers (le stack racine contient `HospitalReport` : pas de `getParent`). */
+  const finishToTabs = () => {
+    navigation.dispatch(
+      CommonActions.reset({
+        index: 0,
+        routes: [{ name: 'HospitalTabs' }],
+      }),
+    );
+    void refresh();
+  };
 
   const handleSendReport = async () => {
     if (alreadySent) {
@@ -61,7 +150,7 @@ export function HospitalReportScreen({ route, navigation }: any) {
         <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
         </AppTouchableOpacity>
-        <Text style={styles.appBarTitle}>Rapport Médical Automatisé</Text>
+        <Text style={styles.appBarTitle}>Rapport médical automatisé</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -118,18 +207,28 @@ export function HospitalReportScreen({ route, navigation }: any) {
             <Text style={styles.sectionTitle}>Chronologie des interventions</Text>
           </View>
           <View style={styles.timelineSummary}>
-            {caseData.interventions?.map((item, idx) => (
-              <View key={item.id} style={styles.itemRow}>
-                <View style={styles.itemDot} />
-                <View style={styles.itemContent}>
-                  <View style={styles.row}>
-                    <Text style={styles.itemTime}>{item.time}</Text>
-                    <Text style={styles.itemCategory}>{item.category}</Text>
+            {timelineRows.length === 0 ? (
+              <Text style={styles.timelineEmpty}>Aucune intervention enregistrée.</Text>
+            ) : (
+              timelineRows.map((item) => (
+                <View key={item.key} style={styles.itemRow}>
+                  <View style={styles.itemDot} />
+                  <View style={styles.itemContent}>
+                    {showTimelineSource ? (
+                      <Text style={styles.itemSource}>
+                        {item.source === 'pec' ? 'Hôpital (PEC)' : 'Pré-hospitalier'}
+                      </Text>
+                    ) : null}
+                    <View style={styles.row}>
+                      <Text style={styles.itemTime}>{item.time}</Text>
+                      <Text style={styles.itemCategory}>{item.category}</Text>
+                    </View>
+                    <Text style={styles.itemDetail}>{item.detail}</Text>
+                    {item.sub ? <Text style={styles.itemSub}>{item.sub}</Text> : null}
                   </View>
-                  <Text style={styles.itemDetail}>{item.detail}</Text>
                 </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         </View>
       </ScrollView>
@@ -179,6 +278,8 @@ const styles = StyleSheet.create({
   diagnosisLabel: { color: colors.secondary, fontSize: 12, fontWeight: '900', letterSpacing: 1, marginBottom: 8 },
   diagnosisText: { color: '#FFF', fontSize: 15, fontWeight: '600', lineHeight: 22 },
   timelineSummary: { backgroundColor: '#1A1A1A', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  timelineEmpty: { color: 'rgba(255,255,255,0.45)', fontSize: 14, fontStyle: 'italic', textAlign: 'center', paddingVertical: 8 },
+  itemSource: { color: 'rgba(255,255,255,0.35)', fontSize: 11, fontWeight: '800', letterSpacing: 0.6, marginBottom: 4, textTransform: 'uppercase' },
   itemRow: { flexDirection: 'row', gap: 12, paddingBottom: 16 },
   itemDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.secondary, marginTop: 6 },
   itemContent: { flex: 1 },
@@ -186,6 +287,7 @@ const styles = StyleSheet.create({
   itemTime: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
   itemCategory: { color: colors.secondary, fontSize: 13, fontWeight: '700' },
   itemDetail: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
+  itemSub: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 4, fontWeight: '600' },
   bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 14, backgroundColor: colors.mainBackground, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
   sendBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16, borderRadius: 28, backgroundColor: colors.secondary },
   sendBtnDisabled: { opacity: 0.7 },
