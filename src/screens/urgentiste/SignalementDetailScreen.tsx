@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,9 @@ import {
   Dimensions,
   Animated,
   Vibration,
+  Modal,
+  FlatList,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
@@ -96,6 +99,20 @@ export function SignalementDetailScreen({ navigation, route }: any) {
   const [liveResolutionNotes, setLiveResolutionNotes] = useState<string | null>(report?.resolution_notes ?? null);
   const statusPulse = useRef(new Animated.Value(1)).current;
   const prevStatusRef = useRef(liveStatus);
+
+  // ── Lightbox state ──
+  const [lightboxVisible, setLightboxVisible] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState(0);
+  const lightboxRef = useRef<FlatList>(null);
+
+  const openLightbox = useCallback((index: number) => {
+    setLightboxIndex(index);
+    setLightboxVisible(true);
+  }, []);
+
+  const closeLightbox = useCallback(() => {
+    setLightboxVisible(false);
+  }, []);
 
   // ── Realtime subscription ──
   useEffect(() => {
@@ -295,12 +312,20 @@ export function SignalementDetailScreen({ navigation, route }: any) {
               contentContainerStyle={styles.photosScroll}
             >
               {photos.map((url, idx) => (
-                <View key={url} style={styles.photoWrapper}>
+                <TouchableOpacity
+                  key={url}
+                  style={styles.photoWrapper}
+                  activeOpacity={0.85}
+                  onPress={() => openLightbox(idx)}
+                >
                   <Image source={{ uri: url }} style={styles.photoImage} />
                   <View style={styles.photoBadge}>
                     <Text style={styles.photoBadgeText}>{idx + 1}</Text>
                   </View>
-                </View>
+                  <View style={styles.photoZoomHint}>
+                    <MaterialIcons name="zoom-in" color="#FFF" size={16} />
+                  </View>
+                </TouchableOpacity>
               ))}
             </ScrollView>
           </>
@@ -315,6 +340,69 @@ export function SignalementDetailScreen({ navigation, route }: any) {
         </View>
 
       </ScrollView>
+
+      {/* ── Lightbox Modal ── */}
+      <Modal
+        visible={lightboxVisible}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={closeLightbox}
+      >
+        <View style={styles.lightboxOverlay}>
+          {/* Top bar */}
+          <View style={styles.lightboxTopBar}>
+            <View style={styles.lightboxCounter}>
+              <Text style={styles.lightboxCounterText}>
+                {lightboxIndex + 1} / {photos.length}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.lightboxCloseBtn}
+              onPress={closeLightbox}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <MaterialIcons name="close" color="#FFF" size={26} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Paging images */}
+          <FlatList
+            ref={lightboxRef}
+            data={photos}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={lightboxIndex}
+            getItemLayout={(_, index) => ({
+              length: SCREEN_WIDTH,
+              offset: SCREEN_WIDTH * index,
+              index,
+            })}
+            onMomentumScrollEnd={(e) => {
+              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+              setLightboxIndex(idx);
+            }}
+            keyExtractor={(item, idx) => `lb-${idx}`}
+            renderItem={({ item: url }) => (
+              <View style={styles.lightboxSlide}>
+                <Image
+                  source={{ uri: url }}
+                  style={styles.lightboxImage}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+          />
+
+          {/* Tap background to close */}
+          <TouchableOpacity
+            style={styles.lightboxTapArea}
+            activeOpacity={1}
+            onPress={closeLightbox}
+          />
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -455,6 +543,46 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center',
   },
   photoBadgeText: { color: '#FFF', fontSize: 12, fontWeight: '900' },
+  photoZoomHint: {
+    position: 'absolute', top: 8, right: 8,
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center',
+  },
+
+  // ── Lightbox ──
+  lightboxOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+  },
+  lightboxTopBar: {
+    position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingTop: Platform.OS === 'ios' ? 56 : 40,
+    paddingHorizontal: 20, paddingBottom: 16,
+  },
+  lightboxCounter: {
+    backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 12,
+  },
+  lightboxCounterText: { color: '#FFF', fontSize: 14, fontWeight: '800', letterSpacing: 0.5 },
+  lightboxCloseBtn: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center',
+  },
+  lightboxSlide: {
+    width: SCREEN_WIDTH, flex: 1,
+    justifyContent: 'center', alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  lightboxImage: {
+    width: SCREEN_WIDTH - 16,
+    height: '80%',
+    borderRadius: 12,
+  },
+  lightboxTapArea: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: -1,
+  },
 
   // ── Realtime hint ──
   realtimeHint: {
