@@ -1093,9 +1093,19 @@ export function SignalementScreen({ navigation, route }: any) {
                     </View>
 
                      <View style={styles.receptionBottomPanel}>
+                        {/*
+                          Bande « contact victime » dans le scroll : sinon le pied fixe
+                          (Glisser pour débuter) la recouvre en position absolute.
+                          paddingBottom ≈ hauteur du glisseur + safe area.
+                        */}
                         <ScrollView
+                           style={styles.receptionScroll}
                            showsVerticalScrollIndicator={false}
-                           contentContainerStyle={{ padding: 24, paddingBottom: 120 }}
+                           keyboardShouldPersistTaps="handled"
+                           contentContainerStyle={{
+                              padding: 24,
+                              paddingBottom: insets.bottom + 140,
+                           }}
                         >
                            <View style={styles.detailBox}>
                               <View style={styles.receptionHeaderStrip}>
@@ -1133,14 +1143,13 @@ export function SignalementScreen({ navigation, route }: any) {
                                  <Text key={i} style={styles.detailDesc}>{"\u2022  "}{line}</Text>
                               ))}
                            </View>
+                           {selectedMission &&
+                              canOfferVictimContactCalls(selectedMission.dispatch_status) && (
+                                 <View style={styles.victimStripReceptionWrap}>
+                                    {renderVictimContactStripContent()}
+                                 </View>
+                              )}
                         </ScrollView>
-
-                        {selectedMission &&
-                           canOfferVictimContactCalls(selectedMission.dispatch_status) && (
-                              <View style={styles.victimStripReceptionWrap}>
-                                 {renderVictimContactStripContent()}
-                              </View>
-                           )}
 
                         <View style={styles.stickySwipeWrapper}>
                            <View style={styles.swipeContainer}>
@@ -2205,10 +2214,11 @@ const styles = StyleSheet.create({
    },
    assignActionText: { color: "#FFF", fontSize: 14, fontWeight: "900" },
    victimStripReceptionWrap: {
-      paddingHorizontal: 16,
+      marginTop: 14,
+      paddingHorizontal: 0,
       paddingTop: 8,
       paddingBottom: 4,
-      backgroundColor: "rgba(0,0,0,0.55)",
+      backgroundColor: "transparent",
    },
    victimStripGlobalWrap: {
       paddingHorizontal: 12,
@@ -2256,6 +2266,8 @@ const styles = StyleSheet.create({
    },
    receptionView: { flex: 1, flexDirection: "column", padding: 0 },
    receptionBottomPanel: { flex: 1, minHeight: 180 },
+   /** Remplit le panneau sous la carte pour que le scroll inclue toute la zone utile. */
+   receptionScroll: { flex: 1 },
    floatingBackSignalement: {
       position: "absolute",
       left: 12,
