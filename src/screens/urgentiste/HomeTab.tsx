@@ -201,7 +201,7 @@ export function HomeTab({ navigation }: any) {
           {isLoading || missionLoading ? (
             <View style={styles.standbyCard}>
                <View style={styles.standbyContent}>
-                  <SkeletonItem width={56} height={56} borderRadius={20} />
+                  <SkeletonItem width={48} height={48} borderRadius={18} />
                   <View style={{ flex: 1 }}>
                     <SkeletonText width="60%" />
                     <SkeletonText width="90%" />
@@ -250,7 +250,7 @@ export function HomeTab({ navigation }: any) {
               <View style={styles.standbyContent}>
                 <View style={styles.standbyIconBox}>
                   <Animated.View style={[styles.radarCircle, { transform: [{ scale: radarAnim }], opacity: Animated.subtract(1, radarAnim) }]} />
-                  <MaterialCommunityIcons name="radar" size={32} color={colors.secondary} />
+                  <MaterialCommunityIcons name="radar" size={28} color={colors.secondary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.standbyTitle}>Prêt pour intervention</Text>
@@ -453,14 +453,13 @@ const styles = StyleSheet.create({
 
   // Dynamic Alert Section
   dynamicSection: {
-    paddingHorizontal: 24,
-    marginTop: -15, // Negative margin to overlap with header slightly if needed
+    marginTop: -15,
     marginBottom: 30,
   },
   alertCard: {
     backgroundColor: colors.surfaceElevated,
-    borderRadius: 32,
-    padding: 24,
+    borderRadius: 24,
+    padding: 16,
     borderWidth: 1,
     borderColor: colors.glassBorder,
   },
@@ -468,7 +467,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   priorityBadge: {
     flexDirection: 'row',
@@ -495,77 +494,77 @@ const styles = StyleSheet.create({
   },
   alertType: {
     color: '#FFF',
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '900',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   alertLocRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 24,
+    marginBottom: 12,
   },
   alertLocText: {
     color: 'rgba(255,255,255,0.5)',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
   },
   alertFooter: {
-    marginTop: 8,
+    marginTop: 4,
   },
   consultButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.secondary,
-    paddingVertical: 14,
-    borderRadius: 16,
-    gap: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    gap: 8,
   },
   consultButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   standbyCard: {
     backgroundColor: colors.glassBackground,
-    borderRadius: 32,
-    padding: 24,
+    borderRadius: 24,
+    padding: 16,
     borderWidth: 1,
     borderColor: colors.borderHairline,
   },
   standbyContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
+    gap: 14,
   },
   standbyIconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 18,
     backgroundColor: colors.secondary + '10',
     justifyContent: 'center',
     alignItems: 'center',
   },
   radarCircle: {
     position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     borderWidth: 2,
     borderColor: colors.secondary,
   },
   standbyTitle: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   standbyDesc: {
     color: 'rgba(255,255,255,0.4)',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '500',
   },
   // Shortcuts
