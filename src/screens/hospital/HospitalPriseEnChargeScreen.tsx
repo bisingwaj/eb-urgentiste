@@ -134,7 +134,7 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
     syncDataToDB({ timeline: newTimeline });
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!newText.trim() && modalType !== "exam_edit") return;
     const now = new Date();
     const timeStr = `${now.getHours()}:${now.getMinutes() < 10 ? "0" : ""}${now.getMinutes()}`;
@@ -204,7 +204,7 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
       updatePayload.timeline = newTimeline;
     }
 
-    void syncDataToDB(updatePayload);
+    await syncDataToDB(updatePayload);
 
     setNewText("");
     setModalType(null);
@@ -435,8 +435,16 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
                 )}
               </ScrollView>
 
-              <AppTouchableOpacity style={[styles.saveBtn, modalType === 'treatment_add' && { backgroundColor: '#FF5252' }]} onPress={handleSave}>
-                <Text style={styles.saveBtnText}>{getModalConfig().btn}</Text>
+              <AppTouchableOpacity
+                style={[styles.saveBtn, modalType === 'treatment_add' && { backgroundColor: '#FF5252' }, isSyncing && { opacity: 0.7 }]}
+                onPress={() => void handleSave()}
+                disabled={isSyncing}
+              >
+                {isSyncing ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.saveBtnText}>{getModalConfig().btn}</Text>
+                )}
               </AppTouchableOpacity>
             </View>
           </KeyboardAvoidingView>

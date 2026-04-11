@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,9 @@ Platform,
   Dimensions,
   Modal,
   TextInput,
-  KeyboardAvoidingView} from 'react-native';
+  KeyboardAvoidingView,
+  ActivityIndicator,
+} from 'react-native';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
@@ -110,30 +112,18 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const [showRefusalModal, setShowRefusalModal] = useState(false);
   const [selectedReason, setSelectedReason] = useState("");
   const [otherReason, setOtherReason] = useState("");
+  const [accepting, setAccepting] = useState(false);
+  const [refusing, setRefusing] = useState(false);
+  const acceptingRef = useRef(false);
+  const refusingRef = useRef(false);
 
   // Swipe Animation
   const pan = useRef(new Animated.Value(0)).current;
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: Animated.event([null, { dx: pan }], { useNativeDriver: false }),
-      onPanResponderRelease: (e, gestureState) => {
-        if (gestureState.dx > SWIPE_WIDTH * 0.7) {
-          Animated.spring(pan, {
-            toValue: SWIPE_WIDTH - BUTTON_SIZE,
-            useNativeDriver: false,
-          }).start(() => handleAcceptCase());
-        } else {
-          Animated.spring(pan, {
-            toValue: 0,
-            useNativeDriver: false,
-          }).start();
-        }
-      },
-    })
-  ).current;
 
-  const handleAcceptCase = async () => {
+  const handleAcceptCase = useCallback(async () => {
+    if (acceptingRef.current) return;
+    acceptingRef.current = true;
+    setAccepting(true);
     try {
       await updateCaseStatus(caseData.id, { hospitalStatus: 'accepted' });
       setCaseData(prev => ({
@@ -143,16 +133,50 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
       }));
     } catch (err) {
       Alert.alert('Erreur', 'Impossible d\'accepter le cas actuellement.');
+      Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
+    } finally {
+      acceptingRef.current = false;
+      setAccepting(false);
     }
-  };
+  }, [caseData.id, updateCaseStatus, pan]);
 
-  const handleRefuseCase = async () => {
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !acceptingRef.current,
+        onPanResponderMove: Animated.event([null, { dx: pan }], { useNativeDriver: false }),
+        onPanResponderRelease: (e, gestureState) => {
+          if (acceptingRef.current) {
+            Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
+            return;
+          }
+          if (gestureState.dx > SWIPE_WIDTH * 0.7) {
+            Animated.spring(pan, {
+              toValue: SWIPE_WIDTH - BUTTON_SIZE,
+              useNativeDriver: false,
+            }).start(() => {
+              void handleAcceptCase();
+            });
+          } else {
+            Animated.spring(pan, {
+              toValue: 0,
+              useNativeDriver: false,
+            }).start();
+          }
+        },
+      }),
+    [handleAcceptCase, pan]
+  );
+
+  const handleRefuseCase = useCallback(async () => {
     const finalReason = selectedReason === "Autre raison" ? otherReason : selectedReason;
     if (!finalReason) {
       Alert.alert("Action requise", "Veuillez sélectionner ou saisir une raison.");
       return;
     }
-
+    if (refusingRef.current) return;
+    refusingRef.current = true;
+    setRefusing(true);
     try {
       await updateCaseStatus(caseData.id, {
         hospitalStatus: 'refused',
@@ -163,8 +187,11 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
       Alert.alert("Cas refusé", "Le signalement a été refusé. L'unité mobile est notifiée.");
     } catch (err) {
       Alert.alert('Erreur', 'Impossible de refuser ce cas.');
+    } finally {
+      refusingRef.current = false;
+      setRefusing(false);
     }
-  };
+  }, [selectedReason, otherReason, caseData.id, updateCaseStatus, navigation]);
 
   const unitDialNumber =
     caseData.urgentistePhone && caseData.urgentistePhone !== '-' ? caseData.urgentistePhone : '';
@@ -812,10 +839,22 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
       {needsHospitalSwipe ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <View style={styles.swipeContainer}>
-            <View style={styles.swipeBackground}><Text style={styles.swipeText}>Glisser pour accepter</Text><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.3)" size={24} /></View>
-            <Animated.View style={[styles.swipeThumb, { transform: [{ translateX: pan }] }]} {...panResponder.panHandlers}><MaterialIcons name="keyboard-double-arrow-right" color="#000" size={24} /></Animated.View>
+            {accepting ? (
+              <View style={styles.swipeLoading}>
+                <ActivityIndicator color="#FFF" />
+              </View>
+            ) : (
+              <>
+                <View style={styles.swipeBackground}><Text style={styles.swipeText}>Glisser pour accepter</Text><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.3)" size={24} /></View>
+                <Animated.View style={[styles.swipeThumb, { transform: [{ translateX: pan }] }]} {...panResponder.panHandlers}><MaterialIcons name="keyboard-double-arrow-right" color="#000" size={24} /></Animated.View>
+              </>
+            )}
           </View>
-          <AppTouchableOpacity style={styles.refuseBtn} onPress={() => setShowRefusalModal(true)}>
+          <AppTouchableOpacity
+            style={[styles.refuseBtn, (accepting || refusing) && { opacity: 0.5 }]}
+            disabled={accepting || refusing}
+            onPress={() => setShowRefusalModal(true)}
+          >
             <Text style={styles.refuseText}>Refuser le cas</Text>
           </AppTouchableOpacity>
         </View>
@@ -898,7 +937,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
             >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Raison du refus</Text>
-                <AppTouchableOpacity onPress={() => setShowRefusalModal(false)}>
+                <AppTouchableOpacity disabled={refusing} onPress={() => setShowRefusalModal(false)}>
                   <MaterialIcons name="close" color="rgba(255,255,255,0.4)" size={24} />
                 </AppTouchableOpacity>
               </View>
@@ -934,8 +973,16 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 )}
               </ScrollView>
 
-              <AppTouchableOpacity style={styles.confirmRefusalBtn} onPress={handleRefuseCase}>
-                <Text style={styles.confirmRefusalText}>CONFIRMER LE REFUS</Text>
+              <AppTouchableOpacity
+                style={[styles.confirmRefusalBtn, refusing && { opacity: 0.65 }]}
+                disabled={refusing}
+                onPress={handleRefuseCase}
+              >
+                {refusing ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.confirmRefusalText}>CONFIRMER LE REFUS</Text>
+                )}
               </AppTouchableOpacity>
             </View>
           </KeyboardAvoidingView>
@@ -1090,6 +1137,7 @@ const styles = StyleSheet.create({
   liveText: { color: '#FFF', fontSize: 13, fontWeight: '900' },
   stickyFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 16, backgroundColor: colors.mainBackground },
   swipeContainer: { height: 64, width: SWIPE_WIDTH, backgroundColor: '#1A1A1A', borderRadius: 32, padding: 4, justifyContent: 'center', overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  swipeLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   swipeBackground: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
   swipeText: { color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '700' },
   swipeThumb: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.success, justifyContent: 'center', alignItems: 'center' },

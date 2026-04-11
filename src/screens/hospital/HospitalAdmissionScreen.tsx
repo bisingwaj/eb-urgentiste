@@ -3,10 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-Platform,
+  Platform,
   Alert,
   StatusBar,
-  ScrollView} from 'react-native';
+  ScrollView,
+  ActivityIndicator,
+} from 'react-native';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -48,10 +50,12 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
   );
   const [arrivalState, setArrivalState] = useState(caseData.arrivalState || '');
   const [admissionService, setAdmissionService] = useState(caseData.admissionService || '');
+  const [submitting, setSubmitting] = useState(false);
 
   const totalSteps = 3;
 
   const handleNext = () => {
+    if (submitting) return;
     if (step < totalSteps) {
       setStep(step + 1);
     } else {
@@ -81,6 +85,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
         {
           text: 'CONFIRMER',
           onPress: async () => {
+            setSubmitting(true);
             try {
               await updateCaseStatus(caseData.id, {
                 status: 'admis',
@@ -104,6 +109,8 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
               });
             } catch (err) {
               Alert.alert('Erreur', 'Impossible d\'enregistrer l\'admission.');
+            } finally {
+              setSubmitting(false);
             }
           },
         },
@@ -281,17 +288,31 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
         <AppTouchableOpacity
           style={[
             styles.primaryBtn,
-            step === 1 && !arrivalMode && styles.btnDisabled,
-            step === 2 && !arrivalState && styles.btnDisabled,
-            step === 3 && !admissionService && styles.btnDisabled,
+            (step === 1 && !arrivalMode) ||
+            (step === 2 && !arrivalState) ||
+            (step === 3 && !admissionService) ||
+            submitting
+              ? styles.btnDisabled
+              : null,
           ]}
           onPress={handleNext}
-          disabled={(step === 1 && !arrivalMode) || (step === 2 && !arrivalState) || (step === 3 && !admissionService)}
+          disabled={
+            submitting ||
+            (step === 1 && !arrivalMode) ||
+            (step === 2 && !arrivalState) ||
+            (step === 3 && !admissionService)
+          }
         >
-          <Text style={styles.primaryBtnText}>
-            {step === totalSteps ? 'ADMETTRE LE PATIENT' : 'CONTINUER'}
-          </Text>
-          <MaterialIcons name={step === totalSteps ? 'check-circle' : 'east'} color="#000" size={20} />
+          {submitting && step === totalSteps ? (
+            <ActivityIndicator color="#000" />
+          ) : (
+            <>
+              <Text style={styles.primaryBtnText}>
+                {step === totalSteps ? 'ADMETTRE LE PATIENT' : 'CONTINUER'}
+              </Text>
+              <MaterialIcons name={step === totalSteps ? 'check-circle' : 'east'} color="#000" size={20} />
+            </>
+          )}
         </AppTouchableOpacity>
         <AppTouchableOpacity
           style={styles.secondaryFooterLink}

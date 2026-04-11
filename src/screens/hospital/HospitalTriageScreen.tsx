@@ -3,11 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-TextInput,
+  TextInput,
   Platform,
   Alert,
   KeyboardAvoidingView,
-  ScrollView} from "react-native";
+  ScrollView,
+  ActivityIndicator,
+} from "react-native";
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import {
   SafeAreaView,
@@ -88,10 +90,12 @@ export function HospitalTriageScreen({ route, navigation }: any) {
     caseData.provisionalDiagnosis || "",
   );
   const [triageNotes, setTriageNotes] = useState(caseData.triageNotes || "");
+  const [submitting, setSubmitting] = useState(false);
 
   const totalSteps = 3;
 
   const handleNext = () => {
+    if (submitting) return;
     if (step < totalSteps) {
       setStep(step + 1);
     } else {
@@ -129,6 +133,7 @@ export function HospitalTriageScreen({ route, navigation }: any) {
         {
           text: "Valider",
           onPress: async () => {
+            setSubmitting(true);
             try {
               const triageRecordedAt = new Date().toISOString();
               const vitalsForDb = {
@@ -173,6 +178,8 @@ export function HospitalTriageScreen({ route, navigation }: any) {
               });
             } catch (err) {
               Alert.alert("Erreur", "Impossible de sauvegarder le triage.");
+            } finally {
+              setSubmitting(false);
             }
           },
         },
@@ -531,23 +538,31 @@ export function HospitalTriageScreen({ route, navigation }: any) {
               step === 2 &&
                 (!vitals.tension || !vitals.heartRate) &&
                 styles.btnDisabled,
+              submitting && styles.btnDisabled,
             ]}
             onPress={handleNext}
             disabled={
+              submitting ||
               (step === 1 && !triageLevel) ||
               (step === 2 && (!vitals.tension || !vitals.heartRate))
             }
           >
-            <Text style={styles.nextBtnText}>
-              {step === totalSteps ? "Confirmer le triage" : "Suivant"}
-            </Text>
-            <MaterialIcons
-              name={
-                step === totalSteps ? "assignment-turned-in" : "chevron-right"
-              }
-              color="#FFF"
-              size={22}
-            />
+            {submitting && step === totalSteps ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <>
+                <Text style={styles.nextBtnText}>
+                  {step === totalSteps ? "Confirmer le triage" : "Suivant"}
+                </Text>
+                <MaterialIcons
+                  name={
+                    step === totalSteps ? "assignment-turned-in" : "chevron-right"
+                  }
+                  color="#FFF"
+                  size={22}
+                />
+              </>
+            )}
           </AppTouchableOpacity>
         </View>
       </KeyboardAvoidingView>

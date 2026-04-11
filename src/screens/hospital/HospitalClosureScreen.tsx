@@ -4,10 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-TextInput,
+  TextInput,
   Platform,
   Alert,
-  KeyboardAvoidingView} from 'react-native';
+  KeyboardAvoidingView,
+  ActivityIndicator,
+} from 'react-native';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -29,8 +31,10 @@ export function HospitalClosureScreen({ route, navigation }: any) {
   const [outcome, setOutcome] = useState('');
   const [finalDiagnosis, setFinalDiagnosis] = useState('');
   const [closureTime] = useState(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+  const [closing, setClosing] = useState(false);
 
   const handleClose = () => {
+    if (closing) return;
     if (!outcome || !finalDiagnosis) {
       Alert.alert('Champs requis', 'Veuillez sélectionner une issue et entrer le diagnostic final.');
       return;
@@ -44,6 +48,7 @@ export function HospitalClosureScreen({ route, navigation }: any) {
         {
           text: 'Clôturer',
           onPress: async () => {
+            setClosing(true);
             try {
               const dischargeType = outcomeKeyToDischargeType(outcome);
               const dischargedAt = new Date().toISOString();
@@ -83,6 +88,8 @@ export function HospitalClosureScreen({ route, navigation }: any) {
               });
             } catch {
               Alert.alert('Erreur', 'Impossible de clôturer le dossier sur le serveur.');
+            } finally {
+              setClosing(false);
             }
           },
         },
@@ -159,11 +166,18 @@ export function HospitalClosureScreen({ route, navigation }: any) {
       {/* Primary Action */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
         <AppTouchableOpacity
-          style={[styles.closeBtn, (!outcome || !finalDiagnosis) && styles.disabledBtn]}
+          style={[styles.closeBtn, ((!outcome || !finalDiagnosis || closing) && styles.disabledBtn)]}
           onPress={handleClose}
+          disabled={closing || !outcome || !finalDiagnosis}
         >
-          <Text style={styles.closeBtnText}>Générer le Rapport Final</Text>
-          <MaterialIcons name="description" color="#FFF" size={24} />
+          {closing ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <>
+              <Text style={styles.closeBtnText}>Générer le Rapport Final</Text>
+              <MaterialIcons name="description" color="#FFF" size={24} />
+            </>
+          )}
         </AppTouchableOpacity>
       </View>
       </SafeAreaView>
