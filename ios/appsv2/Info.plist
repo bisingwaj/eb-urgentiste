@@ -45,7 +45,7 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>La caméra est utilisée pour les appels vidéo avec la centrale.</string>
+    <string>La caméra permet de photographier le terrain pour documenter l'intervention.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>L'application utilise Face ID pour déverrouiller l'accès après connexion.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -58,6 +58,8 @@
     <string>L'application utilise le micro pour les appels avec la centrale de régulation.</string>
     <key>NSMotionUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your device motion</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>L'application accède à la galerie pour joindre des photos au dossier d'intervention.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UIBackgroundModes</key>
