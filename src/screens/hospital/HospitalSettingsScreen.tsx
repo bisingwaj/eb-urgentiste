@@ -3,16 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-Dimensions,
-  Alert} from "react-native";
+  Alert,
+} from "react-native";
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import { useAuth } from "../../contexts/AuthContext";
-
-const { width } = Dimensions.get("window");
 
 const SETTINGS_GROUPS = [
   {
@@ -31,32 +28,6 @@ const SETTINGS_GROUPS = [
         icon: "chart-box-outline",
         color: "#69F0AE",
         route: "HospitalStats",
-      },
-    ],
-  },
-  {
-    title: "CONFIGURATION DU SERVICE",
-    items: [
-      {
-        id: "reglages",
-        label: "Paramètres Généraux",
-        icon: "cog-outline",
-        color: "#FF9800",
-        route: null,
-      },
-      {
-        id: "staff",
-        label: "Gestion du personnel",
-        icon: "account-group-outline",
-        color: "#E040FB",
-        route: null,
-      },
-      {
-        id: "notifications",
-        label: "Alertes & Notifications",
-        icon: "bell-ring-outline",
-        color: "#FF5252",
-        route: null,
       },
     ],
   },
@@ -121,44 +92,43 @@ export function HospitalSettingsScreen({ navigation }: any) {
         <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
-      >
-        {SETTINGS_GROUPS.map((group, idx) => (
-          <View key={idx} style={styles.groupContainer}>
-            <Text style={styles.groupTitle}>{group.title}</Text>
-            <View style={styles.groupCard}>
-              {group.items.map((item, itemIdx) => (
-                <View key={item.id}>
-                  <AppTouchableOpacity style={styles.settingItem} onPress={() => onSettingPress(item)}>
-                    <View
-                      style={[
-                        styles.iconBg,
-                        { backgroundColor: item.color + "15" },
-                      ]}
-                    >
-                      <MaterialCommunityIcons
-                        name={item.icon as any}
-                        color={item.color}
-                        size={22}
+      <View style={styles.body}>
+        <View>
+          {SETTINGS_GROUPS.map((group, idx) => (
+            <View key={idx} style={styles.groupContainer}>
+              <Text style={styles.groupTitle}>{group.title}</Text>
+              <View style={styles.groupCard}>
+                {group.items.map((item, itemIdx) => (
+                  <View key={item.id}>
+                    <AppTouchableOpacity style={styles.settingItem} onPress={() => onSettingPress(item)}>
+                      <View
+                        style={[
+                          styles.iconBg,
+                          { backgroundColor: item.color + "15" },
+                        ]}
+                      >
+                        <MaterialCommunityIcons
+                          name={item.icon as any}
+                          color={item.color}
+                          size={22}
+                        />
+                      </View>
+                      <Text style={styles.itemLabel}>{item.label}</Text>
+                      <MaterialIcons
+                        name="chevron-right"
+                        color="rgba(255,255,255,0.15)"
+                        size={24}
                       />
-                    </View>
-                    <Text style={styles.itemLabel}>{item.label}</Text>
-                    <MaterialIcons
-                      name="chevron-right"
-                      color="rgba(255,255,255,0.15)"
-                      size={24}
-                    />
-                  </AppTouchableOpacity>
-                  {itemIdx < group.items.length - 1 && (
-                    <View style={styles.divider} />
-                  )}
-                </View>
-              ))}
+                    </AppTouchableOpacity>
+                    {itemIdx < group.items.length - 1 && (
+                      <View style={styles.divider} />
+                    )}
+                  </View>
+                ))}
+              </View>
             </View>
-          </View>
-        ))}
+          ))}
+        </View>
 
         <View style={styles.footer}>
           <Text style={styles.versionText}>
@@ -166,7 +136,7 @@ export function HospitalSettingsScreen({ navigation }: any) {
           </Text>
           <Text style={styles.copyrightText}>{footerLabel}</Text>
         </View>
-      </ScrollView>
+      </View>
     </TabScreenSafeArea>
   );
 }
@@ -187,6 +157,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   headerTitle: { color: "#FFF", fontSize: 18, fontWeight: "800" },
+  body: { flex: 1, paddingBottom: 24, justifyContent: 'space-between' },
   groupContainer: { marginTop: 24, paddingHorizontal: 20 },
   groupTitle: {
     color: "rgba(255,255,255,0.25)",
@@ -222,7 +193,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.03)",
     marginLeft: 72,
   },
-  footer: { marginTop: 40, alignItems: "center", gap: 6 },
+  footer: { alignItems: "center", gap: 6, paddingBottom: 8 },
   versionText: {
     color: "rgba(255,255,255,0.2)",
     fontSize: 13,
