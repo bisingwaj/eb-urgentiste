@@ -18,6 +18,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MapboxMapView } from '../../components/map/MapboxMapView';
+import { FullscreenMapModal } from '../../components/map/FullscreenMapModal';
 import { HospitalMarker, UnitMarker } from '../../components/map/mapMarkers';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -414,6 +415,85 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     [caseData.dispatchStatus],
   );
 
+  const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false);
+
+  const hospitalFullscreenMapChildren = useMemo(() => {
+    if (!showAmbulanceTracking) return null;
+    return (
+      <>
+        {mapCameraBounds ? (
+          <Mapbox.Camera bounds={mapCameraBounds} animationMode="flyTo" animationDuration={1000} />
+        ) : (
+          <Mapbox.Camera
+            centerCoordinate={mapFallbackCenter}
+            zoomLevel={14}
+            animationMode="flyTo"
+            animationDuration={800}
+          />
+        )}
+        {hospitalCoord && (
+          <Mapbox.MarkerView id="hospital-structure-mv-fs" coordinate={hospitalCoord}>
+            <HospitalMarker
+              label={structureMapLabel}
+              beds={0}
+              onPress={() => Alert.alert('Structure', structureMapLabel, [{ text: 'OK' }])}
+            />
+          </Mapbox.MarkerView>
+        )}
+        {hasAmbulancePosition && (
+          <Mapbox.MarkerView id="ambulance-unit-mv-fs" coordinate={[ambulanceLng!, ambulanceLat!]}>
+            <UnitMarker
+              status={unitMarkerStatus}
+              onPress={() => Alert.alert('Unité', caseData.urgentisteName, [{ text: 'OK' }])}
+            />
+          </Mapbox.MarkerView>
+        )}
+        {routeGeoJSON && (
+          <Mapbox.ShapeSource id="hospital-route-fs" shape={routeGeoJSON}>
+            <Mapbox.LineLayer
+              id="hospital-route-line-fs"
+              style={{
+                lineColor: colors.routePrimary,
+                lineWidth: 4,
+                lineOpacity: 0.85,
+              }}
+            />
+          </Mapbox.ShapeSource>
+        )}
+      </>
+    );
+  }, [
+    showAmbulanceTracking,
+    mapCameraBounds,
+    mapFallbackCenter,
+    hospitalCoord,
+    hasAmbulancePosition,
+    ambulanceLng,
+    ambulanceLat,
+    routeGeoJSON,
+    structureMapLabel,
+    unitMarkerStatus,
+    caseData.urgentisteName,
+  ]);
+
+  const hospitalFullscreenTopOverlay = useMemo(() => {
+    if (!showAmbulanceTracking) return null;
+    return (
+      <View style={{ gap: 10 }}>
+        {!hospitalCoord && (
+          <View style={styles.fullscreenBannerRow}>
+            <MaterialIcons name="info-outline" size={16} color="#FFF" />
+            <Text style={styles.coordsMissingText}>Coordonnées de la structure indisponibles</Text>
+          </View>
+        )}
+        <View style={styles.fullscreenGpsBadge}>
+          <View style={[styles.liveDot, isSignalLost ? { backgroundColor: '#FFF' } : {}]} />
+          <Text style={styles.liveText}>{isSignalLost ? 'SIGNAL PERDU' : 'GPS EN DIRECT'}</Text>
+        </View>
+      </View>
+    );
+  }, [showAmbulanceTracking, hospitalCoord, isSignalLost]);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       {/* Header */}
@@ -499,6 +579,14 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 <View style={[styles.liveDot, isSignalLost ? { backgroundColor: '#FFF' } : {}]} />
                 <Text style={styles.liveText}>{isSignalLost ? 'SIGNAL PERDU' : 'GPS EN DIRECT'}</Text>
               </View>
+              <TouchableOpacity
+                style={styles.mapFullscreenEntryBtn}
+                onPress={() => setMapFullscreenOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Carte plein écran"
+              >
+                <MaterialIcons name="fullscreen" color="#FFF" size={22} />
+              </TouchableOpacity>
             </View>
 
             <View style={styles.trackingInfoLite}>
@@ -836,6 +924,14 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      <FullscreenMapModal
+        visible={mapFullscreenOpen && hospitalFullscreenMapChildren != null}
+        onClose={() => setMapFullscreenOpen(false)}
+        topOverlay={hospitalFullscreenTopOverlay ?? undefined}
+      >
+        {hospitalFullscreenMapChildren}
+      </FullscreenMapModal>
     </SafeAreaView>
   );
 }
@@ -875,6 +971,40 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     overflow: 'hidden',
     backgroundColor: '#111',
+    position: 'relative',
+  },
+  mapFullscreenEntryBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  fullscreenBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  fullscreenGpsBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 8,
   },
   liveMap: { flex: 1 },
   /** Bloc sous la carte : infos légères, pas de « carte » UI */

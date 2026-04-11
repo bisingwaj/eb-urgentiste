@@ -25,6 +25,7 @@ import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from "../../lib/mapbox";
 import { MapboxMapView } from "../../components/map/MapboxMapView";
+import { FullscreenMapModal } from "../../components/map/FullscreenMapModal";
 import { openExternalDirections } from "../../utils/navigation";
 import { formatMissionAddress, formatIncidentType, formatDescriptionLines } from "../../utils/missionAddress";
 import { HeartPulse, Ambulance, Hospital as HospitalIcon } from "lucide-react-native";
@@ -122,6 +123,7 @@ export function SignalementScreen({ navigation, route }: any) {
    };
 
    const [step, setStep] = useState<MissionStep>(getInitialStep);
+   const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false);
    const [stateRestored, setStateRestored] = useState(false);
    const [selectedMission, setSelectedMission] = useState<any>(initialMission);
    const missionRef = useRef<any>(null);
@@ -305,6 +307,10 @@ export function SignalementScreen({ navigation, route }: any) {
       return distanceInfo.dist + " • " + distanceInfo.eta;
    }, [routeDistance, routeDuration, distanceInfo]);
 
+   useEffect(() => {
+      setMapFullscreenOpen(false);
+   }, [step]);
+
    const STEP_ORDER: MissionStep[] = ["standby", "reception", "arrival", "assessment", "aid", "decision", "assignment", "transport_mode", "transport", "closure"];
 
    const dispatchToMinStep = (status: string): MissionStep => {
@@ -391,6 +397,237 @@ export function SignalementScreen({ navigation, route }: any) {
       if (!hospitalRouteGeoJSON?.features[0]?.geometry) return null;
       return geometryToCameraBounds(hospitalRouteGeoJSON.features[0].geometry as GeoJSON.LineString, 80);
    }, [hospitalRouteGeoJSON]);
+
+   /** Enfants Mapbox pour le modal plein écran (IDs distincts de la carte embarquée). */
+   const fullscreenMissionMapChildren = useMemo(() => {
+      if (!selectedMission) return null;
+      const dlng = 15.307045;
+      const dlat = -4.322447;
+      const vlng = selectedMission.location?.lng ?? dlng;
+      const vlat = selectedMission.location?.lat ?? dlat;
+      const victimCoord: [number, number] = [vlng, vlat];
+
+      if (step === "reception") {
+         return (
+            <>
+               {receptionCameraBounds ? (
+                  <Mapbox.Camera bounds={receptionCameraBounds} animationMode="flyTo" animationDuration={1000} />
+               ) : (
+                  <Mapbox.Camera centerCoordinate={victimCoord} zoomLevel={13} />
+               )}
+               <Mapbox.PointAnnotation id="victim-reception-fs" coordinate={victimCoord}>
+                  <View style={styles.victimMarker}>
+                     <HeartPulse size={16} color="#FFF" strokeWidth={2.5} />
+                  </View>
+               </Mapbox.PointAnnotation>
+               {urgentisteLoc && (
+                  <Mapbox.PointAnnotation
+                     id="my-unit-reception-fs"
+                     coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}
+                  >
+                     <View style={styles.urgentisteMarker}>
+                        <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
+                     </View>
+                  </Mapbox.PointAnnotation>
+               )}
+               {routeGeoJSON && (
+                  <Mapbox.ShapeSource id="route-reception-fs" shape={routeGeoJSON}>
+                     <Mapbox.LineLayer id="route-reception-line-fs" style={{ lineColor: "#4A90D9", lineWidth: 4, lineOpacity: 0.85 }} />
+                  </Mapbox.ShapeSource>
+               )}
+            </>
+         );
+      }
+
+      if (step === "arrival") {
+         return (
+            <>
+               {receptionCameraBounds ? (
+                  <Mapbox.Camera bounds={receptionCameraBounds} animationMode="flyTo" animationDuration={1000} />
+               ) : (
+                  <Mapbox.Camera centerCoordinate={victimCoord} zoomLevel={15} />
+               )}
+               <Mapbox.PointAnnotation id="victim-arrival-fs" coordinate={victimCoord}>
+                  <View style={styles.victimMarker}>
+                     <HeartPulse size={16} color="#FFF" strokeWidth={2.5} />
+                  </View>
+               </Mapbox.PointAnnotation>
+               {urgentisteLoc && (
+                  <Mapbox.PointAnnotation
+                     id="my-unit-arrival-fs"
+                     coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}
+                  >
+                     <View style={styles.urgentisteMarker}>
+                        <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
+                     </View>
+                  </Mapbox.PointAnnotation>
+               )}
+               {routeGeoJSON && (
+                  <Mapbox.ShapeSource id="route-arrival-fs" shape={routeGeoJSON}>
+                     <Mapbox.LineLayer id="route-arrival-line-fs" style={{ lineColor: "#4A90D9", lineWidth: 4, lineOpacity: 0.85 }} />
+                  </Mapbox.ShapeSource>
+               )}
+            </>
+         );
+      }
+
+      if (step === "assignment" && targetHospital?.coords) {
+         const th = targetHospital.coords;
+         return (
+            <>
+               {urgentisteLoc ? (
+                  <Mapbox.Camera
+                     bounds={
+                        hospitalRouteCameraBounds ?? {
+                           ne: [
+                              Math.max(th.longitude, urgentisteLoc.coords.longitude),
+                              Math.max(th.latitude, urgentisteLoc.coords.latitude),
+                           ],
+                           sw: [
+                              Math.min(th.longitude, urgentisteLoc.coords.longitude),
+                              Math.min(th.latitude, urgentisteLoc.coords.latitude),
+                           ],
+                           paddingTop: 80,
+                           paddingBottom: 200,
+                           paddingLeft: 60,
+                           paddingRight: 60,
+                        }
+                     }
+                     animationMode="flyTo"
+                     animationDuration={1000}
+                  />
+               ) : (
+                  <Mapbox.Camera centerCoordinate={[th.longitude, th.latitude]} zoomLevel={13} />
+               )}
+               <Mapbox.PointAnnotation id="hospital-assign-fs" coordinate={[th.longitude, th.latitude]}>
+                  <View style={styles.hospitalMarker}>
+                     <HospitalIcon size={16} color="#FFF" strokeWidth={2.5} />
+                  </View>
+               </Mapbox.PointAnnotation>
+               {urgentisteLoc && (
+                  <Mapbox.PointAnnotation
+                     id="my-unit-assign-fs"
+                     coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}
+                  >
+                     <View style={styles.urgentisteMarker}>
+                        <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
+                     </View>
+                  </Mapbox.PointAnnotation>
+               )}
+               {hospitalRouteGeoJSON && (
+                  <Mapbox.ShapeSource id="route-hospital-assign-fs" shape={hospitalRouteGeoJSON}>
+                     <Mapbox.LineLayer id="route-hospital-assign-line-fs" style={{ lineColor: "#34C759", lineWidth: 4, lineOpacity: 0.85 }} />
+                  </Mapbox.ShapeSource>
+               )}
+            </>
+         );
+      }
+
+      if (step === "transport" && targetHospital?.coords) {
+         const th = targetHospital.coords;
+         return (
+            <>
+               {urgentisteLoc ? (
+                  <Mapbox.Camera
+                     bounds={
+                        hospitalRouteCameraBounds ?? {
+                           ne: [
+                              Math.max(th.longitude, urgentisteLoc.coords.longitude),
+                              Math.max(th.latitude, urgentisteLoc.coords.latitude),
+                           ],
+                           sw: [
+                              Math.min(th.longitude, urgentisteLoc.coords.longitude),
+                              Math.min(th.latitude, urgentisteLoc.coords.latitude),
+                           ],
+                           paddingTop: 80,
+                           paddingBottom: 180,
+                           paddingLeft: 60,
+                           paddingRight: 60,
+                        }
+                     }
+                     animationMode="flyTo"
+                     animationDuration={1000}
+                  />
+               ) : (
+                  <Mapbox.Camera centerCoordinate={[th.longitude, th.latitude]} zoomLevel={13} />
+               )}
+               <Mapbox.PointAnnotation id="hospital-dest-fs" coordinate={[th.longitude, th.latitude]}>
+                  <View style={styles.hospitalMarker}>
+                     <HospitalIcon size={16} color="#FFF" strokeWidth={2.5} />
+                  </View>
+               </Mapbox.PointAnnotation>
+               {urgentisteLoc && (
+                  <Mapbox.PointAnnotation
+                     id="my-unit-transport-fs"
+                     coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}
+                  >
+                     <View style={styles.urgentisteMarker}>
+                        <Ambulance size={16} color="#FFF" strokeWidth={2.5} />
+                     </View>
+                  </Mapbox.PointAnnotation>
+               )}
+               {hospitalRouteGeoJSON && (
+                  <Mapbox.ShapeSource id="route-hospital-transport-fs" shape={hospitalRouteGeoJSON}>
+                     <Mapbox.LineLayer id="route-hospital-transport-line-fs" style={{ lineColor: "#34C759", lineWidth: 4, lineOpacity: 0.85 }} />
+                  </Mapbox.ShapeSource>
+               )}
+            </>
+         );
+      }
+
+      return null;
+   }, [
+      step,
+      selectedMission,
+      receptionCameraBounds,
+      urgentisteLoc,
+      routeGeoJSON,
+      targetHospital,
+      hospitalRouteCameraBounds,
+      hospitalRouteGeoJSON,
+   ]);
+
+   const fullscreenMapTopOverlay = useMemo(() => {
+      if (step === "reception") {
+         return (
+            <View style={styles.mapDistOverlay}>
+               <MaterialIcons name="navigation" size={14} color="#FFF" />
+               <Text style={styles.mapDistText}>{routeInfoText}</Text>
+            </View>
+         );
+      }
+      if (step === "arrival") {
+         return (
+            <View style={styles.mapAddressOverlay}>
+               <MaterialIcons name="place" size={14} color="rgba(255,255,255,0.6)" />
+               <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.mapAddressOverlayLabel}>Site d'affectation</Text>
+                  <Text style={styles.smallAddressText} numberOfLines={4}>
+                     {displayAddress}
+                  </Text>
+               </View>
+            </View>
+         );
+      }
+      if (
+         (step === "assignment" || step === "transport") &&
+         hospitalRouteDistance != null &&
+         hospitalRouteDuration != null
+      ) {
+         return (
+            <View style={styles.mapDistOverlay}>
+               <MaterialIcons name="navigation" size={14} color="#FFF" />
+               <Text style={styles.mapDistText}>
+                  {hospitalRouteDistance < 1000
+                     ? `${Math.round(hospitalRouteDistance)} m`
+                     : `${(hospitalRouteDistance / 1000).toFixed(1)} km`}{" "}
+                  • {Math.ceil(hospitalRouteDuration / 60)} min
+               </Text>
+            </View>
+         );
+      }
+      return null;
+   }, [step, routeInfoText, displayAddress, hospitalRouteDistance, hospitalRouteDuration]);
 
    const missionStorageKey = selectedMission?.id
       ? `@mission_state_${selectedMission.id}`
@@ -1090,6 +1327,14 @@ export function SignalementScreen({ navigation, route }: any) {
                           <MaterialIcons name="navigation" size={14} color="#FFF" />
                           <Text style={styles.mapDistText}>{routeInfoText}</Text>
                        </View>
+                       <TouchableOpacity
+                          style={[styles.mapFullscreenEntryBtn, { top: insets.top + 10 }]}
+                          onPress={() => setMapFullscreenOpen(true)}
+                          accessibilityRole="button"
+                          accessibilityLabel="Carte plein écran"
+                       >
+                          <MaterialIcons name="fullscreen" color="#FFF" size={22} />
+                       </TouchableOpacity>
                     </View>
 
                      <View style={styles.receptionBottomPanel}>
@@ -1250,6 +1495,14 @@ export function SignalementScreen({ navigation, route }: any) {
                               </Text>
                            </View>
                         </View>
+                        <TouchableOpacity
+                           style={[styles.mapFullscreenEntryBtn, { top: insets.top + 10 }]}
+                           onPress={() => setMapFullscreenOpen(true)}
+                           accessibilityRole="button"
+                           accessibilityLabel="Carte plein écran"
+                        >
+                           <MaterialIcons name="fullscreen" color="#FFF" size={22} />
+                        </TouchableOpacity>
                      </View>
                      <View style={styles.arrivalFooter}>
                         <View style={styles.footerTimerBox}>
@@ -1723,6 +1976,15 @@ export function SignalementScreen({ navigation, route }: any) {
                               </MapboxMapView>
 
                               <TouchableOpacity
+                                 style={styles.mapFullscreenEntryBtnAssignment}
+                                 onPress={() => setMapFullscreenOpen(true)}
+                                 accessibilityRole="button"
+                                 accessibilityLabel="Carte plein écran"
+                              >
+                                 <MaterialIcons name="fullscreen" color="#FFF" size={22} />
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
                                  style={styles.assignmentEnRouteFab}
                                  onPress={handleDepartVersStructure}
                                  disabled={departingEnRoute}
@@ -1927,6 +2189,14 @@ export function SignalementScreen({ navigation, route }: any) {
                               </Text>
                            </View>
                         )}
+                        <TouchableOpacity
+                           style={[styles.mapFullscreenEntryBtn, { top: insets.top + 10 }]}
+                           onPress={() => setMapFullscreenOpen(true)}
+                           accessibilityRole="button"
+                           accessibilityLabel="Carte plein écran"
+                        >
+                           <MaterialIcons name="fullscreen" color="#FFF" size={22} />
+                        </TouchableOpacity>
                      </View>
 
                      <View style={styles.transportBottomPanel}>
@@ -1998,6 +2268,13 @@ export function SignalementScreen({ navigation, route }: any) {
                <View style={{ height: 250 }}>{renderTimeline()}</View>
             )}
          </View>
+         <FullscreenMapModal
+            visible={mapFullscreenOpen && fullscreenMissionMapChildren != null}
+            onClose={() => setMapFullscreenOpen(false)}
+            topOverlay={fullscreenMapTopOverlay ?? undefined}
+         >
+            {fullscreenMissionMapChildren}
+         </FullscreenMapModal>
       </SafeAreaView>
    );
 }
@@ -2272,6 +2549,34 @@ const styles = StyleSheet.create({
       position: "absolute",
       left: 12,
       zIndex: 20,
+      width: 44,
+      height: 44,
+      borderRadius: 16,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+   },
+   mapFullscreenEntryBtn: {
+      position: "absolute",
+      right: 12,
+      zIndex: 21,
+      width: 44,
+      height: 44,
+      borderRadius: 16,
+      backgroundColor: "rgba(0,0,0,0.55)",
+      justifyContent: "center",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+   },
+   /** Carte affectation : sous le header, repère local au cadre carte. */
+   mapFullscreenEntryBtnAssignment: {
+      position: "absolute",
+      top: 12,
+      right: 12,
+      zIndex: 21,
       width: 44,
       height: 44,
       borderRadius: 16,
