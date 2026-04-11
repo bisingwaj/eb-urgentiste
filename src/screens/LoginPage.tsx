@@ -80,7 +80,7 @@ export function LoginPage({ route, navigation }: any) {
 
     } catch (err) {
       console.error('[Login] Exception:', err);
-      setErrorMessage('Erreur réseau. Vérifiez votre connexion.');
+      setErrorMessage('Erreur réseau. vérifiez votre connexion.');
       setPin('');
       setIsLoading(false);
     }
@@ -156,7 +156,7 @@ export function LoginPage({ route, navigation }: any) {
           ) : (
             <View style={styles.stepContainer}>
               <Text style={styles.welcomeText}>
-                {role === 'urgentiste' ? `Bienvenue, Recrue ${identifier}` : `Bienvenue, Hôpital ${identifier}`}
+                {role === 'urgentiste' ? `Bienvenue, ${identifier}` : `Bienvenue, Hôpital ${identifier}`}
               </Text>
               <Text style={styles.roleText}>
                 {role === 'urgentiste' ? 'URGENTISTE' : 'HÔPITAL'}

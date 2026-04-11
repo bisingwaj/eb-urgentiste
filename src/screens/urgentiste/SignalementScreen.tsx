@@ -637,7 +637,7 @@ export function SignalementScreen({ navigation, route }: any) {
             closureFinalizeRef.current = false;
             Alert.alert(
                "Erreur",
-               "Impossible de finaliser la mission (mission_end / completed). Réessayez.",
+               "Impossible de finaliser la mission (mission_end / completed). réessayez.",
             );
          }
       })();

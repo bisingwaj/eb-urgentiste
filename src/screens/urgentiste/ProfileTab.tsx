@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import {
   View,
@@ -15,6 +15,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useAppLock } from "../../contexts/AppLockContext";
 import { colors } from "../../theme/colors";
 import { MaterialIcons } from "@expo/vector-icons";
+import { supabase } from "../../lib/supabase";
 
 function SectionLabel({ children }: { children: string }) {
   return <Text style={styles.sectionLabel}>{children}</Text>;
@@ -49,8 +50,32 @@ function InfoRow({ icon, iconTint, label, value, valueLines = 3 }: InfoRowProps)
 }
 
 export function ProfileTab({ navigation }: any) {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, refreshProfile } = useAuth();
   const [avatarLoadError, setAvatarLoadError] = useState(false);
+  const [isDutyActive, setIsDutyActive] = useState(profile?.available ?? false);
+
+  useEffect(() => {
+    if (profile) setIsDutyActive(profile.available ?? false);
+  }, [profile?.available]);
+
+  const handleToggleDuty = useCallback(
+    async (val: boolean) => {
+      setIsDutyActive(val);
+      if (!profile?.id) return;
+      const { error } = await supabase
+        .from("users_directory")
+        .update({ available: val, status: val ? "active" : "offline" })
+        .eq("id", profile.id);
+
+      if (error) {
+        console.error("[ProfileTab] duty status:", error.message);
+        setIsDutyActive(!val);
+      } else {
+        refreshProfile();
+      }
+    },
+    [profile?.id, refreshProfile],
+  );
 
   useEffect(() => {
     setAvatarLoadError(false);
@@ -151,6 +176,28 @@ export function ProfileTab({ navigation }: any) {
           />
           <View style={styles.rowSep} />
           <InfoRow icon="phone" iconTint={colors.textMuted} label="Téléphone" value={phone} />
+        </Card>
+
+        <SectionLabel>Disponibilité</SectionLabel>
+        <Card>
+          <View style={styles.dutyRow}>
+            <View style={[styles.infoIconWrap, { backgroundColor: `${colors.success}18` }]}>
+              <MaterialIcons name="radio-button-checked" color={colors.success} size={18} />
+            </View>
+            <View style={styles.dutyBody}>
+              <Text style={styles.dutyTitle}>Statut de service</Text>
+              <Text style={styles.dutyValue}>{isDutyActive ? "Disponible" : "Hors service"}</Text>
+              <Text style={styles.dutyHint}>
+                Visible par la centrale pour l’attribution des missions et alertes.
+              </Text>
+            </View>
+            <Switch
+              value={isDutyActive}
+              onValueChange={(v) => void handleToggleDuty(v)}
+              trackColor={{ false: "#2C2C2C", true: `${colors.success}88` }}
+              thumbColor={isDutyActive ? colors.success : "#9E9E9E"}
+            />
+          </View>
         </Card>
 
         <SectionLabel>Sécurité</SectionLabel>
@@ -334,6 +381,37 @@ const styles = StyleSheet.create({
     lineHeight: 21,
   },
 
+  dutyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    gap: 12,
+  },
+  dutyBody: {
+    flex: 1,
+    minWidth: 0,
+  },
+  dutyTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  dutyValue: {
+    marginTop: 4,
+    fontSize: 17,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  dutyHint: {
+    marginTop: 6,
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.textMuted,
+    lineHeight: 16,
+  },
   lockRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -223,7 +223,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (error) {
         // Extraire le message d'erreur détaillé
-        let errorDetail = 'Erreur de connexion. Réessayez.';
+        let errorDetail = 'Erreur de connexion. réessayez.';
         try {
           if (error.context && typeof error.context.json === 'function') {
             const errorBody = await error.context.json();
@@ -267,7 +267,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (portal: AuthPortal): Promise<{ ok: boolean; error?: string }> => {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
-        return { ok: false, error: 'Session introuvable. Réessayez.' };
+        return { ok: false, error: 'Session introuvable. réessayez.' };
       }
       const loaded = await fetchProfile(userData.user.id);
       if (!loaded) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, StatusBar, Animated, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Animated, Dimensions, Alert } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -30,13 +30,11 @@ const SkeletonText = ({ width: w, style }: { width: any, style?: any }) => (
 );
 
 export function HomeTab({ navigation }: any) {
-  const { profile, refreshProfile } = useAuth();
+  const { profile } = useAuth();
   const { activeMission, isLoading: missionLoading } = useActiveMission();
   const { unreadCount } = useNotifications();
   useLocationTracking(); // Initialise le suivi GPS pour la flotte Admin
   const [isLoading, setIsLoading] = useState(true);
-  const [isDutyActive, setIsDutyActive] = useState(profile?.available ?? false);
-  const [fadeAnim] = useState(new Animated.Value(0));
   const radarAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -77,14 +75,8 @@ export function HomeTab({ navigation }: any) {
     };
   }, [profile?.assigned_unit_id]);
 
-  // Synchroniser le statut local avec le profil
-  useEffect(() => {
-    if (profile) setIsDutyActive(profile.available);
-  }, [profile?.available]);
-
   const [sectionsAnim] = useState({
     header: new Animated.Value(0),
-    status: new Animated.Value(0),
     dynamic: new Animated.Value(0),
     shortcuts: new Animated.Value(0),
   });
@@ -97,7 +89,6 @@ export function HomeTab({ navigation }: any) {
       // Staggered entrance
       Animated.stagger(100, [
         Animated.spring(sectionsAnim.header, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-        Animated.spring(sectionsAnim.status, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
         Animated.spring(sectionsAnim.dynamic, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
         Animated.spring(sectionsAnim.shortcuts, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
       ]).start();
@@ -119,35 +110,6 @@ export function HomeTab({ navigation }: any) {
 
     return () => clearTimeout(timer);
   }, []);
-
-  const handleToggleDuty = async (val: boolean) => {
-    setIsDutyActive(val);
-    if (profile?.id) {
-      const { error } = await supabase
-        .from('users_directory')
-        .update({ available: val, status: val ? 'active' : 'offline' })
-        .eq('id', profile.id);
-
-      if (error) {
-        console.error('[HomeTab] Error updating duty status:', error.message);
-        setIsDutyActive(!val);
-      } else {
-        refreshProfile();
-      }
-    }
-  };
-
-  const MOCK_MISSION = {
-    id: "AL-902",
-    time: "2 min",
-    type: "ACCIDENT ROUTE",
-    typeIcon: "directions-car",
-    location: "Limete, Boulevard Lumumba",
-    description: "Collision deux véhicules. Victime coincée. Fracture ouverte jambe gauche suspectée.",
-    priority: "CRITIQUE",
-    coordinates: { latitude: -4.34, longitude: 15.33 },
-    patient: { nom: "JEAN KABEYA", age: 42, sexe: "Masculin", groupeSanguin: "O+" },
-  };
 
   return (
     <TabScreenSafeArea style={styles.container}>
@@ -224,44 +186,6 @@ export function HomeTab({ navigation }: any) {
             </TouchableOpacity>
           </View>
         </View>
-
-        {/* Status Card */}
-        <Animated.View style={[
-          styles.statusCard, 
-          { 
-            opacity: sectionsAnim.status,
-            transform: [{ translateY: sectionsAnim.status.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }]
-          }
-        ]}>
-          {isLoading ? (
-            <View style={styles.statusContent}>
-               <View style={styles.statusMain}>
-                  <SkeletonItem width={12} height={12} borderRadius={6} />
-                  <View>
-                    <SkeletonText width={60} />
-                    <SkeletonText width={90} />
-                  </View>
-               </View>
-               <SkeletonItem width={40} height={24} borderRadius={12} />
-            </View>
-          ) : (
-            <View style={styles.statusContent}>
-               <View style={styles.statusMain}>
-                <View style={[styles.statusIndicator, { backgroundColor: isDutyActive ? colors.success : colors.textMuted }]} />
-                <View>
-                  <Text style={styles.statusTitle}>Statut de service</Text>
-                  <Text style={styles.statusValue}>{isDutyActive ? 'Disponible' : 'Hors service'}</Text>
-                </View>
-              </View>
-              <Switch
-                value={isDutyActive}
-                onValueChange={handleToggleDuty}
-                trackColor={{ false: '#333', true: colors.success }}
-                thumbColor="#FFF"
-              />
-            </View>
-          )}
-        </Animated.View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -330,7 +254,9 @@ export function HomeTab({ navigation }: any) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.standbyTitle}>Prêt pour intervention</Text>
-                  <Text style={styles.standbyDesc}>Votre unité est scannée par la centrale. Activez votre statut pour recevoir des alertes.</Text>
+                  <Text style={styles.standbyDesc}>
+                    Votre unité est suivie par la centrale. Indiquez votre disponibilité dans l’onglet Profil pour recevoir les alertes.
+                  </Text>
                 </View>
               </View>
             </View>
@@ -418,7 +344,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 20
+    marginBottom: 0,
   },
   headerTextCol: {
     flex: 1,
@@ -523,51 +449,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
-  },
-
-  // Status Card
-  statusCard: {
-    backgroundColor: colors.glassBackground,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  statusContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statusMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 15,
-  },
-  statusIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    shadowColor: colors.success,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-  },
-  statusTitle: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: colors.textMuted,
-    letterSpacing: 1.5,
-    marginBottom: 4,
-    textTransform: 'uppercase',
-  },
-  statusValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFF',
   },
 
   // Dynamic Alert Section

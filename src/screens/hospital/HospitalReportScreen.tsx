@@ -39,7 +39,7 @@ export function HospitalReportScreen({ route, navigation }: any) {
         { text: 'Terminer', onPress: finishToTabs },
       ]);
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message ?? 'Impossible d’envoyer le rapport. Réessayez.');
+      Alert.alert('Erreur', e?.message ?? 'Impossible d’envoyer le rapport. réessayez.');
     } finally {
       setSending(false);
     }

@@ -402,7 +402,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
 
       if (error) {
         console.error('[Call] ❌ Erreur INSERT:', error.message);
-        Alert.alert('Erreur', "Impossible de joindre la centrale. Réessayez.");
+        Alert.alert('Erreur', "Impossible de joindre la centrale. réessayez.");
         setCallState('connecting');
         navigation.goBack();
         return;
