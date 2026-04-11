@@ -20,10 +20,21 @@ allprojects {
   }
 }
 
-// NDK 26 requis : avec NDK 27, la liaison de `expo-modules-core` (New Architecture) échoue souvent
-// sous Windows (ld.lld : __cxa_*, libc++, operator new/delete, etc.). Expo ne remplace pas
-// `ext.ndkVersion` s'il est déjà défini (ExpoRootProjectPlugin#setIfNotExist).
-ext.ndkVersion = "26.1.10909125"
+// NDK 26.1 recommandé pour certains setups Windows (expo-modules-core + New Arch).
+// Expo ne remplace pas `ext.ndkVersion` s'il est déjà défini (ExpoRootProjectPlugin#setIfNotExist).
+//
+// Si le SDK Android n'a qu'un NDK incomplet (erreur CXX1101 : pas de source.properties
+// sous ndk/<version>/), réinstaller : supprimer ce dossier puis
+//   sdkmanager --install "ndk;26.1.10909125"
+// Contournement local : dans android/local.properties, définir ndk.version vers un NDK
+// déjà complet (vérifier la présence de source.properties dans le dossier ndk).
+def localProps = new Properties()
+def localPropsFile = rootProject.file("local.properties")
+if (localPropsFile.exists()) {
+  localPropsFile.withInputStream { localProps.load(it) }
+}
+def ndkFromLocal = localProps.getProperty("ndk.version")?.trim()
+ext.ndkVersion = (ndkFromLocal != null && ndkFromLocal.length() > 0) ? ndkFromLocal : "26.1.10909125"
 
 apply plugin: "expo-root-project"
 apply plugin: "com.facebook.react.rootproject"
