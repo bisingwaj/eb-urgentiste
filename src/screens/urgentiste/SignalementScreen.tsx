@@ -103,7 +103,7 @@ interface AlertData {
 
 export function SignalementScreen({ navigation, route }: any) {
    const insets = useSafeAreaInsets();
-   const { activeMission, isLoading: missionLoading, updateDispatchStatus, refresh } = useActiveMission();
+   const { activeMission, updateDispatchStatus, refresh } = useActiveMission();
    const { updateMissionDetails } = useMission();
    const initialMission = route?.params?.mission || activeMission;
    
@@ -132,7 +132,6 @@ export function SignalementScreen({ navigation, route }: any) {
    }, [selectedMission]);
 
    const [timeline, setTimeline] = useState<TimelineEvent[]>([]);
-   const [isLoading, setIsLoading] = useState(true);
    const [isAssigned, setIsAssigned] = useState(false);
    const [elapsedSeconds, setElapsedSeconds] = useState(0);
    const [urgentisteLoc, setUrgentisteLoc] = useState<Location.LocationObject | null>(null);
@@ -493,8 +492,7 @@ export function SignalementScreen({ navigation, route }: any) {
       }),
    ).current;
 
-    useEffect(() => {
-       setTimeout(() => setIsLoading(false), 1000);
+   useEffect(() => {
       Animated.loop(
          Animated.sequence([
             Animated.timing(radarAnim, {

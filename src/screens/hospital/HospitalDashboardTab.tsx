@@ -654,7 +654,7 @@ export function HospitalDashboardTab({ navigation }: any) {
           </View>
         </View>
 
-        {isLoading ? (
+        {isLoading && activeCases.length === 0 ? (
           <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
         ) : sortedFilteredCases.length === 0 ? (
           <View style={{ alignItems: "center", marginTop: 40, paddingHorizontal: 24 }}>

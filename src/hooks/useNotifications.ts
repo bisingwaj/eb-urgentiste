@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { readNotificationsCache, writeNotificationsCache } from '../lib/localAppCache';
 
 export interface Notification {
   id: string;
@@ -18,7 +19,7 @@ export function useNotifications() {
   const userId = session?.user?.id;
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
     if (!userId) {
@@ -39,8 +40,10 @@ export function useNotifications() {
         return;
       }
 
-      setNotifications(data || []);
-      setUnreadCount((data || []).filter(n => !n.is_read).length);
+      const list = data || [];
+      setNotifications(list);
+      setUnreadCount(list.filter((n) => !n.is_read).length);
+      void writeNotificationsCache(userId, list);
     } catch (err: any) {
       console.error('[Notifications] Error:', err.message);
     } finally {
@@ -48,10 +51,26 @@ export function useNotifications() {
     }
   }, [userId]);
 
-  // Initial fetch
   useEffect(() => {
-    fetchNotifications();
-  }, [fetchNotifications]);
+    let cancelled = false;
+    (async () => {
+      if (!userId) {
+        setNotifications([]);
+        setUnreadCount(0);
+        return;
+      }
+      const cached = await readNotificationsCache(userId);
+      if (cancelled) return;
+      if (cached) {
+        setNotifications(cached.notifications);
+        setUnreadCount(cached.unreadCount);
+      }
+      await fetchNotifications();
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, fetchNotifications]);
 
   // Realtime subscription — separate effect, only depends on userId
   useEffect(() => {
@@ -76,8 +95,12 @@ export function useNotifications() {
         (payload: any) => {
           const newNotif = payload.new as Notification;
           console.log('[Notifications] 🔔 New:', newNotif.title);
-          setNotifications(prev => [newNotif, ...prev]);
-          setUnreadCount(prev => prev + 1);
+          setNotifications((prev) => {
+            const next = [newNotif, ...prev];
+            void writeNotificationsCache(userId, next);
+            return next;
+          });
+          setUnreadCount((prev) => prev + 1);
         }
       )
       .subscribe();
@@ -94,10 +117,12 @@ export function useNotifications() {
       .eq('id', notifId);
 
     if (!error) {
-      setNotifications(prev =>
-        prev.map(n => n.id === notifId ? { ...n, is_read: true } : n)
-      );
-      setUnreadCount(prev => Math.max(0, prev - 1));
+      setNotifications((prev) => {
+        const next = prev.map((n) => (n.id === notifId ? { ...n, is_read: true } : n));
+        if (userId) void writeNotificationsCache(userId, next);
+        return next;
+      });
+      setUnreadCount((prev) => Math.max(0, prev - 1));
     }
   };
 
@@ -110,7 +135,11 @@ export function useNotifications() {
       .eq('is_read', false);
 
     if (!error) {
-      setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+      setNotifications((prev) => {
+        const next = prev.map((n) => ({ ...n, is_read: true }));
+        if (userId) void writeNotificationsCache(userId, next);
+        return next;
+      });
       setUnreadCount(0);
     }
   };

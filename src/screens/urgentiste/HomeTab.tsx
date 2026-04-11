@@ -34,7 +34,8 @@ export function HomeTab({ navigation }: any) {
   const { activeMission, isLoading: missionLoading } = useActiveMission();
   const { unreadCount } = useNotifications();
   useLocationTracking(); // Initialise le suivi GPS pour la flotte Admin
-  const [isLoading, setIsLoading] = useState(true);
+  /** Skeleton uniquement si aucune mission en cache et fetch encore en cours. */
+  const showMissionSkeleton = missionLoading && !activeMission;
   const radarAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -82,19 +83,12 @@ export function HomeTab({ navigation }: any) {
   });
 
   useEffect(() => {
-    // Initial loading delay simulator
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-      
-      // Staggered entrance
-      Animated.stagger(100, [
-        Animated.spring(sectionsAnim.header, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-        Animated.spring(sectionsAnim.dynamic, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-        Animated.spring(sectionsAnim.shortcuts, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-      ]).start();
-    }, 1200);
+    Animated.stagger(100, [
+      Animated.spring(sectionsAnim.header, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+      Animated.spring(sectionsAnim.dynamic, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+      Animated.spring(sectionsAnim.shortcuts, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+    ]).start();
 
-    // Radar & Pulse Animations
     Animated.loop(
       Animated.parallel([
         Animated.sequence([
@@ -104,11 +98,9 @@ export function HomeTab({ navigation }: any) {
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.04, duration: 1200, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        ])
-      ])
+        ]),
+      ]),
     ).start();
-
-    return () => clearTimeout(timer);
   }, []);
 
   return (
@@ -198,7 +190,7 @@ export function HomeTab({ navigation }: any) {
             transform: [{ translateY: sectionsAnim.dynamic.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }]
           }
         ]}>
-          {isLoading || missionLoading ? (
+          {showMissionSkeleton ? (
             <View style={styles.standbyCard}>
                <View style={styles.standbyContent}>
                   <SkeletonItem width={48} height={48} borderRadius={18} />
@@ -270,7 +262,7 @@ export function HomeTab({ navigation }: any) {
         }}>
           <Text style={styles.sectionHeading}>Accès rapides</Text>
           <View style={styles.shortcutsGrid}>
-            {isLoading ? (
+            {showMissionSkeleton ? (
               [1, 2, 3, 4].map(i => (
                 <View key={i} style={[styles.shortcutCard, { opacity: 0.6 }]}>
                    <SkeletonItem width={48} height={48} borderRadius={16} style={{ marginBottom: 16 }} />

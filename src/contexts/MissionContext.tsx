@@ -3,6 +3,7 @@ import { Alert, Vibration, DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { Mission, normalizeHospitalStatus } from '../hooks/useActiveMission';
+import { readMissionCache, writeMissionCache } from '../lib/localAppCache';
 
 /** PostgREST / JSON peuvent renvoyer des nombres en string */
 function toNullableNumber(v: unknown): number | null {
@@ -124,20 +125,28 @@ const MissionContext = createContext<MissionContextType | undefined>(undefined);
 export function MissionProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeMissionRef = useRef<Mission | null>(null);
+  /** Un seul « chargement » visible par unité : premier fetch sans cache, pas les refetch Realtime. */
+  const firstSilentFetchForUnitRef = useRef(true);
+  useEffect(() => {
+    activeMissionRef.current = activeMission;
+  }, [activeMission]);
 
   const fetchActiveMission = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
-    if (!profile?.assigned_unit_id) {
-      if (!silent) setIsLoading(false);
+    const unitId = profile?.assigned_unit_id;
+    if (!unitId) {
+      setIsLoading(false);
       setActiveMission(null);
       return;
     }
 
     try {
       if (!silent) setIsLoading(true);
+      else if (firstSilentFetchForUnitRef.current && !activeMissionRef.current) setIsLoading(true);
       /** `incidents!inner` = jointure stricte dispatch → incident ; `citizen_id` et champs UI viennent d’ici. */
       const { data, error: dispatchError } = await supabase
         .from('dispatches')
@@ -167,7 +176,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           )
         `.trim()
         )
-        .eq('unit_id', profile.assigned_unit_id)
+        .eq('unit_id', unitId)
         .in('status', ['dispatched', 'en_route', 'on_scene', 'en_route_hospital', 'arrived_hospital', 'mission_end'])
         .order('created_at', { ascending: false })
         .limit(1)
@@ -214,7 +223,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           logStructureGps('fetchActiveMission', dispatch as unknown as Record<string, unknown>);
         }
 
-        setActiveMission({
+        const mission: Mission = {
           id: dispatch.id,
           incident_id: incident.id,
           citizen_id: incident.citizen_id != null ? String(incident.citizen_id) : null,
@@ -241,15 +250,19 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           hospital_status,
           hospital_notes,
           hospital_data,
-        });
+        };
+        setActiveMission(mission);
+        void writeMissionCache(unitId, mission);
       } else {
         setActiveMission(null);
+        void writeMissionCache(unitId, null);
       }
     } catch (err: any) {
       console.error('[MissionProvider] Fetch error:', err.message);
       setError(err.message);
     } finally {
-      if (!silent) setIsLoading(false);
+      setIsLoading(false);
+      firstSilentFetchForUnitRef.current = false;
     }
   }, [profile?.assigned_unit_id]);
 
@@ -296,9 +309,27 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(() => fetchActiveMission({ silent: true }), [fetchActiveMission]);
 
-  /** Chargement initial + changement d’unité */
+  /** Hydratation cache locale puis sync silencieuse (pas de spinner bloquant). */
   useEffect(() => {
-    fetchActiveMission({ silent: false });
+    let cancelled = false;
+    firstSilentFetchForUnitRef.current = true;
+    (async () => {
+      if (!profile?.assigned_unit_id) {
+        setActiveMission(null);
+        return;
+      }
+      const uid = profile.assigned_unit_id;
+      const cached = await readMissionCache(uid);
+      if (cancelled) return;
+      if (cached) {
+        activeMissionRef.current = cached;
+        setActiveMission(cached);
+      }
+      await fetchActiveMission({ silent: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [profile?.assigned_unit_id, fetchActiveMission]);
 
   /** Dispatches : INSERT / UPDATE par unité (temps réel) */
