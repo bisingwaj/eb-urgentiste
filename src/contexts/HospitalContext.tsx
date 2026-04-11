@@ -11,6 +11,7 @@ import { mergeHospitalDataPartial } from '../lib/hospitalMerge';
 import { mapDispatchRowToEmergencyCase } from '../lib/hospitalCaseMapping';
 import { buildHospitalReportPayload } from '../lib/hospitalReportPayload';
 import { readHospitalCasesCache, writeHospitalCasesCache } from '../lib/localAppCache';
+import { APP_FOREGROUND_SYNC } from '../lib/syncEvents';
 
 /** Émis quand un dispatch assigné à la structure exige une réponse hôpital (alignement urgentiste → HospitalAlertManager). */
 export const NEW_HOSPITAL_ALERT = 'NEW_HOSPITAL_ALERT';
@@ -438,6 +439,13 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       throw error;
     }
   };
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(APP_FOREGROUND_SYNC, () => {
+      void fetchCases({ silent: true });
+    });
+    return () => sub.remove();
+  }, [fetchCases]);
 
   return (
     <HospitalContext.Provider

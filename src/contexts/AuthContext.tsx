@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
 import type { UserProfile } from '../types/userProfile';
@@ -7,6 +7,7 @@ import {
   readUserProfileCache,
   writeUserProfileCache,
 } from '../lib/localAppCache';
+import { runSessionBootstrap } from '../lib/sessionBootstrap';
 
 export type { UserProfile };
 
@@ -30,6 +31,7 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const sessionBootstrapKeyRef = useRef<string | null>(null);
   const [state, setState] = useState<AuthState>({
     session: null,
     profile: null,
@@ -184,14 +186,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             });
           } else {
             // Pour SIGNED_IN et les autres, on NE DOIT PAS utiliser "await" sinon supabase-js bloque (deadlock)
-            // On valide la session instantanément
-            setState(prev => ({ ...prev, session, isLoading: false, isAuthenticated: true }));
-            
-            // Puis on charge le profil sans bloquer le thread de Supabase
-            fetchProfile(session.user.id).then(profile => {
-              console.log('[Auth] Profil asynchrone chargé:', profile ? `${profile.first_name} ${profile.last_name}` : 'NULL');
-              setState(prev => ({ ...prev, profile }));
-            }).catch(console.error);
+            setState((prev) => ({
+              ...prev,
+              session,
+              isLoading: false,
+              isAuthenticated: true,
+            }));
+            readUserProfileCache(session.user.id).then((cached) => {
+              if (cached) {
+                setState((prev) => ({ ...prev, profile: cached }));
+              }
+            });
+            fetchProfile(session.user.id)
+              .then((profile) => {
+                console.log(
+                  '[Auth] Profil asynchrone chargé:',
+                  profile ? `${profile.first_name} ${profile.last_name}` : 'NULL',
+                );
+                setState((prev) => ({ ...prev, profile }));
+              })
+              .catch(console.error);
           }
         }
       }
@@ -199,6 +213,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
+
+  /** Préchargement cache historique (urgentiste) — une fois par couple user + unité. */
+  useEffect(() => {
+    const p = state.profile;
+    if (!p?.assigned_unit_id || p.role === 'hopital') return;
+    const key = `${p.auth_user_id}:${p.assigned_unit_id}`;
+    if (sessionBootstrapKeyRef.current === key) return;
+    sessionBootstrapKeyRef.current = key;
+    void runSessionBootstrap(p);
+  }, [state.profile]);
 
   // Login via agent_login_id + pin_code (Edge Function)
   const signInWithAgent = useCallback(async (
@@ -294,6 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Déconnexion propre
   const signOut = useCallback(async () => {
+    sessionBootstrapKeyRef.current = null;
     try {
       if (state.profile?.auth_user_id) {
         await clearLocalAppCacheForSession({

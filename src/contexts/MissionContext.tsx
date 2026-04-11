@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { Mission, normalizeHospitalStatus } from '../hooks/useActiveMission';
 import { readMissionCache, writeMissionCache } from '../lib/localAppCache';
+import { APP_FOREGROUND_SYNC } from '../lib/syncEvents';
 
 /** PostgREST / JSON peuvent renvoyer des nombres en string */
 function toNullableNumber(v: unknown): number | null {
@@ -586,6 +587,13 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     /** L’urgentiste n’utilise pas `health_structures` pour l’affectation (voir workflow Lovable). */
     return [];
   };
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(APP_FOREGROUND_SYNC, () => {
+      void fetchActiveMission({ silent: true });
+    });
+    return () => sub.remove();
+  }, [fetchActiveMission]);
 
   return (
     <MissionContext.Provider value={{ 

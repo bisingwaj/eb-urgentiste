@@ -1,170 +1,117 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { Mission } from './useActiveMission';
+import { fetchMissionHistoryForUnit } from '../lib/missionHistoryRemote';
+import {
+  readMissionHistoryCache,
+  writeMissionHistoryCache,
+} from '../lib/localAppCache';
+import { APP_FOREGROUND_SYNC } from '../lib/syncEvents';
 
 export function useMissionHistory() {
   const { profile } = useAuth();
   const [history, setHistory] = useState<Mission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchHistory = useCallback(async () => {
-    if (!profile?.assigned_unit_id) {
-      setIsLoading(false);
-      setHistory([]);
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      const { data, error: dispatchError } = await supabase
-        .from('dispatches')
-        .select(`
-          id,
-          status,
-          incident_id,
-          notes,
-          created_at,
-          dispatched_at,
-          arrived_at,
-          completed_at,
-          incidents (
-            id,
-            reference,
-            type,
-            title,
-            description,
-            priority,
-            status,
-            location_lat,
-            location_lng,
-            location_address,
-            commune,
-            ville,
-            province,
-            caller_name,
-            caller_phone,
-            citizen_id,
-            caller_realtime_lat,
-            caller_realtime_lng,
-            caller_realtime_updated_at,
-            recommended_facility,
-            recommended_actions,
-            notes,
-            incident_at,
-            media_urls,
-            media_type,
-            battery_level,
-            network_state,
-            created_at,
-            updated_at
-          )
-        `)
-        .eq('unit_id', profile.assigned_unit_id)
-        .eq('status', 'completed')
-        .order('completed_at', { ascending: false });
-
-      if (dispatchError) throw dispatchError;
-
-      const rows = data || [];
-      const incidentIds = [
-        ...new Set(
-          rows
-            .map((d: any) => d.incidents?.id)
-            .filter((id: unknown): id is string => typeof id === 'string'),
-        ),
-      ];
-
-      let sosByIncident: Record<string, any[]> = {};
-      if (incidentIds.length > 0) {
-        const { data: sosRows, error: sosErr } = await supabase
-          .from('sos_responses')
-          .select('incident_id, question_key, question_text, answer, answered_at')
-          .in('incident_id', incidentIds);
-        if (sosErr) {
-          console.warn('[useMissionHistory] sos_responses:', sosErr.message);
-        } else if (sosRows) {
-          sosByIncident = sosRows.reduce(
-            (acc: Record<string, any[]>, row: any) => {
-              const iid = row.incident_id;
-              if (!iid) return acc;
-              if (!acc[iid]) acc[iid] = [];
-              acc[iid].push(row);
-              return acc;
-            },
-            {},
-          );
-        }
+  const fetchHistory = useCallback(
+    async (options?: { silent?: boolean }) => {
+      const silent = options?.silent ?? false;
+      const unitId = profile?.assigned_unit_id;
+      if (!unitId) {
+        setIsLoading(false);
+        setHistory([]);
+        return;
       }
 
-      const missions: Mission[] = rows.map((dispatch: any) => {
-        const incident = dispatch.incidents;
-        const sosRaw = incident?.id ? sosByIncident[incident.id] : undefined;
-        const sos_responses = Array.isArray(sosRaw)
-          ? sosRaw.map((r: any) => ({
-              question_key: String(r.question_key ?? ''),
-              question_text: r.question_text ?? null,
-              answer: r.answer ?? null,
-              answered_at: r.answered_at,
-            }))
-          : [];
+      try {
+        if (!silent) setIsLoading(true);
+        const { missions, error: err } = await fetchMissionHistoryForUnit(unitId);
+        if (err) {
+          setError(err);
+          return;
+        }
+        setError(null);
+        setHistory(missions);
+        await writeMissionHistoryCache(unitId, missions);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error('[useMissionHistory] Fetch error:', msg);
+        setError(msg);
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [profile?.assigned_unit_id],
+  );
 
-        return {
-          id: dispatch.id,
-          incident_id: incident.id,
-          citizen_id: incident.citizen_id != null ? String(incident.citizen_id) : null,
-          reference: incident.reference,
-          type: incident.type,
-          title: incident.title,
-          description: incident.description,
-          priority: incident.priority,
-          incident_status: incident.status,
-          dispatch_status: dispatch.status,
-          location: {
-            lat: incident.location_lat ?? null,
-            lng: incident.location_lng ?? null,
-            address: incident.location_address ?? null,
-            commune: incident.commune ?? null,
-            ville: incident.ville ?? null,
-            province: incident.province ?? null,
-          },
-          caller: {
-            name: incident.caller_name || 'Anonyme',
-            phone: incident.caller_phone || '-',
-          },
-          destination: incident.recommended_facility,
-          created_at: incident.created_at,
-          dispatched_at: dispatch.dispatched_at ?? dispatch.created_at,
-          arrived_at: dispatch.arrived_at,
-          completed_at: dispatch.completed_at,
-          dispatch_notes: dispatch.notes ?? null,
-          incident_notes: incident.notes ?? null,
-          recommended_actions: incident.recommended_actions ?? null,
-          incident_at: incident.incident_at ?? null,
-          caller_realtime_lat: incident.caller_realtime_lat ?? null,
-          caller_realtime_lng: incident.caller_realtime_lng ?? null,
-          caller_realtime_updated_at: incident.caller_realtime_updated_at ?? null,
-          sos_responses,
-          media_urls: incident.media_urls ?? null,
-          battery_level: incident.battery_level ?? null,
-          network_state: incident.network_state ?? null,
-          incident_updated_at: incident.updated_at ?? null,
-        };
-      });
-
-      setHistory(missions);
-    } catch (err: any) {
-      console.error('[useMissionHistory] Fetch error:', err.message);
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [profile?.assigned_unit_id]);
-
-  useEffect(() => {
-    fetchHistory();
+  const scheduleSilentRefetch = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      void fetchHistory({ silent: true });
+    }, 400);
   }, [fetchHistory]);
 
-  return { history, isLoading, error, refresh: fetchHistory };
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const unitId = profile?.assigned_unit_id;
+      if (!unitId) {
+        setHistory([]);
+        setIsLoading(false);
+        return;
+      }
+
+      const cached = await readMissionHistoryCache(unitId);
+      if (cancelled) return;
+      if (cached !== null) {
+        setHistory(cached);
+        setIsLoading(false);
+      }
+      await fetchHistory({ silent: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile?.assigned_unit_id, fetchHistory]);
+
+  useEffect(() => {
+    const unitId = profile?.assigned_unit_id;
+    if (!unitId) return;
+
+    const channel = supabase
+      .channel(`mission-history-${unitId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'dispatches',
+          filter: `unit_id=eq.${unitId}`,
+        },
+        (payload: { new?: { status?: string } }) => {
+          if (payload.new?.status === 'completed') {
+            scheduleSilentRefetch();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.assigned_unit_id, scheduleSilentRefetch]);
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(APP_FOREGROUND_SYNC, () => {
+      void fetchHistory({ silent: true });
+    });
+    return () => sub.remove();
+  }, [fetchHistory]);
+
+  return { history, isLoading, error, refresh: () => fetchHistory({ silent: true }) };
 }
