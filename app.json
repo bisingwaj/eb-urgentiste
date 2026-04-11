@@ -18,7 +18,7 @@
       "infoPlist": {
         "UIBackgroundModes": ["audio", "remote-notification"],
         "NSMicrophoneUsageDescription": "L'application utilise le micro pour les appels avec la centrale de régulation.",
-        "NSCameraUsageDescription": "La caméra est utilisée pour les appels vidéo avec la centrale.",
+        "NSCameraUsageDescription": "La caméra est utilisée pour les appels vidéo avec la centrale et pour photographier le terrain lors des interventions.",
         "NSFaceIDUsageDescription": "L'application utilise Face ID pour déverrouiller l'accès après connexion."
       }
     },
@@ -46,6 +46,13 @@
     },
     "plugins": [
       "expo-build-properties",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "L'application accède à la galerie pour joindre des photos au dossier d'intervention.",
+          "cameraPermission": "La caméra permet de photographier le terrain pour documenter l'intervention."
+        }
+      ],
       "@rnmapbox/maps",
       "expo-secure-store",
       "./plugins/with-notifee-repository",

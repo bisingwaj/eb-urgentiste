@@ -15,7 +15,10 @@ import {
    FlatList,
    PanResponder,
    Linking,
+   Image,
+   Pressable,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Mapbox from "@rnmapbox/maps";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -104,7 +107,7 @@ interface AlertData {
 export function SignalementScreen({ navigation, route }: any) {
    const insets = useSafeAreaInsets();
    const { activeMission, isLoading: missionLoading, updateDispatchStatus, refresh } = useActiveMission();
-   const { updateMissionDetails } = useMission();
+   const { updateMissionDetails, appendIncidentTerrainPhoto } = useMission();
    const initialMission = route?.params?.mission || activeMission;
    
    const getInitialStep = (): MissionStep => {
@@ -141,6 +144,7 @@ export function SignalementScreen({ navigation, route }: any) {
    const [routeDistance, setRouteDistance] = useState<number | null>(null);
    const lastRouteFetch = useRef<number>(0);
    const [voipLoading, setVoipLoading] = useState(false);
+   const [terrainPhotoBusy, setTerrainPhotoBusy] = useState(false);
 
    useEffect(() => {
       if (!urgentisteLoc || !selectedMission) return;
@@ -947,6 +951,203 @@ export function SignalementScreen({ navigation, route }: any) {
       </View>
    );
 
+   useEffect(() => {
+      if (!activeMission?.id || !selectedMission?.id) return;
+      if (activeMission.id !== selectedMission.id) return;
+      if (activeMission.media_urls === selectedMission.media_urls) return;
+      setSelectedMission((s: any) =>
+         s ? { ...s, media_urls: activeMission.media_urls ?? null } : s,
+      );
+   }, [activeMission?.id, activeMission?.media_urls, selectedMission?.id]);
+
+   /** Même dispatch que le contexte → on privilégie `activeMission` (toujours `incident_id` si chargé par Supabase). */
+   const missionForTerrainPhotos =
+      activeMission && selectedMission?.id === activeMission.id
+         ? activeMission
+         : selectedMission;
+   const terrainPhotoUrls: string[] = Array.isArray(missionForTerrainPhotos?.media_urls)
+      ? missionForTerrainPhotos.media_urls.filter((u: string) => typeof u === "string" && u.length > 0)
+      : [];
+
+   const pickAndUploadTerrainPhoto = async (source: "camera" | "library") => {
+      const incidentId = missionForTerrainPhotos?.incident_id;
+      const logPrefix = "[TerrainPhoto]";
+      console.log(logPrefix, "tap", {
+         source,
+         platform: Platform.OS,
+         terrainPhotoBusy,
+         incidentId: incidentId ?? null,
+         dispatchId: selectedMission?.id ?? null,
+         activeDispatchId: activeMission?.id ?? null,
+         missionSource: activeMission && selectedMission?.id === activeMission.id ? "activeMission" : "selectedMission",
+         mediaUrlsCount: terrainPhotoUrls.length,
+      });
+
+      if (terrainPhotoBusy) {
+         console.warn(logPrefix, "abandon: déjà une action photo en cours");
+         return;
+      }
+      if (!incidentId) {
+         console.warn(logPrefix, "abandon: pas d'incident_id", {
+            missionForTerrainPhotos: missionForTerrainPhotos
+               ? { id: missionForTerrainPhotos.id, incident_id: missionForTerrainPhotos.incident_id }
+               : null,
+         });
+         Alert.alert(
+            "Photo terrain",
+            "L'incident n'est pas identifié (données incomplètes). Revenez à l'accueil et rouvrez la mission, ou attendez la fin du chargement.",
+         );
+         return;
+      }
+      try {
+         if (source === "camera") {
+            const perm = await ImagePicker.requestCameraPermissionsAsync();
+            console.log(logPrefix, "permission caméra", perm);
+            if (perm.status !== "granted") {
+               console.warn(logPrefix, "permission caméra refusée", perm.status);
+               Alert.alert("Caméra", "Permission refusée pour prendre une photo.");
+               return;
+            }
+         } else {
+            const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            console.log(logPrefix, "permission médiathèque", perm);
+            if (perm.status !== "granted") {
+               console.warn(logPrefix, "permission médiathèque refusée", perm.status);
+               Alert.alert("Galerie", "Permission refusée pour choisir une photo.");
+               return;
+            }
+         }
+
+         console.log(logPrefix, source === "camera" ? "ouverture caméra…" : "ouverture galerie…");
+         const result =
+            source === "camera"
+               ? await ImagePicker.launchCameraAsync({
+                    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                    quality: 0.75,
+                 })
+               : await ImagePicker.launchImageLibraryAsync({
+                    mediaTypes: ["images"],
+                    quality: 0.75,
+                    allowsMultipleSelection: false,
+                    /** Android : sélecteur plus tolérant (fichiers hors « Photothèque » système si besoin). */
+                    ...(Platform.OS === "android" ? { legacy: true as const } : {}),
+                 });
+
+         console.log(logPrefix, "résultat picker", {
+            canceled: result.canceled,
+            assetsCount: result.assets?.length ?? 0,
+         });
+
+         if (result.canceled || !result.assets?.[0]) {
+            console.log(logPrefix, "fin: annulation utilisateur ou aucun fichier");
+            return;
+         }
+         const asset = result.assets[0];
+         const uriSample = typeof asset.uri === "string" ? asset.uri.slice(0, 48) : "";
+         console.log(logPrefix, "fichier choisi", {
+            uriPrefix: uriSample + (asset.uri && asset.uri.length > 48 ? "…" : ""),
+            uriLength: asset.uri?.length,
+            mimeType: asset.mimeType ?? null,
+            width: asset.width,
+            height: asset.height,
+         });
+
+         setTerrainPhotoBusy(true);
+         console.log(logPrefix, "upload + appendIncidentTerrainPhoto…", { incidentId });
+         await appendIncidentTerrainPhoto(asset.uri, asset.mimeType ?? "image/jpeg", {
+            incidentId,
+            previousUrls: terrainPhotoUrls,
+         });
+         console.log(logPrefix, "succès: photo enregistrée côté incident");
+      } catch (e: any) {
+         console.error(logPrefix, "erreur", e?.message ?? e, e);
+         const msg =
+            typeof e?.message === "string"
+               ? e.message
+               : typeof e === "string"
+                 ? e
+                 : "Envoi impossible.";
+         Alert.alert("Photo terrain", msg);
+      } finally {
+         setTerrainPhotoBusy(false);
+         console.log(logPrefix, "fin handler (busy remis à false)");
+      }
+   };
+
+   const renderTerrainPhotosStrip = () => {
+      if (step === "standby" || !selectedMission) return null;
+      return (
+         <View style={styles.terrainPhotosStrip}>
+            <View style={styles.terrainPhotosStripHeader}>
+               <MaterialIcons name="photo-library" size={18} color={colors.secondary} />
+               <View style={{ flex: 1 }}>
+                  <Text style={styles.terrainPhotosStripTitle}>Photos terrain</Text>
+                  <Text style={styles.terrainPhotosStripHint}>
+                     Commencez par la galerie — la caméra est en seconde option.
+                  </Text>
+               </View>
+            </View>
+            <ScrollView
+               horizontal
+               nestedScrollEnabled
+               keyboardShouldPersistTaps="always"
+               showsHorizontalScrollIndicator={false}
+               contentContainerStyle={styles.terrainPhotosScroll}
+            >
+               {terrainPhotoUrls.map((url) => (
+                  <Image key={url} source={{ uri: url }} style={styles.terrainPhotoThumb} />
+               ))}
+               <View style={styles.terrainPhotoActions}>
+                  <Pressable
+                     style={({ pressed }) => [
+                        styles.terrainPhotoAddBtn,
+                        styles.terrainPhotoAddBtnPrimary,
+                        terrainPhotoBusy && { opacity: 0.6 },
+                        pressed && !terrainPhotoBusy && { opacity: 0.85 },
+                     ]}
+                     onPress={() => void pickAndUploadTerrainPhoto("library")}
+                     disabled={terrainPhotoBusy}
+                     accessibilityLabel="Choisir une photo dans la galerie"
+                     hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                     {...(Platform.OS === "android" ? { collapsable: false } : {})}
+                  >
+                     {terrainPhotoBusy ? (
+                        <ActivityIndicator color={colors.secondary} size="small" />
+                     ) : (
+                        <>
+                           <MaterialIcons name="photo-library" size={24} color={colors.secondary} />
+                           <Text style={styles.terrainPhotoAddText}>Galerie</Text>
+                        </>
+                     )}
+                  </Pressable>
+                  <Pressable
+                     style={({ pressed }) => [
+                        styles.terrainPhotoAddBtn,
+                        styles.terrainPhotoAddBtnSecondary,
+                        terrainPhotoBusy && { opacity: 0.6 },
+                        pressed && !terrainPhotoBusy && { opacity: 0.85 },
+                     ]}
+                     onPress={() => void pickAndUploadTerrainPhoto("camera")}
+                     disabled={terrainPhotoBusy}
+                     accessibilityLabel="Prendre une photo avec la caméra"
+                     hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                     {...(Platform.OS === "android" ? { collapsable: false } : {})}
+                  >
+                     {terrainPhotoBusy ? (
+                        <ActivityIndicator color={colors.secondary} size="small" />
+                     ) : (
+                        <>
+                           <MaterialIcons name="photo-camera" size={22} color="rgba(255,255,255,0.55)" />
+                           <Text style={styles.terrainPhotoAddTextSecondary}>Caméra</Text>
+                        </>
+                     )}
+                  </Pressable>
+               </View>
+            </ScrollView>
+         </View>
+      );
+   };
+
    return (
       <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
          <StatusBar barStyle="light-content" />
@@ -971,6 +1172,7 @@ export function SignalementScreen({ navigation, route }: any) {
 
          <View style={styles.mainWrapper}>
             <Animated.View style={[styles.contentArea, { opacity: fadeAnim }]}>
+               {renderTerrainPhotosStrip()}
                {step === "standby" && (
                   <View style={styles.standbyView}>
                      <View style={styles.radarWrapper}>
@@ -2217,6 +2419,82 @@ const styles = StyleSheet.create({
       paddingTop: 10,
       paddingBottom: 6,
       backgroundColor: colors.mainBackground,
+   },
+   terrainPhotosStrip: {
+      paddingHorizontal: 16,
+      paddingTop: 8,
+      paddingBottom: 10,
+      borderBottomWidth: 1,
+      borderBottomColor: "rgba(255,255,255,0.06)",
+      backgroundColor: "rgba(0,0,0,0.35)",
+   },
+   terrainPhotosStripHeader: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 8,
+      marginBottom: 10,
+   },
+   terrainPhotosStripTitle: {
+      color: "rgba(255,255,255,0.85)",
+      fontSize: 13,
+      fontWeight: "800",
+      letterSpacing: 0.8,
+   },
+   terrainPhotosStripHint: {
+      color: "rgba(255,255,255,0.45)",
+      fontSize: 11,
+      fontWeight: "600",
+      marginTop: 4,
+      lineHeight: 15,
+   },
+   terrainPhotosScroll: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+      paddingRight: 8,
+   },
+   terrainPhotoThumb: {
+      width: 64,
+      height: 64,
+      borderRadius: 12,
+      backgroundColor: "#1A1A1A",
+   },
+   terrainPhotoActions: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+   },
+   terrainPhotoAddBtn: {
+      width: 76,
+      height: 64,
+      borderRadius: 12,
+      borderWidth: 1.5,
+      borderColor: colors.secondary + "35",
+      borderStyle: "dashed",
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.secondary + "08",
+   },
+   terrainPhotoAddBtnPrimary: {
+      borderStyle: "solid",
+      borderColor: colors.secondary + "AA",
+      backgroundColor: colors.secondary + "18",
+   },
+   terrainPhotoAddBtnSecondary: {
+      borderColor: "rgba(255,255,255,0.12)",
+      backgroundColor: "rgba(255,255,255,0.04)",
+   },
+   terrainPhotoAddText: {
+      color: colors.secondary,
+      fontSize: 11,
+      fontWeight: "800",
+      marginTop: 2,
+   },
+   terrainPhotoAddTextSecondary: {
+      color: "rgba(255,255,255,0.5)",
+      fontSize: 10,
+      fontWeight: "700",
+      marginTop: 2,
    },
    victimContactStrip: {
       backgroundColor: "#161616",
