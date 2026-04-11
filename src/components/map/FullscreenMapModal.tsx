@@ -3,10 +3,9 @@ import {
   Modal,
   View,
   StyleSheet,
-  TouchableOpacity,
-  StatusBar,
-  Platform,
-} from 'react-native';
+StatusBar,
+  Platform} from 'react-native';
+import { AppTouchableOpacity } from '../ui/AppTouchableOpacity';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -47,14 +46,14 @@ export function FullscreenMapModal({ visible, onClose, children, topOverlay }: F
           </View>
         ) : null}
 
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={[styles.closeBtn, { top: insets.top + 10 }]}
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel="Fermer la carte plein écran"
         >
           <MaterialIcons name="close" color="#FFF" size={26} />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
       </View>
     </Modal>
   );

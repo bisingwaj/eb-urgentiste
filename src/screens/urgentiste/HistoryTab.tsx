@@ -4,14 +4,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  StatusBar,
+StatusBar,
   Modal,
   TextInput,
   Platform,
   ActivityIndicator,
-  Keyboard,
-} from "react-native";
+  Keyboard} from "react-native";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateTimePicker, {
   type DateTimePickerEvent,
@@ -228,7 +227,7 @@ export function HistoryTab({ navigation }: any) {
             <Text style={styles.hospitalName}>Historique</Text>
           </View>
           <View style={styles.headerIconRow}>
-            <TouchableOpacity
+            <AppTouchableOpacity
               style={styles.headerAvatarBtn}
               onPress={() => setFilterModalVisible(true)}
               accessibilityLabel="Filtres"
@@ -239,7 +238,7 @@ export function HistoryTab({ navigation }: any) {
                 size={26}
               />
               {hasActiveFilters ? <View style={styles.filterBadgeDot} /> : null}
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
         </View>
 
@@ -280,7 +279,7 @@ export function HistoryTab({ navigation }: any) {
         contentContainerStyle={styles.scrollPad}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={styles.callHistoryCard}
           onPress={() => navigation.navigate("CallHistoryCalls")}
           activeOpacity={0.88}
@@ -308,7 +307,7 @@ export function HistoryTab({ navigation }: any) {
             color="rgba(255,255,255,0.2)"
             size={24}
           />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
 
         <Text style={styles.sectionTitle}>Missions récentes</Text>
 
@@ -350,12 +349,12 @@ export function HistoryTab({ navigation }: any) {
             >
               Aucun résultat pour ces filtres
             </Text>
-            <TouchableOpacity
+            <AppTouchableOpacity
               style={styles.clearFiltersLink}
               onPress={resetFilters}
             >
               <Text style={styles.clearFiltersLinkText}>Réinitialiser les filtres</Text>
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
         ) : (
           <View style={styles.listContainer}>
@@ -364,7 +363,7 @@ export function HistoryTab({ navigation }: any) {
               const sortTime = getMissionSortTime(mission);
 
               return (
-                <TouchableOpacity
+                <AppTouchableOpacity
                   key={mission.id}
                   style={styles.alertCard}
                   activeOpacity={0.9}
@@ -441,7 +440,7 @@ export function HistoryTab({ navigation }: any) {
                       size={24}
                     />
                   </View>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               );
             })}
           </View>
@@ -455,7 +454,7 @@ export function HistoryTab({ navigation }: any) {
         onRequestClose={() => setFilterModalVisible(false)}
       >
         <View style={styles.modalOverlay}>
-          <TouchableOpacity
+          <AppTouchableOpacity
             style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={() => setFilterModalVisible(false)}
@@ -507,7 +506,7 @@ export function HistoryTab({ navigation }: any) {
                 ).map(([key, label]) => {
                   const on = periodMode === key;
                   return (
-                    <TouchableOpacity
+                    <AppTouchableOpacity
                       key={key}
                       style={[styles.chip, on && styles.chipOn]}
                       onPress={() => setPeriodMode(key)}
@@ -515,7 +514,7 @@ export function HistoryTab({ navigation }: any) {
                       <Text style={[styles.chipText, on && styles.chipTextOn]}>
                         {label}
                       </Text>
-                    </TouchableOpacity>
+                    </AppTouchableOpacity>
                   );
                 })}
               </View>
@@ -527,7 +526,7 @@ export function HistoryTab({ navigation }: any) {
                       ? anchorDate.toLocaleDateString()
                       : weekLabel}
                   </Text>
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     style={styles.dateBtn}
                     onPress={() => setPickerKind("anchor")}
                   >
@@ -541,28 +540,28 @@ export function HistoryTab({ navigation }: any) {
                         ? "Choisir le jour"
                         : "Choisir une date dans la semaine"}
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 </View>
               ) : null}
 
               {periodMode === "range" ? (
                 <View style={styles.dateBlock}>
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     style={styles.dateBtn}
                     onPress={() => setPickerKind("rangeStart")}
                   >
                     <Text style={styles.dateBtnText}>
                       Du {rangeStart.toLocaleDateString()}
                     </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </AppTouchableOpacity>
+                  <AppTouchableOpacity
                     style={styles.dateBtn}
                     onPress={() => setPickerKind("rangeEnd")}
                   >
                     <Text style={styles.dateBtnText}>
                       Au {rangeEnd.toLocaleDateString()}
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 </View>
               ) : null}
 
@@ -573,7 +572,7 @@ export function HistoryTab({ navigation }: any) {
                     Optionnel, sur l’heure de fin de mission
                   </Text>
                 </View>
-                <TouchableOpacity
+                <AppTouchableOpacity
                   style={[
                     styles.toggle,
                     useHourFilter && styles.toggleOn,
@@ -586,55 +585,55 @@ export function HistoryTab({ navigation }: any) {
                       useHourFilter && styles.toggleKnobOn,
                     ]}
                   />
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               </View>
 
               {useHourFilter ? (
                 <View style={styles.hourPickers}>
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     style={styles.dateBtn}
                     onPress={() => setPickerKind("hourMin")}
                   >
                     <Text style={styles.dateBtnText}>
                       De {String(hourMin).padStart(2, "0")} h
                     </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
+                  </AppTouchableOpacity>
+                  <AppTouchableOpacity
                     style={styles.dateBtn}
                     onPress={() => setPickerKind("hourMax")}
                   >
                     <Text style={styles.dateBtnText}>
                       À {String(hourMax).padStart(2, "0")} h
                     </Text>
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 </View>
               ) : null}
 
               <View style={styles.modalActions}>
-                <TouchableOpacity
+                <AppTouchableOpacity
                   style={styles.btnSecondary}
                   onPress={resetFilters}
                 >
                   <Text style={styles.btnSecondaryText}>Réinitialiser</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </AppTouchableOpacity>
+                <AppTouchableOpacity
                   style={styles.btnPrimary}
                   onPress={() => setFilterModalVisible(false)}
                 >
                   <Text style={styles.btnPrimaryText}>Fermer</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               </View>
             </ScrollView>
 
             {pickerKind !== "none" ? (
               <View style={styles.pickerWrap}>
                 {Platform.OS === "ios" ? (
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     style={styles.iosPickerDone}
                     onPress={() => setPickerKind("none")}
                   >
                     <Text style={styles.iosPickerDoneText}>OK</Text>
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 ) : null}
                 <DateTimePicker
                   value={pickerValue}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, StatusBar, Alert, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, StatusBar, Alert, Linking, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -14,6 +14,7 @@ import { openExternalDirections } from '../../utils/navigation';
 import { formatMissionAddress, formatDescriptionLines } from '../../utils/missionAddress';
 import { alertVoipError, startRescuerToCitizenVoipCall } from '../../lib/rescuerCallCitizen';
 import { canOfferVictimContactCalls } from '../../lib/missionVictimCall';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
 const STATUS_STEPS = [
   { key: 'dispatched', label: 'Dispatché', icon: 'assignment', color: '#FF9500' },
@@ -256,14 +257,14 @@ export function MissionActiveScreen({ navigation }: any) {
       <View style={{ flex: 1 }}>
         {/* MAP */}
         <View style={styles.mapContainer}>
-          <TouchableOpacity
+          <AppTouchableOpacity
             onPress={() => navigation.goBack()}
             style={[styles.floatingBack, { top: insets.top + 8 }]}
             accessibilityRole="button"
             accessibilityLabel="Retour"
           >
             <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
           <View style={[styles.floatingPriorityChip, { top: insets.top + 8 }]}>
             <View style={[styles.priorityDot, { backgroundColor: priority.color }]} />
             <Text style={[styles.priorityChipText, { color: priority.color }]} numberOfLines={1}>
@@ -384,9 +385,9 @@ export function MissionActiveScreen({ navigation }: any) {
             </View>
             <View style={styles.locationCard}>
               <Text style={styles.locationText}>{siteAddress || 'Adresse non disponible'}</Text>
-              <TouchableOpacity style={styles.gpsSmallBtn} onPress={openNavigation}>
+              <AppTouchableOpacity style={styles.gpsSmallBtn} onPress={openNavigation}>
                 <MaterialIcons name="navigation" color={colors.secondary} size={20} />
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
           </View>
 
@@ -414,35 +415,35 @@ export function MissionActiveScreen({ navigation }: any) {
               value={noteText}
               onChangeText={setNoteText}
             />
-            <TouchableOpacity style={styles.sendBtn} onPress={handleAddNote}>
+            <AppTouchableOpacity style={styles.sendBtn} onPress={handleAddNote}>
               <MaterialIcons name="send" color="#FFF" size={18} />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
 
           {/* Contextual Actions Bar */}
           <View style={styles.unifiedActionBar}>
             <View style={styles.auxActions}>
               {canCallVictim && (
-                <TouchableOpacity style={styles.auxBtn} onPress={callVictim}>
+                <AppTouchableOpacity style={styles.auxBtn} onPress={callVictim}>
                   <MaterialIcons name="phone" color={colors.success} size={22} />
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               )}
               {activeMission.citizen_id && canCallVictim && (
-                <TouchableOpacity style={styles.auxBtn} onPress={callVictimVoip} disabled={voipLoading}>
+                <AppTouchableOpacity style={styles.auxBtn} onPress={callVictimVoip} disabled={voipLoading}>
                   {voipLoading ? (
                     <ActivityIndicator size="small" color={colors.secondary} />
                   ) : (
                     <MaterialIcons name="phone-in-talk" color={colors.secondary} size={22} />
                   )}
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               )}
-              <TouchableOpacity style={styles.auxBtn} onPress={openNavigation}>
+              <AppTouchableOpacity style={styles.auxBtn} onPress={openNavigation}>
                 <MaterialIcons name="navigation" color="#FFF" size={22} />
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
 
             {activeMission.dispatch_status !== 'completed' && (
-              <TouchableOpacity
+              <AppTouchableOpacity
                 style={[styles.primaryActionBtn, isUpdating && { opacity: 0.6 }]}
                 onPress={handleNextStatus}
                 disabled={isUpdating}
@@ -455,14 +456,14 @@ export function MissionActiveScreen({ navigation }: any) {
                   </Text>
                 )}
                 <MaterialIcons name="chevron-right" size={24} color="#FFF" />
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             )}
           </View>
 
           {canCallVictim && activeMission.citizen_id ? (
             <View style={styles.voipBlock}>
               <Text style={styles.voipTitle}>Appel vers l’app victime (audio — vidéo depuis l’écran d’appel)</Text>
-              <TouchableOpacity
+              <AppTouchableOpacity
                 style={[styles.voipBtnFull, voipLoading && { opacity: 0.6 }]}
                 onPress={() => void callVictimVoip()}
                 disabled={voipLoading}
@@ -475,7 +476,7 @@ export function MissionActiveScreen({ navigation }: any) {
                     <Text style={styles.voipBtnText}>App audio</Text>
                   </>
                 )}
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
           ) : null}
 

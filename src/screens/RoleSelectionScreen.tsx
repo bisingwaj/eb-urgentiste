@@ -1,8 +1,9 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, FontAwesome5 } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
+import { AppTouchableOpacity } from '../components/ui/AppTouchableOpacity';
 
 export function RoleSelectionScreen({ navigation }: any) {
   const handleSelectRole = (role: 'urgentiste' | 'hopital') => {
@@ -19,7 +20,7 @@ export function RoleSelectionScreen({ navigation }: any) {
         </View>
 
         <View style={styles.cardsContainer}>
-          <TouchableOpacity 
+          <AppTouchableOpacity 
             style={styles.card} 
             onPress={() => handleSelectRole('urgentiste')}
             activeOpacity={0.8}
@@ -29,9 +30,9 @@ export function RoleSelectionScreen({ navigation }: any) {
             </View>
             <Text style={styles.cardTitle}>Urgentiste</Text>
             <Text style={styles.cardDescription}>Accédez aux missions, historique et détails des patients.</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
 
-          <TouchableOpacity 
+          <AppTouchableOpacity 
             style={styles.card} 
             onPress={() => handleSelectRole('hopital')}
             activeOpacity={0.8}
@@ -41,7 +42,7 @@ export function RoleSelectionScreen({ navigation }: any) {
             </View>
             <Text style={styles.cardTitle}>Hôpital</Text>
             <Text style={styles.cardDescription}>Visualisez les urgences en approche et gérez vos disponibilités.</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
       </View>
     </SafeAreaView>

@@ -3,12 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  Platform,
+Platform,
   Alert,
   StatusBar,
-  ScrollView,
-} from 'react-native';
+  ScrollView} from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -126,7 +125,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
                 const isSelected = arrivalMode === mode.key;
                 const accent = transportModeAccentColor(mode.accent);
                 return (
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     key={mode.key}
                     style={[
                       styles.transportModeCard,
@@ -164,7 +163,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
                     {isSelected && (
                       <MaterialIcons name="check-circle" color={accent} size={20} style={styles.cardCheck} />
                     )}
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 );
               })}
             </View>
@@ -179,7 +178,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
               {ARRIVAL_STATES.map((state) => {
                 const isSelected = arrivalState === state.key;
                 return (
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     key={state.key}
                     style={[styles.premiumRow, isSelected && { borderColor: state.color, backgroundColor: state.color + '08' }]}
                     onPress={() => {
@@ -195,7 +194,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
                     <View style={[styles.customRadio, isSelected && { backgroundColor: state.color }]}>
                       {isSelected && <MaterialIcons name="check" color="#000" size={14} />}
                     </View>
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 );
               })}
             </View>
@@ -210,7 +209,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
               {SERVICES.map((service) => {
                 const isSelected = admissionService === service.key;
                 return (
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     key={service.key}
                     style={[styles.premiumRow, isSelected && { borderColor: service.color, backgroundColor: service.color + '08' }]}
                     onPress={() => setAdmissionService(service.key)}
@@ -223,7 +222,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
                     <View style={[styles.customRadio, isSelected && { backgroundColor: service.color }]}>
                       {isSelected && <MaterialIcons name="check" color="#000" size={14} />}
                     </View>
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 );
               })}
             </View>
@@ -240,9 +239,9 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
 
       {/* Premium Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handlePrev} style={styles.backBtn}>
+        <AppTouchableOpacity onPress={handlePrev} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <View style={styles.headerInfo}>
           <Text style={styles.headerSub}>PROCESSUS D'ADMISSION</Text>
           <View style={styles.progressRow}>
@@ -279,7 +278,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
 
       {/* Footer Actions */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={[
             styles.primaryBtn,
             step === 1 && !arrivalMode && styles.btnDisabled,
@@ -293,8 +292,8 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
             {step === totalSteps ? 'ADMETTRE LE PATIENT' : 'CONTINUER'}
           </Text>
           <MaterialIcons name={step === totalSteps ? 'check-circle' : 'east'} color="#000" size={20} />
-        </TouchableOpacity>
-        <TouchableOpacity
+        </AppTouchableOpacity>
+        <AppTouchableOpacity
           style={styles.secondaryFooterLink}
           onPress={handleOpenCaseDetail}
           accessibilityRole="button"
@@ -302,7 +301,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
         >
           <MaterialIcons name="map" size={18} color={colors.secondary} />
           <Text style={styles.secondaryFooterLinkText}>Voir le suivi / carte</Text>
-        </TouchableOpacity>
+        </AppTouchableOpacity>
       </View>
     </SafeAreaView>
   );

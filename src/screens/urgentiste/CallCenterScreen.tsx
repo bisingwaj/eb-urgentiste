@@ -3,15 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  StatusBar,
+StatusBar,
   Alert,
   ActivityIndicator,
   PanResponder,
   Dimensions,
   BackHandler,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
@@ -703,13 +702,13 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <View style={styles.header}>
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={styles.headerIconBtn}
           onPress={minimizeCall}
           accessibilityLabel="Réduire l’appel sans raccrocher"
         >
           <MaterialIcons name="keyboard-arrow-down" size={28} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
 
         <View style={styles.headerCenter}>
           <Text style={styles.headerBrand}>Centrale</Text>
@@ -759,13 +758,13 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
                   </View>
                 )}
 
-                <TouchableOpacity
+                <AppTouchableOpacity
                   style={styles.swapFab}
                   onPress={() => setSwapFeeds((v) => !v)}
                   accessibilityLabel="Inverser les vues"
                 >
                   <MaterialIcons name="swap-horiz" size={24} color="#FFF" />
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               </View>
               </View>
               <View style={styles.videoCenterOverlay} pointerEvents="none">
@@ -792,15 +791,15 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       {(callState === 'calling' || callState === 'active') && (
         <View style={styles.bottomDock}>
           <View style={styles.bottomBar}>
-            <TouchableOpacity
+            <AppTouchableOpacity
               style={[styles.roundBtn, !isMuted ? styles.roundBtnLight : styles.roundBtnDark]}
               onPress={() => setIsMuted((v) => !v)}
               disabled={!mediaReady}
             >
               <MaterialIcons name={isMuted ? 'mic-off' : 'mic'} size={26} color={isMuted ? '#FFF' : '#111'} />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
 
-            <TouchableOpacity
+            <AppTouchableOpacity
               style={[
                 styles.roundBtn,
                 callType === 'video' ? styles.roundBtnLight : styles.roundBtnDim,
@@ -813,9 +812,9 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
                 size={26}
                 color="#FFF"
               />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
 
-            <TouchableOpacity
+            <AppTouchableOpacity
               style={[styles.roundBtn, isSpeakerOn ? styles.roundBtnLight : styles.roundBtnDark]}
               onPress={() => setIsSpeakerOn((v) => !v)}
               disabled={!mediaReady}
@@ -825,11 +824,11 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
                 size={26}
                 color={isSpeakerOn ? '#111' : '#FFF'}
               />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
 
-            <TouchableOpacity style={styles.roundBtnEnd} onPress={() => void endCallLocal()}>
+            <AppTouchableOpacity style={styles.roundBtnEnd} onPress={() => void endCallLocal()}>
               <MaterialIcons name="call-end" size={30} color="#FFF" />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
         </View>
       )}

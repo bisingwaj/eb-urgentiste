@@ -4,15 +4,14 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Dimensions,
+Dimensions,
   TextInput,
   ActivityIndicator,
   StatusBar,
   Modal,
   KeyboardAvoidingView,
-  Platform,
-} from "react-native";
+  Platform} from "react-native";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -237,9 +236,9 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
       {/* 🔝 HEADER */}
       <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
+          <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
             <MaterialIcons name="close" color="#FFF" size={22} />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
           <View style={styles.headerTitleBox}>
             <Text style={styles.patientName} numberOfLines={1}>{caseData.victimName}</Text>
             <Text style={styles.caseMeta}>{caseData.id} · {caseData.age} ans</Text>
@@ -257,10 +256,10 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
           { id: "EXAMENS", label: "EXAMENS" },
           { id: "TIMELINE", label: "HISTORIQUE" }
         ] as any[]).map((t) => (
-          <TouchableOpacity key={t.id} style={[styles.tabItem, activeTab === t.id && styles.tabItemActive]} onPress={() => setActiveTab(t.id)}>
+          <AppTouchableOpacity key={t.id} style={[styles.tabItem, activeTab === t.id && styles.tabItemActive]} onPress={() => setActiveTab(t.id)}>
             <Text style={[styles.tabLabel, activeTab === t.id && styles.tabLabelActive]}>{t.label}</Text>
             {activeTab === t.id && <View style={styles.tabIndicator} />}
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         ))}
       </View>
 
@@ -296,10 +295,10 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
                 <MaterialCommunityIcons name="pill" color="#FF5252" size={18} />
                 <Text style={[styles.sectionTitle, { color: "#FF5252" }]}>TRAITEMENTS CURATIFS</Text>
               </View>
-              <TouchableOpacity style={styles.addTreatmentBtn} onPress={() => setModalType("treatment_add")}>
+              <AppTouchableOpacity style={styles.addTreatmentBtn} onPress={() => setModalType("treatment_add")}>
                 <MaterialIcons name="add" color="#FFF" size={20} />
                 <Text style={styles.addTreatmentLabel}>AJOUTER</Text>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
             <View style={styles.treatmentList}>
               {treatments.map(t => (
@@ -319,9 +318,9 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
             {/* 📝 SECTION 3 : ÉVOLUTION */}
             <View style={[styles.sectionHeaderRow, { marginTop: 32 }]}>
               <Text style={styles.groupLabel}>ÉVOLUTION & NOTES</Text>
-              <TouchableOpacity style={styles.addSmallCircleBtn} onPress={() => setModalType("note")}>
+              <AppTouchableOpacity style={styles.addSmallCircleBtn} onPress={() => setModalType("note")}>
                 <MaterialIcons name="add" color="#FFF" size={18} />
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
             <View style={styles.observationList}>
               {observations.map((obs) => (
@@ -342,15 +341,15 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
           <View style={styles.tabContent}>
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.groupLabel}>DEMANDES D'EXAMENS</Text>
-              <TouchableOpacity style={styles.addSmallCircleBtn} onPress={() => { setModalType("exam_add"); setExamStatus("Planifié"); }}>
+              <AppTouchableOpacity style={styles.addSmallCircleBtn} onPress={() => { setModalType("exam_add"); setExamStatus("Planifié"); }}>
                 <MaterialIcons name="add" color="#FFF" size={18} />
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
             <View style={styles.card}>
               {exams.map((exam) => (
-                <TouchableOpacity key={exam.id} onPress={() => openExamEdit(exam)}>
+                <AppTouchableOpacity key={exam.id} onPress={() => openExamEdit(exam)}>
                   <ExamRow label={exam.label} status={exam.status} result={exam.result} />
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               ))}
             </View>
           </View>
@@ -369,7 +368,7 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
       </ScrollView>
 
       <View style={[styles.pecBottomBar, { paddingBottom: Math.max(insets.bottom, 16) }]}>
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={styles.pecNextBtn}
           onPress={() => navigation.navigate('HospitalMonitoring', { caseData })}
           activeOpacity={0.9}
@@ -377,7 +376,7 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
           <MaterialCommunityIcons name="heart-pulse" color="#000" size={22} />
           <Text style={styles.pecNextBtnText}>Passer au monitoring patient</Text>
           <MaterialIcons name="chevron-right" color="#000" size={24} />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
       </View>
 
       {/* 📝 MODAL */}
@@ -410,9 +409,9 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
                     <MaterialIcons name={getModalConfig().icon as any} color={colors.secondary} size={20} />
                     <Text style={styles.modalTitle}>{getModalConfig().title}</Text>
                   </View>
-                  <TouchableOpacity onPress={() => setModalType(null)}>
+                  <AppTouchableOpacity onPress={() => setModalType(null)}>
                     <MaterialIcons name="close" color="rgba(255,255,255,0.4)" size={24} />
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 </View>
 
                 <TextInput
@@ -428,17 +427,17 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
                 {modalType === 'note' && (
                   <View style={styles.modalStatusRow}>
                     {(['Amélioration', 'Stable', 'Aggravation'] as const).map((s) => (
-                      <TouchableOpacity key={s} style={[styles.modalStatusBtn, noteStatus === s && { backgroundColor: getStatusColor(s) }]} onPress={() => setNoteStatus(s)}>
+                      <AppTouchableOpacity key={s} style={[styles.modalStatusBtn, noteStatus === s && { backgroundColor: getStatusColor(s) }]} onPress={() => setNoteStatus(s)}>
                         <Text style={[styles.modalStatusText, noteStatus === s && { color: '#000' }]}>{s}</Text>
-                      </TouchableOpacity>
+                      </AppTouchableOpacity>
                     ))}
                   </View>
                 )}
               </ScrollView>
 
-              <TouchableOpacity style={[styles.saveBtn, modalType === 'treatment_add' && { backgroundColor: '#FF5252' }]} onPress={handleSave}>
+              <AppTouchableOpacity style={[styles.saveBtn, modalType === 'treatment_add' && { backgroundColor: '#FF5252' }]} onPress={handleSave}>
                 <Text style={styles.saveBtnText}>{getModalConfig().btn}</Text>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
           </KeyboardAvoidingView>
         </View>
@@ -451,13 +450,13 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
 const CareItem = ({ label, icon, onToggle }: { label: string; icon: string; onToggle: (v: boolean) => void }) => {
   const [active, setActive] = useState(false);
   return (
-    <TouchableOpacity style={[styles.careRow, active && styles.careRowActive]} onPress={() => { setActive(!active); onToggle(!active); }}>
+    <AppTouchableOpacity style={[styles.careRow, active && styles.careRowActive]} onPress={() => { setActive(!active); onToggle(!active); }}>
       <View style={styles.careIconBox}>
         <MaterialCommunityIcons name={icon as any} color={active ? "#FFF" : "rgba(255,255,255,0.4)"} size={20} />
       </View>
       <Text style={[styles.careLabel, active && { color: "#FFF" }]}>{label}</Text>
       <MaterialIcons name={active ? "check-circle" : "radio-button-unchecked"} color={active ? colors.success : "rgba(255,255,255,0.1)"} size={22} />
-    </TouchableOpacity>
+    </AppTouchableOpacity>
   );
 }
 

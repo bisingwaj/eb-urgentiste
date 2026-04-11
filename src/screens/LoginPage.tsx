@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useAuth } from '../contexts/AuthContext';
+import { AppTouchableOpacity } from '../components/ui/AppTouchableOpacity';
 
 const { height } = Dimensions.get('window');
 
@@ -121,9 +122,9 @@ export function LoginPage({ route, navigation }: any) {
   };
 
   const renderNumpadKey = (num: string) => (
-    <TouchableOpacity key={num} style={styles.numpadKey} onPress={() => onNumpadTap(num)}>
+    <AppTouchableOpacity key={num} style={styles.numpadKey} onPress={() => onNumpadTap(num)}>
       <Text style={styles.numpadText}>{num}</Text>
-    </TouchableOpacity>
+    </AppTouchableOpacity>
   );
 
   return (
@@ -147,9 +148,9 @@ export function LoginPage({ route, navigation }: any) {
               {renderBoxes(identifier)}
               <View style={styles.actionArea}>
                 {identifier.length === 6 && (
-                  <TouchableOpacity style={styles.nextBtn} onPress={verifyIdentifier}>
+                  <AppTouchableOpacity style={styles.nextBtn} onPress={verifyIdentifier}>
                     <Text style={styles.nextBtnText}>SUIVANT</Text>
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 )}
               </View>
             </View>
@@ -167,10 +168,10 @@ export function LoginPage({ route, navigation }: any) {
                 {isLoading ? (
                   <ActivityIndicator color={colors.secondary} size="large" />
                 ) : (
-                  <TouchableOpacity style={styles.backBtn} onPress={() => { setCurrentStep(0); setPin(''); setIdentifier(''); setErrorMessage(null); }}>
+                  <AppTouchableOpacity style={styles.backBtn} onPress={() => { setCurrentStep(0); setPin(''); setIdentifier(''); setErrorMessage(null); }}>
                     <MaterialIcons name="arrow-back" size={16} color="rgba(255,255,255,0.54)" />
                     <Text style={styles.backBtnText}>Changer d'identifiant</Text>
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 )}
               </View>
             </View>
@@ -194,9 +195,9 @@ export function LoginPage({ route, navigation }: any) {
           <View style={styles.numpadRow}>
             <View style={{ width: 70 }} />
             {renderNumpadKey('0')}
-            <TouchableOpacity style={styles.numpadKey} onPress={onBackspace}>
+            <AppTouchableOpacity style={styles.numpadKey} onPress={onBackspace}>
               <MaterialIcons name="backspace" color="rgba(255,255,255,0.54)" size={28} />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
         </View>
 

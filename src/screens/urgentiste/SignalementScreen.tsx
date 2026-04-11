@@ -4,8 +4,7 @@ import {
    Text,
    StyleSheet,
    ScrollView,
-   TouchableOpacity,
-   Animated,
+Animated,
    Dimensions,
    Platform,
    StatusBar,
@@ -14,8 +13,8 @@ import {
    ActivityIndicator,
    FlatList,
    PanResponder,
-   Linking,
-} from "react-native";
+   Linking} from "react-native";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Mapbox from "@rnmapbox/maps";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -1113,7 +1112,7 @@ export function SignalementScreen({ navigation, route }: any) {
          <View style={styles.victimContactStrip}>
             <Text style={styles.victimContactStripTitle}>Contacter la victime (avant arrivée sur place)</Text>
             <View style={styles.victimContactRow}>
-               <TouchableOpacity
+               <AppTouchableOpacity
                   style={[styles.victimContactChip, !hasPhone && styles.victimContactChipDisabled]}
                   onPress={callVictimPstnFromSignalement}
                >
@@ -1130,8 +1129,8 @@ export function SignalementScreen({ navigation, route }: any) {
                   >
                      Téléphone
                   </Text>
-               </TouchableOpacity>
-               <TouchableOpacity
+               </AppTouchableOpacity>
+               <AppTouchableOpacity
                   style={[
                      styles.victimContactChip,
                      (!hasCitizen || voipLoading) && styles.victimContactChipDisabled,
@@ -1147,7 +1146,7 @@ export function SignalementScreen({ navigation, route }: any) {
                         <Text style={styles.victimContactChipText}>App audio</Text>
                      </>
                   )}
-               </TouchableOpacity>
+               </AppTouchableOpacity>
             </View>
             {!hasCitizen && (
                <Text style={styles.victimContactHint}>
@@ -1163,14 +1162,14 @@ export function SignalementScreen({ navigation, route }: any) {
 
    const renderStepInlineHeader = () => (
       <View style={[styles.stepInlineHeader, { paddingTop: Math.max(insets.top, 12) }]}>
-         <TouchableOpacity
+         <AppTouchableOpacity
             onPress={() => navigation.goBack()}
             style={styles.stepInlineBack}
             accessibilityRole="button"
             accessibilityLabel="Retour"
          >
             <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-         </TouchableOpacity>
+         </AppTouchableOpacity>
          <View style={styles.stepInlineTextCol}>
             <Text style={styles.stepInlineLabel}>{STEP_LABELS[step]}</Text>
             <Text style={styles.stepInlineTitle} numberOfLines={2}>{missionTypeLabel}</Text>
@@ -1184,12 +1183,12 @@ export function SignalementScreen({ navigation, route }: any) {
          {step === "standby" && (
             <View style={styles.topHeader}>
                <View style={styles.headerRow}>
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                      onPress={() => navigation.goBack()}
                      style={styles.backBtn}
                   >
                      <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                   <View style={{ flex: 1, paddingHorizontal: 15 }}>
                      <Text style={styles.greetingText}>Centrale régulation</Text>
                      <Text style={styles.hospitalName} numberOfLines={1}>
@@ -1253,7 +1252,7 @@ export function SignalementScreen({ navigation, route }: any) {
                            <Text style={styles.assignLoc}>
                               {displayAddress}
                            </Text>
-                           <TouchableOpacity
+                           <AppTouchableOpacity
                               style={styles.assignAction}
                               onPress={() => {
                                  setSelectedMission(selectedMission);
@@ -1268,7 +1267,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                  size={24}
                                  color="#FFF"
                               />
-                           </TouchableOpacity>
+                           </AppTouchableOpacity>
                         </Animated.View>
                      )}
                   </View>
@@ -1277,14 +1276,14 @@ export function SignalementScreen({ navigation, route }: any) {
                {step === "reception" && selectedMission && (
                   <View style={[styles.receptionView, { padding: 0 }]}>
                      <View style={styles.receptionMapWrapper}>
-                        <TouchableOpacity
+                        <AppTouchableOpacity
                            onPress={() => navigation.goBack()}
                            style={[styles.floatingBackSignalement, { top: insets.top + 10 }]}
                            accessibilityRole="button"
                            accessibilityLabel="Retour"
                         >
                            <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-                        </TouchableOpacity>
+                        </AppTouchableOpacity>
                         <MapboxMapView style={styles.receptionMap} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
                            {receptionCameraBounds ? (
                               <Mapbox.Camera
@@ -1321,14 +1320,14 @@ export function SignalementScreen({ navigation, route }: any) {
                           <MaterialIcons name="navigation" size={14} color="#FFF" />
                           <Text style={styles.mapDistText}>{routeInfoText}</Text>
                        </View>
-                       <TouchableOpacity
+                       <AppTouchableOpacity
                           style={[styles.mapFullscreenEntryBtn, { top: insets.top + 10 }]}
                           onPress={() => setMapFullscreenOpen(true)}
                           accessibilityRole="button"
                           accessibilityLabel="Carte plein écran"
                        >
                           <MaterialIcons name="fullscreen" color="#FFF" size={22} />
-                       </TouchableOpacity>
+                       </AppTouchableOpacity>
                     </View>
 
                      <View style={styles.receptionBottomPanel}>
@@ -1434,14 +1433,14 @@ export function SignalementScreen({ navigation, route }: any) {
                             { flex: 1, borderRadius: 0, borderWidth: 0 },
                          ]}
                       >
-                         <TouchableOpacity
+                         <AppTouchableOpacity
                             onPress={() => navigation.goBack()}
                             style={[styles.floatingBackSignalement, { top: insets.top + 10 }]}
                             accessibilityRole="button"
                             accessibilityLabel="Retour"
                          >
                             <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-                         </TouchableOpacity>
+                         </AppTouchableOpacity>
                          <MapboxMapView style={styles.trackingMap} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
                             {receptionCameraBounds ? (
                                <Mapbox.Camera
@@ -1487,14 +1486,14 @@ export function SignalementScreen({ navigation, route }: any) {
                               </Text>
                            </View>
                         </View>
-                        <TouchableOpacity
+                        <AppTouchableOpacity
                            style={[styles.mapFullscreenEntryBtn, { top: insets.top + 10 }]}
                            onPress={() => setMapFullscreenOpen(true)}
                            accessibilityRole="button"
                            accessibilityLabel="Carte plein écran"
                         >
                            <MaterialIcons name="fullscreen" color="#FFF" size={22} />
-                        </TouchableOpacity>
+                        </AppTouchableOpacity>
                      </View>
                      <View style={styles.arrivalFooter}>
                         <View style={styles.footerTimerBox}>
@@ -1503,7 +1502,7 @@ export function SignalementScreen({ navigation, route }: any) {
                            </Text>
                            <Text style={styles.footerTimerLab}>Temps écoulé</Text>
                         </View>
-                        <TouchableOpacity
+                        <AppTouchableOpacity
                            style={[
                               styles.footerBtn,
                               { backgroundColor: colors.success },
@@ -1512,7 +1511,7 @@ export function SignalementScreen({ navigation, route }: any) {
                         >
                            <MaterialIcons name="place" size={20} color="#FFF" />
                            <Text style={styles.footerBtnText}>Arrivée sur site</Text>
-                        </TouchableOpacity>
+                        </AppTouchableOpacity>
                      </View>
                   </View>
                )}
@@ -1545,7 +1544,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                  </Text>
                               </View>
                               <View style={styles.miniToggleGroup}>
-                                 <TouchableOpacity
+                                 <AppTouchableOpacity
                                     style={[
                                        styles.miniToggle,
                                        assessment.conscious === true &&
@@ -1564,8 +1563,8 @@ export function SignalementScreen({ navigation, route }: any) {
                                     >
                                        Oui
                                     </Text>
-                                 </TouchableOpacity>
-                                 <TouchableOpacity
+                                 </AppTouchableOpacity>
+                                 <AppTouchableOpacity
                                     style={[
                                        styles.miniToggle,
                                        assessment.conscious === false &&
@@ -1584,7 +1583,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                     >
                                        Non
                                     </Text>
-                                 </TouchableOpacity>
+                                 </AppTouchableOpacity>
                               </View>
                            </View>
                            <View style={styles.divider} />
@@ -1607,7 +1606,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                  </Text>
                               </View>
                               <View style={styles.miniToggleGroup}>
-                                 <TouchableOpacity
+                                 <AppTouchableOpacity
                                     style={[
                                        styles.miniToggle,
                                        assessment.breathing === true &&
@@ -1626,8 +1625,8 @@ export function SignalementScreen({ navigation, route }: any) {
                                     >
                                        Oui
                                     </Text>
-                                 </TouchableOpacity>
-                                 <TouchableOpacity
+                                 </AppTouchableOpacity>
+                                 <AppTouchableOpacity
                                     style={[
                                        styles.miniToggle,
                                        assessment.breathing === false &&
@@ -1646,7 +1645,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                     >
                                        Non
                                     </Text>
-                                 </TouchableOpacity>
+                                 </AppTouchableOpacity>
                               </View>
                            </View>
                         </View>
@@ -1661,7 +1660,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                  icon: "check-circle-outline",
                               },
                            ].map((s) => (
-                              <TouchableOpacity
+                              <AppTouchableOpacity
                                  key={s.id}
                                  style={[
                                     styles.severityItem,
@@ -1691,7 +1690,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                  >
                                     {s.id}
                                  </Text>
-                              </TouchableOpacity>
+                              </AppTouchableOpacity>
                            ))}
                         </View>
                         {assessment.conscious === false && (
@@ -1703,7 +1702,7 @@ export function SignalementScreen({ navigation, route }: any) {
                            </View>
                         )}
                      </ScrollView>
-                     <TouchableOpacity
+                     <AppTouchableOpacity
                         style={[
                            styles.bigActionBtn,
                            (assessment.conscious === null || !assessment.severity) && {
@@ -1715,7 +1714,7 @@ export function SignalementScreen({ navigation, route }: any) {
                      >
                         <MaterialIcons name="done-all" size={24} color="#FFF" />
                         <Text style={styles.bigActionText}>Valider l'évaluation</Text>
-                     </TouchableOpacity>
+                     </AppTouchableOpacity>
                   </View>
                )}
 
@@ -1750,7 +1749,7 @@ export function SignalementScreen({ navigation, route }: any) {
                            ].map((care) => {
                               const isActive = careChecklist.includes(care.id);
                               return (
-                                 <TouchableOpacity
+                                 <AppTouchableOpacity
                                     key={care.id}
                                     style={[
                                        styles.aidCardGrid,
@@ -1790,17 +1789,17 @@ export function SignalementScreen({ navigation, route }: any) {
                                           />
                                        </View>
                                     )}
-                                 </TouchableOpacity>
+                                 </AppTouchableOpacity>
                               );
                            })}
                         </View>
                      </ScrollView>
-                     <TouchableOpacity
+                     <AppTouchableOpacity
                         style={styles.bigActionBtn}
                         onPress={handleConfirmAid}
                      >
                         <Text style={styles.bigActionText}>Valider les soins</Text>
-                     </TouchableOpacity>
+                     </AppTouchableOpacity>
                   </View>
                )}
 
@@ -1809,7 +1808,7 @@ export function SignalementScreen({ navigation, route }: any) {
                      {renderStepInlineHeader()}
                      <Text style={styles.stepSectionHeading}>Plan d'évacuation</Text>
                      <View style={styles.decisionGrid}>
-                        <TouchableOpacity
+                        <AppTouchableOpacity
                            style={styles.decisionCardGrid}
                            onPress={() => handleDecideTransport("Stable")}
                         >
@@ -1826,8 +1825,8 @@ export function SignalementScreen({ navigation, route }: any) {
                               />
                            </View>
                            <Text style={styles.decisionLabel}>Traité sur place</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </AppTouchableOpacity>
+                        <AppTouchableOpacity
                            style={styles.decisionCardGrid}
                            onPress={() => handleDecideTransport("Transport")}
                         >
@@ -1844,8 +1843,8 @@ export function SignalementScreen({ navigation, route }: any) {
                               />
                            </View>
                            <Text style={styles.decisionLabel}>Évacuation base</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
+                        </AppTouchableOpacity>
+                        <AppTouchableOpacity
                            style={[
                               styles.decisionCardGrid,
                               { borderColor: colors.primary + "40" },
@@ -1869,7 +1868,7 @@ export function SignalementScreen({ navigation, route }: any) {
                            >
                               Urgence vitale
                            </Text>
-                        </TouchableOpacity>
+                        </AppTouchableOpacity>
                      </View>
                   </View>
                )}
@@ -1965,16 +1964,16 @@ export function SignalementScreen({ navigation, route }: any) {
                                  )}
                               </MapboxMapView>
 
-                              <TouchableOpacity
+                              <AppTouchableOpacity
                                  style={styles.mapFullscreenEntryBtnAssignment}
                                  onPress={() => setMapFullscreenOpen(true)}
                                  accessibilityRole="button"
                                  accessibilityLabel="Carte plein écran"
                               >
                                  <MaterialIcons name="fullscreen" color="#FFF" size={22} />
-                              </TouchableOpacity>
+                              </AppTouchableOpacity>
 
-                              <TouchableOpacity
+                              <AppTouchableOpacity
                                  style={styles.assignmentEnRouteFab}
                                  onPress={handleDepartVersStructure}
                                  disabled={departingEnRoute}
@@ -1989,9 +1988,9 @@ export function SignalementScreen({ navigation, route }: any) {
                                        <Text style={styles.assignmentEnRouteFabText}>En route</Text>
                                     </>
                                  )}
-                              </TouchableOpacity>
+                              </AppTouchableOpacity>
 
-                              <TouchableOpacity
+                              <AppTouchableOpacity
                                  style={styles.assignmentNavFab}
                                  onPress={() =>
                                     openExternalDirections(
@@ -2004,7 +2003,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                  accessibilityLabel="Ouvrir la navigation"
                               >
                                  <MaterialIcons name="navigation" color="#FFF" size={22} />
-                              </TouchableOpacity>
+                              </AppTouchableOpacity>
 
                               {hospitalRouteDistance != null && hospitalRouteDuration != null && (
                                  <View style={styles.mapDistOverlay}>
@@ -2038,13 +2037,13 @@ export function SignalementScreen({ navigation, route }: any) {
                                  </View>
                                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
                                     {targetHospital.phone && (
-                                       <TouchableOpacity
+                                       <AppTouchableOpacity
                                           style={styles.structureCallBtn}
                                           onPress={() => Linking.openURL(`tel:${targetHospital.phone}`)}
                                        >
                                           <MaterialIcons name="phone" size={16} color="#30D158" />
                                           <Text style={styles.structureCallText}>Appeler</Text>
-                                       </TouchableOpacity>
+                                       </AppTouchableOpacity>
                                     )}
                                     <View style={styles.hospResBadge}>
                                        <MaterialIcons name="verified" size={12} color={colors.secondary} />
@@ -2052,7 +2051,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                     </View>
                                  </View>
                               </View>
-                              <TouchableOpacity
+                              <AppTouchableOpacity
                                  style={[styles.bigActionBtn, { marginHorizontal: 20, marginBottom: 20 }]}
                                  onPress={handleDepartVersStructure}
                                  disabled={departingEnRoute}
@@ -2060,7 +2059,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                  <Text style={styles.bigActionText}>
                                     {departingEnRoute ? "Mise à jour…" : "Choisir le transport"}
                                  </Text>
-                              </TouchableOpacity>
+                              </AppTouchableOpacity>
                            </View>
                         </View>
                      )}
@@ -2075,7 +2074,7 @@ export function SignalementScreen({ navigation, route }: any) {
                         {TRANSPORT_MODE_OPTIONS.map((opt) => {
                            const accent = transportModeAccentColor(opt.accent);
                            return (
-                              <TouchableOpacity
+                              <AppTouchableOpacity
                                  key={opt.key}
                                  style={[
                                     styles.aidCardGrid,
@@ -2103,7 +2102,7 @@ export function SignalementScreen({ navigation, route }: any) {
                                  >
                                     {opt.label}
                                  </Text>
-                              </TouchableOpacity>
+                              </AppTouchableOpacity>
                            );
                         })}
                      </View>
@@ -2113,14 +2112,14 @@ export function SignalementScreen({ navigation, route }: any) {
                {step === "transport" && targetHospital && (
                   <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
                      <View style={{ flex: 1, borderRadius: 0, overflow: "hidden" }}>
-                        <TouchableOpacity
+                        <AppTouchableOpacity
                            onPress={() => navigation.goBack()}
                            style={[styles.floatingBackSignalement, { top: insets.top + 10 }]}
                            accessibilityRole="button"
                            accessibilityLabel="Retour"
                         >
                            <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-                        </TouchableOpacity>
+                        </AppTouchableOpacity>
                         <MapboxMapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
                            {urgentisteLoc ? (
                               <Mapbox.Camera
@@ -2177,14 +2176,14 @@ export function SignalementScreen({ navigation, route }: any) {
                               </Text>
                            </View>
                         )}
-                        <TouchableOpacity
+                        <AppTouchableOpacity
                            style={[styles.mapFullscreenEntryBtn, { top: insets.top + 10 }]}
                            onPress={() => setMapFullscreenOpen(true)}
                            accessibilityRole="button"
                            accessibilityLabel="Carte plein écran"
                         >
                            <MaterialIcons name="fullscreen" color="#FFF" size={22} />
-                        </TouchableOpacity>
+                        </AppTouchableOpacity>
                      </View>
 
                      <View style={styles.transportBottomPanel}>
@@ -2205,13 +2204,13 @@ export function SignalementScreen({ navigation, route }: any) {
                            )}
                         </View>
                         <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 12, paddingBottom: 16 }}>
-                           <TouchableOpacity
+                           <AppTouchableOpacity
                               style={[styles.bigActionBtn, { flex: 1, backgroundColor: colors.success }]}
                               onPress={handleArrivedAtHospital}
                            >
                               <MaterialIcons name="check-circle" size={24} color="#FFF" />
                               <Text style={styles.bigActionText}>Arrivée à l'hôpital</Text>
-                           </TouchableOpacity>
+                           </AppTouchableOpacity>
                         </View>
                      </View>
                   </View>
@@ -2233,14 +2232,14 @@ export function SignalementScreen({ navigation, route }: any) {
                            Toutes les étapes ont été enregistrées avec succès dans le
                            journal de bord.
                         </Text>
-                        <TouchableOpacity
+                        <AppTouchableOpacity
                            style={styles.largeReturnBtn}
                            onPress={() => navigation.goBack()}
                         >
                            <Text style={styles.largeReturnBtnText}>
                               Retour au tableau
                            </Text>
-                        </TouchableOpacity>
+                        </AppTouchableOpacity>
                      </View>
                   </View>
                )}

@@ -4,10 +4,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Dimensions,
-  Alert,
-} from "react-native";
+Dimensions,
+  Alert} from "react-native";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -112,12 +111,12 @@ export function HospitalSettingsScreen({ navigation }: any) {
     <TabScreenSafeArea style={styles.safeArea}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
+        <AppTouchableOpacity
           onPress={() => navigation.goBack()}
           style={styles.backBtn}
         >
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <Text style={styles.headerTitle}>Paramètres</Text>
         <View style={{ width: 44 }} />
       </View>
@@ -132,7 +131,7 @@ export function HospitalSettingsScreen({ navigation }: any) {
             <View style={styles.groupCard}>
               {group.items.map((item, itemIdx) => (
                 <View key={item.id}>
-                  <TouchableOpacity style={styles.settingItem} onPress={() => onSettingPress(item)}>
+                  <AppTouchableOpacity style={styles.settingItem} onPress={() => onSettingPress(item)}>
                     <View
                       style={[
                         styles.iconBg,
@@ -151,7 +150,7 @@ export function HospitalSettingsScreen({ navigation }: any) {
                       color="rgba(255,255,255,0.15)"
                       size={24}
                     />
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                   {itemIdx < group.items.length - 1 && (
                     <View style={styles.divider} />
                   )}

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity,
-  TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView,
-} from 'react-native';
+  View, Text, StyleSheet,
+  TextInput, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView} from 'react-native';
+import { AppTouchableOpacity } from '../components/ui/AppTouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -100,7 +100,7 @@ export function ChangePasswordScreen({ navigation }: any) {
                   placeholderTextColor="rgba(255,255,255,0.24)"
                   autoCapitalize="none"
                 />
-                <TouchableOpacity
+                <AppTouchableOpacity
                   style={styles.eyeBtn}
                   onPress={() => setShowPassword(!showPassword)}
                 >
@@ -109,7 +109,7 @@ export function ChangePasswordScreen({ navigation }: any) {
                     size={22}
                     color="rgba(255,255,255,0.4)"
                   />
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               </View>
             </View>
 
@@ -143,7 +143,7 @@ export function ChangePasswordScreen({ navigation }: any) {
               <Text style={styles.errorText}>{error}</Text>
             )}
 
-            <TouchableOpacity
+            <AppTouchableOpacity
               style={[styles.submitBtn, !isValid && styles.submitBtnDisabled]}
               onPress={handleChangePassword}
               disabled={!isValid || isLoading}
@@ -154,7 +154,7 @@ export function ChangePasswordScreen({ navigation }: any) {
               ) : (
                 <Text style={styles.submitBtnText}>DÉFINIR LE MOT DE PASSE</Text>
               )}
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

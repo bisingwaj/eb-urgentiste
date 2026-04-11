@@ -4,12 +4,11 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  StatusBar,
+StatusBar,
   Alert,
   Switch,
-  Image,
-} from "react-native";
+  Image} from "react-native";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { useAuth } from "../../contexts/AuthContext";
 import { useAppLock } from "../../contexts/AppLockContext";
 import { colors } from "../../theme/colors";
@@ -253,7 +252,7 @@ export function ProfileTab({ navigation }: any) {
             </View>
           </Card>
 
-          <TouchableOpacity
+          <AppTouchableOpacity
             style={styles.navRow}
             activeOpacity={0.7}
             onPress={() => navigation.navigate("CallHistoryCalls")}
@@ -268,14 +267,14 @@ export function ProfileTab({ navigation }: any) {
               </Text>
             </View>
             <MaterialIcons name="chevron-right" color={colors.textMuted} size={22} />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
 
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
+          <AppTouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
             <MaterialIcons name="logout" color={colors.primary} size={20} />
             <Text style={styles.logoutText}>Se déconnecter</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
       </View>
     </TabScreenSafeArea>

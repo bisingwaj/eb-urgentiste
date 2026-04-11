@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar, Animated, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar, Animated, Dimensions, Alert } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useNotifications } from '../../hooks/useNotifications';
 import { supabase } from '../../lib/supabase';
 import { ProfileIcon, NotificationIcon, CallOutgoingIcon, FirstAidBriefcaseIcon, EmergencyBellIcon } from '../../components/icons/TabIcons';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
 const { width } = Dimensions.get('window');
 
@@ -165,17 +166,17 @@ export function HomeTab({ navigation }: any) {
             </View>
           </View>
           <View style={styles.headerIconRow}>
-            <TouchableOpacity style={styles.notifBtn} onPress={() => navigation.navigate('Notifications')}>
+            <AppTouchableOpacity style={styles.notifBtn} onPress={() => navigation.navigate('Notifications')}>
               <NotificationIcon color={unreadCount > 0 ? colors.secondary : '#FFF'} size={24} />
               {unreadCount > 0 && (
                 <View style={styles.notifBadge}>
                   <Text style={styles.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
                 </View>
               )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerAvatarBtn} onPress={() => navigation.navigate('Profil')}>
+            </AppTouchableOpacity>
+            <AppTouchableOpacity style={styles.headerAvatarBtn} onPress={() => navigation.navigate('Profil')}>
               <ProfileIcon color="#FFF" size={24} />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
         </View>
       </View>
@@ -203,7 +204,7 @@ export function HomeTab({ navigation }: any) {
           ) : activeMission && activeMission.dispatch_status !== 'completed' ? (
             /* ACTIVE ALERT CASE (DYNAMIC) */
             <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <TouchableOpacity
+              <AppTouchableOpacity
                 style={styles.alertCard}
                 onPress={() => navigation.navigate('Signalement', { mission: activeMission })}
               >
@@ -226,15 +227,15 @@ export function HomeTab({ navigation }: any) {
                 </View>
 
                 <View style={styles.alertFooter}>
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     style={styles.consultButton}
                     onPress={() => navigation.navigate('Signalement', { mission: activeMission })}
                   >
                     <Text style={styles.consultButtonText}>Gérer l'intervention</Text>
                     <MaterialIcons name="chevron-right" size={20} color="#fff" />
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </Animated.View>
           ) : (
             /* STANDBY / READY CASE */
@@ -272,7 +273,7 @@ export function HomeTab({ navigation }: any) {
               ))
             ) : (
               <>
-                <TouchableOpacity style={styles.shortcutCard} onPress={() => {
+                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => {
                   if (activeMission) {
                     navigation.navigate('Signalement', { mission: activeMission });
                   } else {
@@ -284,31 +285,31 @@ export function HomeTab({ navigation }: any) {
                   </View>
                   <Text style={styles.shortcutTitle}>{activeMission ? 'Mission en cours' : 'Alertes'}</Text>
                   <Text style={styles.shortcutDesc}>{activeMission ? activeMission.reference : 'Aucune alerte'}</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
   
-                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('CallCenter')}>
+                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('CallCenter')}>
                   <View style={[styles.shortcutIconBox, { backgroundColor: colors.success + '10' }]}>
                     <CallOutgoingIcon color={colors.success} size={28} />
                   </View>
                   <Text style={styles.shortcutTitle}>Contacter la centrale</Text>
                   <Text style={styles.shortcutDesc}>Appel sécurisé</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
   
-                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('Protocoles')}>
+                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('Protocoles')}>
                   <View style={[styles.shortcutIconBox, { backgroundColor: '#E3242B15' }]}>
                     <FirstAidBriefcaseIcon color="#E3242B" size={28} />
                   </View>
                   <Text style={styles.shortcutTitle}>Protocoles</Text>
                   <Text style={styles.shortcutDesc}>SMUR / SAMU</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
   
-                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('SignalerProbleme')}>
+                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('SignalerProbleme')}>
                   <View style={[styles.shortcutIconBox, { backgroundColor: '#FF950015' }]}>
                     <EmergencyBellIcon color="#FF9500" size={28} />
                   </View>
                   <Text style={styles.shortcutTitle}>Signalement</Text>
                   <Text style={styles.shortcutDesc}>Incident terrain</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               </>
             )}
           </View>
