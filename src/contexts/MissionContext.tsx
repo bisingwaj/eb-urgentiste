@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { Alert, Vibration, DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { uploadIncidentTerrainPhotoToStorage } from '../lib/incidentTerrainPhotos';
 import { useAuth } from './AuthContext';
 import { Mission, normalizeHospitalStatus } from '../hooks/useActiveMission';
 
@@ -31,6 +32,8 @@ interface SupabaseIncident {
   commune: string | null;
   recommended_facility: string | null;
   created_at: string;
+  /** URLs Storage / HTTPS — photos terrain ajoutées par l’urgentiste */
+  media_urls?: string[] | null;
 }
 
 interface SupabaseDispatch {
@@ -115,6 +118,12 @@ interface MissionContextType {
     status: 'en_route' | 'on_scene' | 'en_route_hospital' | 'arrived_hospital' | 'mission_end' | 'completed',
   ) => Promise<void>;
   updateMissionDetails: (details: Partial<Mission> & { assessment?: any }) => Promise<void>;
+  /** Photo terrain : upload Storage + append `incidents.media_urls`. Passer `meta` si `activeMission` peut être absent (ex. état restauré). */
+  appendIncidentTerrainPhoto: (
+    localUri: string,
+    mimeType: string,
+    meta?: { incidentId: string; previousUrls?: string[] | null },
+  ) => Promise<void>;
   /** Désactivé pour l’urgentiste (affectation via `dispatches.assigned_structure_*` uniquement). */
   fetchHospitals: () => Promise<Hospital[]>;
 }
@@ -163,7 +172,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
             caller_realtime_updated_at,
             commune,
             recommended_facility,
-            created_at
+            created_at,
+            media_urls
           )
         `.trim()
         )
@@ -241,6 +251,9 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           hospital_status,
           hospital_notes,
           hospital_data,
+          media_urls: Array.isArray(incident.media_urls)
+            ? (incident.media_urls as string[]).filter((u) => typeof u === 'string' && u.length > 0)
+            : null,
         });
       } else {
         setActiveMission(null);
@@ -412,22 +425,35 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           const newData = payload.new;
           const newLat = toNullableNumber(newData.caller_realtime_lat ?? newData.location_lat);
           const newLng = toNullableNumber(newData.caller_realtime_lng ?? newData.location_lng);
-          if (newLat == null || newLng == null) return;
-          console.log(`📡 [MAJ POSITION VICTIME TEMPS RÉEL] : ${newLat}, ${newLng}`);
-          setActiveMission((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  location: {
-                     ...prev.location,
-                     lat: newLat,
-                     lng: newLng,
-                     address: newData.location_address ?? prev.location.address,
-                     commune: newData.commune ?? prev.location.commune,
-                  },
-                }
-              : null
-          );
+          const hasGeo = newLat != null && newLng != null;
+          const mediaPatch =
+            newData.media_urls !== undefined && Array.isArray(newData.media_urls)
+              ? (newData.media_urls as string[]).filter((u) => typeof u === 'string' && u.length > 0)
+              : null;
+
+          if (hasGeo) {
+            console.log(`📡 [MAJ POSITION VICTIME TEMPS RÉEL] : ${newLat}, ${newLng}`);
+          }
+          if (!hasGeo && !mediaPatch) return;
+
+          setActiveMission((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              ...(hasGeo
+                ? {
+                    location: {
+                      ...prev.location,
+                      lat: newLat!,
+                      lng: newLng!,
+                      address: newData.location_address ?? prev.location.address,
+                      commune: newData.commune ?? prev.location.commune,
+                    },
+                  }
+                : {}),
+              ...(mediaPatch ? { media_urls: mediaPatch } : {}),
+            };
+          });
         }
       );
 
@@ -551,6 +577,43 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const appendIncidentTerrainPhoto = async (
+    localUri: string,
+    mimeType: string,
+    meta?: { incidentId: string; previousUrls?: string[] | null },
+  ) => {
+    const incidentId = meta?.incidentId ?? activeMission?.incident_id;
+    if (!incidentId) {
+      throw new Error('Aucun incident lié à cette mission.');
+    }
+
+    try {
+      const publicUrl = await uploadIncidentTerrainPhotoToStorage(incidentId, localUri, mimeType);
+      const prevUrls =
+        meta?.previousUrls != null
+          ? meta.previousUrls.filter((u) => typeof u === 'string' && u.length > 0)
+          : activeMission?.incident_id === incidentId
+            ? activeMission.media_urls ?? []
+            : [];
+      const nextUrls = [...prevUrls, publicUrl];
+
+      const { error } = await supabase
+        .from('incidents')
+        .update({ media_urls: nextUrls })
+        .eq('id', incidentId);
+
+      if (error) throw error;
+
+      setActiveMission((p) =>
+        p && p.incident_id === incidentId ? { ...p, media_urls: nextUrls } : p,
+      );
+      await fetchActiveMission({ silent: true });
+    } catch (err: any) {
+      console.error('[MissionProvider] appendIncidentTerrainPhoto:', err.message);
+      throw err;
+    }
+  };
+
   const fetchHospitals = async (): Promise<Hospital[]> => {
     /** L’urgentiste n’utilise pas `health_structures` pour l’affectation (voir workflow Lovable). */
     return [];
@@ -564,6 +627,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       refresh, 
       updateDispatchStatus,
       updateMissionDetails,
+      appendIncidentTerrainPhoto,
       fetchHospitals
     }}>
       {children}
