@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, FlatList, StatusBar, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, FlatList, StatusBar, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { useNotifications, Notification } from '../../hooks/useNotifications';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
 const TYPE_CONFIG: Record<string, { icon: string; color: string; label: string }> = {
   dispatch: { icon: 'local-shipping', color: '#FF3B30', label: 'Mission' },
@@ -29,7 +30,7 @@ export function NotificationsScreen({ navigation }: any) {
   const renderItem = ({ item }: { item: Notification }) => {
     const config = TYPE_CONFIG[item.type] || TYPE_CONFIG.system;
     return (
-      <TouchableOpacity
+      <AppTouchableOpacity
         style={[styles.notifCard, !item.is_read && styles.notifCardUnread]}
         activeOpacity={0.8}
         onPress={() => {
@@ -55,7 +56,7 @@ export function NotificationsScreen({ navigation }: any) {
             {!item.is_read && <View style={styles.unreadDot} />}
           </View>
         </View>
-      </TouchableOpacity>
+      </AppTouchableOpacity>
     );
   };
 
@@ -64,18 +65,18 @@ export function NotificationsScreen({ navigation }: any) {
       <StatusBar barStyle="light-content" />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <View style={{ flex: 1, marginLeft: 16 }}>
           <Text style={styles.headerSub}>CENTRE DE</Text>
           <Text style={styles.headerTitle}>Notifications</Text>
         </View>
         {unreadCount > 0 && (
-          <TouchableOpacity style={styles.markAllBtn} onPress={markAllAsRead}>
+          <AppTouchableOpacity style={styles.markAllBtn} onPress={markAllAsRead}>
             <MaterialIcons name="done-all" color={colors.secondary} size={20} />
             <Text style={styles.markAllText}>Tout lire</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         )}
       </View>
 

@@ -1,10 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, Switch, ActivityIndicator, Alert } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { useAppLock } from '../../contexts/AppLockContext';
 import { useAuth } from '../../contexts/AuthContext';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
 export function HospitalProfileTab(_props: { navigation: unknown }) {
   const { appLockEnabled, setAppLockEnabled, biometricAvailable, nativeModuleLinked } = useAppLock();
@@ -147,10 +148,10 @@ export function HospitalProfileTab(_props: { navigation: unknown }) {
         </View>
 
         {/* Logout */}
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
+        <AppTouchableOpacity style={styles.logoutBtn} onPress={handleLogout}>
           <MaterialIcons name="logout" size={18} color={colors.primary} />
           <Text style={styles.logoutText}>Se déconnecter</Text>
-        </TouchableOpacity>
+        </AppTouchableOpacity>
       </View>
     </TabScreenSafeArea>
   );

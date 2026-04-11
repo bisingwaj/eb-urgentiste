@@ -5,6 +5,7 @@ import React, {
   useCallback,
   useMemo,
 } from "react";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import {
   View,
   Text,
@@ -13,10 +14,8 @@ import {
   Easing,
   StatusBar,
   ActivityIndicator,
-  TouchableOpacity,
-  ScrollView,
-  Switch,
-} from "react-native";
+ScrollView,
+  Switch} from "react-native";
 import { useIsFocused } from "@react-navigation/native";
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { useTabScreenBottomPadding } from "../../navigation/tabBarLayout";
@@ -47,6 +46,7 @@ import {
 } from "../../utils/navigation";
 import { spreadOverlappingMarkers } from "../../utils/mapMarkerLayout";
 import { MapboxMapView } from "../../components/map/MapboxMapView";
+import { useMapPuckHeading } from "../../hooks/useMapPuckHeading";
 import {
   MePuck,
   IncidentMarker,
@@ -220,8 +220,8 @@ export function LiveMapTab() {
   const [incidents, setIncidents] = useState<IncidentData[]>([]);
 
   const [speed, setSpeed] = useState(0);
-  const [heading, setHeading] = useState(0);
   const [accuracy, setAccuracy] = useState(0);
+  const headingResolved = useMapPuckHeading(myLocation);
   const [battery] = useState(87);
 
   const [selection, setSelection] = useState<PoiSelection | null>(null);
@@ -424,7 +424,6 @@ export function LiveMapTab() {
 
   const updateTelemetry = useCallback((loc: Location.LocationObject) => {
     setSpeed(Math.max(0, (loc.coords.speed || 0) * 3.6));
-    setHeading(loc.coords.heading || 0);
     setAccuracy(loc.coords.accuracy || 0);
   }, []);
 
@@ -886,7 +885,7 @@ export function LiveMapTab() {
               id="my-position"
               coordinate={[myCoords.longitude, myCoords.latitude]}
             >
-              <MePuck headingDeg={heading} />
+              <MePuck headingDeg={headingResolved} />
             </Mapbox.PointAnnotation>
 
             {rescuersForMapDisplay.map(({ item: r, displayCoord }) => (
@@ -897,6 +896,7 @@ export function LiveMapTab() {
               >
                 <UnitMarker
                   status={r.status}
+                  headingDeg={r.heading != null && r.heading >= 0 ? r.heading : undefined}
                   onPress={() => setSelection({ kind: "rescuer", data: r })}
                 />
               </Mapbox.MarkerView>
@@ -961,7 +961,7 @@ export function LiveMapTab() {
                 <TriangleAlert size={13} color="#FF453A" strokeWidth={2.5} />
                 <Text style={styles.statusChipText}>{incidentsForMap.length}{incTruncLegend ? "+" : ""}</Text>
               </View>
-              <TouchableOpacity
+              <AppTouchableOpacity
                 style={[styles.filterBtn, filterOpen && styles.filterBtnOpen]}
                 onPress={() => setFilterOpen((v) => !v)}
                 activeOpacity={0.85}
@@ -970,22 +970,22 @@ export function LiveMapTab() {
                 <Text style={[styles.filterBtnText, filterOpen && { color: "#FFF" }]}>
                   {activeFilterCount}/{ESTABLISHMENT_TYPE_KEYS.length}
                 </Text>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
 
             {filterOpen && (
               <View style={styles.filterDropdown}>
-                <TouchableOpacity
+                <AppTouchableOpacity
                   style={styles.filterDropdownChipAll}
                   onPress={() => { selectAllEstablishmentTypes(); }}
                   activeOpacity={0.85}
                 >
                   <Text style={styles.filterDropdownChipAllText}>Tout cocher</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
                 {ESTABLISHMENT_TYPE_KEYS.map((key) => {
                   const on = establishmentTypeFilter[key] === true;
                   return (
-                    <TouchableOpacity
+                    <AppTouchableOpacity
                       key={key}
                       style={[styles.filterDropdownItem, on && styles.filterDropdownItemOn]}
                       onPress={() => toggleEstablishmentType(key)}
@@ -995,7 +995,7 @@ export function LiveMapTab() {
                       <Text style={[styles.filterDropdownText, on && styles.filterDropdownTextOn]} numberOfLines={1}>
                         {ESTABLISHMENT_TYPE_LABELS[key]}
                       </Text>
-                    </TouchableOpacity>
+                    </AppTouchableOpacity>
                   );
                 })}
               </View>
@@ -1015,7 +1015,7 @@ export function LiveMapTab() {
               <View style={styles.telRow}>
                 <MaterialIcons name="explore" color={colors.secondary} size={14} />
                 <Text style={styles.telLabel}>Cap</Text>
-                <Text style={styles.telValue} numberOfLines={1}>{heading.toFixed(0)}°</Text>
+                <Text style={styles.telValue} numberOfLines={1}>{headingResolved.toFixed(0)}°</Text>
               </View>
               <View style={styles.telRow}>
                 <MaterialIcons name="gps-fixed" color={accuracy < 25 ? colors.success : "#FF9F0A"} size={14} />
@@ -1031,7 +1031,7 @@ export function LiveMapTab() {
           </View>
         )}
         <View style={[styles.telemetryHUD, { bottom: spacing.sm }]}>
-          <TouchableOpacity
+          <AppTouchableOpacity
             style={styles.hudPill}
             onPress={() => { setTelemetryExpanded((v) => !v); setLegendExpanded(false); }}
             activeOpacity={0.85}
@@ -1039,7 +1039,7 @@ export function LiveMapTab() {
             <MaterialIcons name="speed" color={colors.secondary} size={16} />
             <Text style={styles.hudPillValue}>{speed.toFixed(0)} km/h</Text>
             <MaterialIcons name={telemetryExpanded ? "expand-more" : "expand-less"} color="rgba(255,255,255,0.5)" size={18} />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
 
         {/* ── Bottom-right: Legend HUD (collapsible) ── */}
@@ -1061,7 +1061,7 @@ export function LiveMapTab() {
           </View>
         )}
         <View style={[styles.legendHUD, { bottom: spacing.sm }]}>
-          <TouchableOpacity
+          <AppTouchableOpacity
             style={styles.hudPill}
             onPress={() => { setLegendExpanded((v) => !v); setTelemetryExpanded(false); }}
             activeOpacity={0.85}
@@ -1069,7 +1069,7 @@ export function LiveMapTab() {
             <MaterialIcons name="layers" color={colors.secondary} size={16} />
             <Text style={styles.hudPillValue}>Légende</Text>
             <MaterialIcons name={legendExpanded ? "expand-more" : "expand-less"} color="rgba(255,255,255,0.5)" size={18} />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
 
         {selection && destLngLat && (
@@ -1084,7 +1084,7 @@ export function LiveMapTab() {
                     {selectionSubtitle}
                   </Text>
                 </View>
-                <TouchableOpacity
+                <AppTouchableOpacity
                   onPress={clearSelection}
                   hitSlop={12}
                   style={styles.destClose}
@@ -1094,7 +1094,7 @@ export function LiveMapTab() {
                     size={22}
                     color="rgba(255,255,255,0.6)"
                   />
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               </View>
 
               {routeLoading ? (
@@ -1128,7 +1128,7 @@ export function LiveMapTab() {
                     contentContainerStyle={styles.routeChipsRow}
                   >
                     {routeList.map((r, idx) => (
-                      <TouchableOpacity
+                      <AppTouchableOpacity
                         key={`route-chip-${idx}`}
                         style={[
                           styles.routeChip,
@@ -1143,11 +1143,11 @@ export function LiveMapTab() {
                         <Text style={styles.routeChipMetaSmall}>
                           {formatDistanceMeters(r.distance)}
                         </Text>
-                      </TouchableOpacity>
+                      </AppTouchableOpacity>
                     ))}
                   </ScrollView>
                   <View style={styles.criterionRow}>
-                    <TouchableOpacity
+                    <AppTouchableOpacity
                       style={[
                         styles.criterionBtn,
                         routeCriterion === "fastest" && styles.criterionBtnOn,
@@ -1155,8 +1155,8 @@ export function LiveMapTab() {
                       onPress={() => onApplyCriterion("fastest")}
                     >
                       <Text style={styles.criterionBtnText}>Plus rapide</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </AppTouchableOpacity>
+                    <AppTouchableOpacity
                       style={[
                         styles.criterionBtn,
                         routeCriterion === "shortest" && styles.criterionBtnOn,
@@ -1164,7 +1164,7 @@ export function LiveMapTab() {
                       onPress={() => onApplyCriterion("shortest")}
                     >
                       <Text style={styles.criterionBtnText}>Plus court</Text>
-                    </TouchableOpacity>
+                    </AppTouchableOpacity>
                   </View>
                 </View>
               )}
@@ -1190,18 +1190,18 @@ export function LiveMapTab() {
                     />
                   </View>
                   <View style={styles.ttsButtons}>
-                    <TouchableOpacity
+                    <AppTouchableOpacity
                       style={styles.ttsBtn}
                       onPress={speakTtsNext}
                     >
                       <Text style={styles.ttsBtnText}>Étape suivante</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
+                    </AppTouchableOpacity>
+                    <AppTouchableOpacity
                       style={styles.ttsBtnOutline}
                       onPress={speakTtsRepeat}
                     >
                       <Text style={styles.ttsBtnTextOutline}>Répéter</Text>
-                    </TouchableOpacity>
+                    </AppTouchableOpacity>
                   </View>
                 </View>
               )}
@@ -1211,7 +1211,7 @@ export function LiveMapTab() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.destActions}
               >
-                <TouchableOpacity
+                <AppTouchableOpacity
                   style={styles.destBtnPrimary}
                   onPress={() =>
                     openExternalDirections(destLngLat[1], destLngLat[0])
@@ -1219,8 +1219,8 @@ export function LiveMapTab() {
                 >
                   <MaterialIcons name="map" size={18} color="#fff" />
                   <Text style={styles.destBtnPrimaryText}>Google Maps</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
+                </AppTouchableOpacity>
+                <AppTouchableOpacity
                   style={styles.destBtnSecondary}
                   onPress={() =>
                     openWazeDirections(destLngLat[1], destLngLat[0])
@@ -1232,7 +1232,7 @@ export function LiveMapTab() {
                     color={colors.secondary}
                   />
                   <Text style={styles.destBtnSecondaryText}>Waze</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               </ScrollView>
             </View>
           </View>

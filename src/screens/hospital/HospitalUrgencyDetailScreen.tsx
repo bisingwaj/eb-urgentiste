@@ -4,10 +4,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Linking,
-  Alert,
-} from 'react-native';
+Linking,
+  Alert} from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -135,9 +134,9 @@ export function HospitalUrgencyDetailScreen({ route, navigation }: any) {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* App bar */}
       <View style={styles.appBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <Text style={styles.appBarTitle}>Détails de l'incident</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -285,14 +284,14 @@ export function HospitalUrgencyDetailScreen({ route, navigation }: any) {
 
       {/* Bottom Actions */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <TouchableOpacity style={styles.smsBtn} onPress={handleSMS}>
+        <AppTouchableOpacity style={styles.smsBtn} onPress={handleSMS}>
           <MaterialIcons name="message" color={colors.secondary} size={20} />
           <Text style={styles.smsBtnText}>SMS Normal</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.callBtn} onPress={handleCall}>
+        </AppTouchableOpacity>
+        <AppTouchableOpacity style={styles.callBtn} onPress={handleCall}>
           <MaterialIcons name="phone" color="#FFF" size={20} />
           <Text style={styles.callBtnText}>Appel Normal</Text>
-        </TouchableOpacity>
+        </AppTouchableOpacity>
       </View>
     </SafeAreaView>
   );

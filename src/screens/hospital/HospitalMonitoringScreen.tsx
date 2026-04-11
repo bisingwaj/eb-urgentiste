@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  TextInput,
+TextInput,
   Platform,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
-} from 'react-native';
+  KeyboardAvoidingView} from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -113,9 +112,9 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.appBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <Text style={styles.appBarTitle}>Monitoring Patient</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -132,7 +131,7 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
             {STATUS_OPTIONS.map((status) => {
               const isSelected = patientStatus === status.key;
               return (
-                <TouchableOpacity
+                <AppTouchableOpacity
                   key={status.key}
                   style={[
                     styles.statusCard,
@@ -147,7 +146,7 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
                       <MaterialIcons name="check" color="#FFF" size={12} />
                     </View>
                   )}
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               );
             })}
           </View>
@@ -156,7 +155,7 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Transfert / Destination</Text>
           <View style={styles.transferList}>
-            <TouchableOpacity
+            <AppTouchableOpacity
               style={[
                 styles.transferCard,
                 transferKey === null && { borderColor: colors.secondary, backgroundColor: 'rgba(68,138,255,0.08)' },
@@ -174,12 +173,12 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
                 </View>
               </View>
               <View style={[styles.radio, transferKey === null && { borderColor: colors.secondary, borderWidth: 6 }]} />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
 
             {TRANSFER_OPTIONS.map((option) => {
               const isSelected = transferKey === option.key;
               return (
-                <TouchableOpacity
+                <AppTouchableOpacity
                   key={option.key}
                   style={[
                     styles.transferCard,
@@ -199,7 +198,7 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
                     </View>
                   </View>
                   <View style={[styles.radio, isSelected && { borderColor: colors.secondary, borderWidth: 6 }]} />
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               );
             })}
           </View>
@@ -236,7 +235,7 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={[styles.submitBtn, saving && styles.submitBtnDisabled]}
           onPress={handleConfirm}
           disabled={saving}
@@ -249,7 +248,7 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
               <MaterialIcons name="done-all" color="#FFF" size={24} />
             </>
           )}
-        </TouchableOpacity>
+        </AppTouchableOpacity>
       </View>
       </SafeAreaView>
     </KeyboardAvoidingView>

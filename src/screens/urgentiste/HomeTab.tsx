@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Switch, StatusBar, Animated, Dimensions, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar, Animated, Dimensions, Alert } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useNotifications } from '../../hooks/useNotifications';
 import { supabase } from '../../lib/supabase';
 import { ProfileIcon, NotificationIcon, CallOutgoingIcon, FirstAidBriefcaseIcon, EmergencyBellIcon } from '../../components/icons/TabIcons';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
 const { width } = Dimensions.get('window');
 
@@ -30,13 +31,12 @@ const SkeletonText = ({ width: w, style }: { width: any, style?: any }) => (
 );
 
 export function HomeTab({ navigation }: any) {
-  const { profile, refreshProfile } = useAuth();
+  const { profile } = useAuth();
   const { activeMission, isLoading: missionLoading } = useActiveMission();
   const { unreadCount } = useNotifications();
   useLocationTracking(); // Initialise le suivi GPS pour la flotte Admin
-  const [isLoading, setIsLoading] = useState(true);
-  const [isDutyActive, setIsDutyActive] = useState(profile?.available ?? false);
-  const [fadeAnim] = useState(new Animated.Value(0));
+  /** Skeleton uniquement si aucune mission en cache et fetch encore en cours. */
+  const showMissionSkeleton = missionLoading && !activeMission;
   const radarAnim = useRef(new Animated.Value(0)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
@@ -77,33 +77,19 @@ export function HomeTab({ navigation }: any) {
     };
   }, [profile?.assigned_unit_id]);
 
-  // Synchroniser le statut local avec le profil
-  useEffect(() => {
-    if (profile) setIsDutyActive(profile.available);
-  }, [profile?.available]);
-
   const [sectionsAnim] = useState({
     header: new Animated.Value(0),
-    status: new Animated.Value(0),
     dynamic: new Animated.Value(0),
     shortcuts: new Animated.Value(0),
   });
 
   useEffect(() => {
-    // Initial loading delay simulator
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-      
-      // Staggered entrance
-      Animated.stagger(100, [
-        Animated.spring(sectionsAnim.header, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-        Animated.spring(sectionsAnim.status, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-        Animated.spring(sectionsAnim.dynamic, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-        Animated.spring(sectionsAnim.shortcuts, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-      ]).start();
-    }, 1200);
+    Animated.stagger(100, [
+      Animated.spring(sectionsAnim.header, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+      Animated.spring(sectionsAnim.dynamic, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+      Animated.spring(sectionsAnim.shortcuts, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
+    ]).start();
 
-    // Radar & Pulse Animations
     Animated.loop(
       Animated.parallel([
         Animated.sequence([
@@ -113,41 +99,10 @@ export function HomeTab({ navigation }: any) {
         Animated.sequence([
           Animated.timing(pulseAnim, { toValue: 1.04, duration: 1200, useNativeDriver: true }),
           Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        ])
-      ])
+        ]),
+      ]),
     ).start();
-
-    return () => clearTimeout(timer);
   }, []);
-
-  const handleToggleDuty = async (val: boolean) => {
-    setIsDutyActive(val);
-    if (profile?.id) {
-      const { error } = await supabase
-        .from('users_directory')
-        .update({ available: val, status: val ? 'active' : 'offline' })
-        .eq('id', profile.id);
-
-      if (error) {
-        console.error('[HomeTab] Error updating duty status:', error.message);
-        setIsDutyActive(!val);
-      } else {
-        refreshProfile();
-      }
-    }
-  };
-
-  const MOCK_MISSION = {
-    id: "AL-902",
-    time: "2 min",
-    type: "ACCIDENT ROUTE",
-    typeIcon: "directions-car",
-    location: "Limete, Boulevard Lumumba",
-    description: "Collision deux véhicules. Victime coincée. Fracture ouverte jambe gauche suspectée.",
-    priority: "CRITIQUE",
-    coordinates: { latitude: -4.34, longitude: 15.33 },
-    patient: { nom: "JEAN KABEYA", age: 42, sexe: "Masculin", groupeSanguin: "O+" },
-  };
 
   return (
     <TabScreenSafeArea style={styles.container}>
@@ -211,57 +166,19 @@ export function HomeTab({ navigation }: any) {
             </View>
           </View>
           <View style={styles.headerIconRow}>
-            <TouchableOpacity style={styles.notifBtn} onPress={() => navigation.navigate('Notifications')}>
+            <AppTouchableOpacity style={styles.notifBtn} onPress={() => navigation.navigate('Notifications')}>
               <NotificationIcon color={unreadCount > 0 ? colors.secondary : '#FFF'} size={24} />
               {unreadCount > 0 && (
                 <View style={styles.notifBadge}>
                   <Text style={styles.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
                 </View>
               )}
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.headerAvatarBtn} onPress={() => navigation.navigate('Profil')}>
+            </AppTouchableOpacity>
+            <AppTouchableOpacity style={styles.headerAvatarBtn} onPress={() => navigation.navigate('Profil')}>
               <ProfileIcon color="#FFF" size={24} />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
         </View>
-
-        {/* Status Card */}
-        <Animated.View style={[
-          styles.statusCard, 
-          { 
-            opacity: sectionsAnim.status,
-            transform: [{ translateY: sectionsAnim.status.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) }]
-          }
-        ]}>
-          {isLoading ? (
-            <View style={styles.statusContent}>
-               <View style={styles.statusMain}>
-                  <SkeletonItem width={12} height={12} borderRadius={6} />
-                  <View>
-                    <SkeletonText width={60} />
-                    <SkeletonText width={90} />
-                  </View>
-               </View>
-               <SkeletonItem width={40} height={24} borderRadius={12} />
-            </View>
-          ) : (
-            <View style={styles.statusContent}>
-               <View style={styles.statusMain}>
-                <View style={[styles.statusIndicator, { backgroundColor: isDutyActive ? colors.success : colors.textMuted }]} />
-                <View>
-                  <Text style={styles.statusTitle}>Statut de service</Text>
-                  <Text style={styles.statusValue}>{isDutyActive ? 'Disponible' : 'Hors service'}</Text>
-                </View>
-              </View>
-              <Switch
-                value={isDutyActive}
-                onValueChange={handleToggleDuty}
-                trackColor={{ false: '#333', true: colors.success }}
-                thumbColor="#FFF"
-              />
-            </View>
-          )}
-        </Animated.View>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -274,10 +191,10 @@ export function HomeTab({ navigation }: any) {
             transform: [{ translateY: sectionsAnim.dynamic.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }]
           }
         ]}>
-          {isLoading || missionLoading ? (
+          {showMissionSkeleton ? (
             <View style={styles.standbyCard}>
                <View style={styles.standbyContent}>
-                  <SkeletonItem width={56} height={56} borderRadius={20} />
+                  <SkeletonItem width={48} height={48} borderRadius={18} />
                   <View style={{ flex: 1 }}>
                     <SkeletonText width="60%" />
                     <SkeletonText width="90%" />
@@ -287,7 +204,7 @@ export function HomeTab({ navigation }: any) {
           ) : activeMission && activeMission.dispatch_status !== 'completed' ? (
             /* ACTIVE ALERT CASE (DYNAMIC) */
             <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <TouchableOpacity
+              <AppTouchableOpacity
                 style={styles.alertCard}
                 onPress={() => navigation.navigate('Signalement', { mission: activeMission })}
               >
@@ -310,15 +227,15 @@ export function HomeTab({ navigation }: any) {
                 </View>
 
                 <View style={styles.alertFooter}>
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     style={styles.consultButton}
                     onPress={() => navigation.navigate('Signalement', { mission: activeMission })}
                   >
                     <Text style={styles.consultButtonText}>Gérer l'intervention</Text>
                     <MaterialIcons name="chevron-right" size={20} color="#fff" />
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 </View>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </Animated.View>
           ) : (
             /* STANDBY / READY CASE */
@@ -326,11 +243,13 @@ export function HomeTab({ navigation }: any) {
               <View style={styles.standbyContent}>
                 <View style={styles.standbyIconBox}>
                   <Animated.View style={[styles.radarCircle, { transform: [{ scale: radarAnim }], opacity: Animated.subtract(1, radarAnim) }]} />
-                  <MaterialCommunityIcons name="radar" size={32} color={colors.secondary} />
+                  <MaterialCommunityIcons name="radar" size={28} color={colors.secondary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.standbyTitle}>Prêt pour intervention</Text>
-                  <Text style={styles.standbyDesc}>Votre unité est scannée par la centrale. Activez votre statut pour recevoir des alertes.</Text>
+                  <Text style={styles.standbyDesc}>
+                    Votre unité est suivie par la centrale. Indiquez votre disponibilité dans l’onglet Profil pour recevoir les alertes.
+                  </Text>
                 </View>
               </View>
             </View>
@@ -344,7 +263,7 @@ export function HomeTab({ navigation }: any) {
         }}>
           <Text style={styles.sectionHeading}>Accès rapides</Text>
           <View style={styles.shortcutsGrid}>
-            {isLoading ? (
+            {showMissionSkeleton ? (
               [1, 2, 3, 4].map(i => (
                 <View key={i} style={[styles.shortcutCard, { opacity: 0.6 }]}>
                    <SkeletonItem width={48} height={48} borderRadius={16} style={{ marginBottom: 16 }} />
@@ -354,7 +273,7 @@ export function HomeTab({ navigation }: any) {
               ))
             ) : (
               <>
-                <TouchableOpacity style={styles.shortcutCard} onPress={() => {
+                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => {
                   if (activeMission) {
                     navigation.navigate('Signalement', { mission: activeMission });
                   } else {
@@ -366,31 +285,31 @@ export function HomeTab({ navigation }: any) {
                   </View>
                   <Text style={styles.shortcutTitle}>{activeMission ? 'Mission en cours' : 'Alertes'}</Text>
                   <Text style={styles.shortcutDesc}>{activeMission ? activeMission.reference : 'Aucune alerte'}</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
   
-                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('CallCenter')}>
+                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('CallCenter')}>
                   <View style={[styles.shortcutIconBox, { backgroundColor: colors.success + '10' }]}>
                     <CallOutgoingIcon color={colors.success} size={28} />
                   </View>
                   <Text style={styles.shortcutTitle}>Contacter la centrale</Text>
                   <Text style={styles.shortcutDesc}>Appel sécurisé</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
   
-                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('Protocoles')}>
+                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('Protocoles')}>
                   <View style={[styles.shortcutIconBox, { backgroundColor: '#E3242B15' }]}>
                     <FirstAidBriefcaseIcon color="#E3242B" size={28} />
                   </View>
                   <Text style={styles.shortcutTitle}>Protocoles</Text>
                   <Text style={styles.shortcutDesc}>SMUR / SAMU</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
   
-                <TouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('SignalementHub')}>
+                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('SignalementHub')}>
                   <View style={[styles.shortcutIconBox, { backgroundColor: '#FF950015' }]}>
                     <EmergencyBellIcon color="#FF9500" size={28} />
                   </View>
                   <Text style={styles.shortcutTitle}>Signalement</Text>
                   <Text style={styles.shortcutDesc}>Incident terrain</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               </>
             )}
           </View>
@@ -418,7 +337,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "flex-start",
-    marginBottom: 20
+    marginBottom: 0,
   },
   headerTextCol: {
     flex: 1,
@@ -525,61 +444,15 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(255,255,255,0.1)',
   },
 
-  // Status Card
-  statusCard: {
-    backgroundColor: colors.glassBackground,
-    borderRadius: 24,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-  },
-  statusContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  statusMain: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 15,
-  },
-  statusIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    shadowColor: colors.success,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 1,
-    shadowRadius: 4,
-  },
-  statusTitle: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: colors.textMuted,
-    letterSpacing: 1.5,
-    marginBottom: 4,
-    textTransform: 'uppercase',
-  },
-  statusValue: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#FFF',
-  },
-
   // Dynamic Alert Section
   dynamicSection: {
-    paddingHorizontal: 24,
-    marginTop: -15, // Negative margin to overlap with header slightly if needed
+    marginTop: -15,
     marginBottom: 30,
   },
   alertCard: {
     backgroundColor: colors.surfaceElevated,
-    borderRadius: 32,
-    padding: 24,
+    borderRadius: 24,
+    padding: 16,
     borderWidth: 1,
     borderColor: colors.glassBorder,
   },
@@ -587,7 +460,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 10,
   },
   priorityBadge: {
     flexDirection: 'row',
@@ -614,77 +487,77 @@ const styles = StyleSheet.create({
   },
   alertType: {
     color: '#FFF',
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '900',
-    marginBottom: 8,
+    marginBottom: 4,
   },
   alertLocRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 24,
+    marginBottom: 12,
   },
   alertLocText: {
     color: 'rgba(255,255,255,0.5)',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
   },
   alertFooter: {
-    marginTop: 8,
+    marginTop: 4,
   },
   consultButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.secondary,
-    paddingVertical: 14,
-    borderRadius: 16,
-    gap: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
+    gap: 8,
   },
   consultButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   standbyCard: {
     backgroundColor: colors.glassBackground,
-    borderRadius: 32,
-    padding: 24,
+    borderRadius: 24,
+    padding: 16,
     borderWidth: 1,
     borderColor: colors.borderHairline,
   },
   standbyContent: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 20,
+    gap: 14,
   },
   standbyIconBox: {
-    width: 56,
-    height: 56,
-    borderRadius: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 18,
     backgroundColor: colors.secondary + '10',
     justifyContent: 'center',
     alignItems: 'center',
   },
   radarCircle: {
     position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     borderWidth: 2,
     borderColor: colors.secondary,
   },
   standbyTitle: {
     color: '#FFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   standbyDesc: {
     color: 'rgba(255,255,255,0.4)',
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: '500',
   },
   // Shortcuts

@@ -26,13 +26,13 @@ function authErrorMessage(err?: string): string | null {
   const map: Record<string, string> = {
     not_enrolled: 'Aucune empreinte ou visage enregistré sur cet appareil.',
     not_available: 'Authentification indisponible pour le moment.',
-    authentication_failed: 'Échec de la reconnaissance. Réessayez.',
-    lockout: 'Trop de tentatives. Réessayez plus tard ou utilisez le code du téléphone.',
+    authentication_failed: 'Échec de la reconnaissance. réessayez.',
+    lockout: 'Trop de tentatives. réessayez plus tard ou utilisez le code du téléphone.',
     passcode_not_set: 'Configurez un code de déverrouillage dans les réglages du téléphone.',
-    unable_to_process: 'Impossible de lancer l’authentification. Réessayez.',
-    timeout: 'Délai dépassé. Réessayez.',
+    unable_to_process: 'Impossible de lancer l’authentification. réessayez.',
+    timeout: 'Délai dépassé. réessayez.',
   };
-  return map[err] ?? `Impossible de déverrouiller (${err}). Réessayez.`;
+  return map[err] ?? `Impossible de déverrouiller (${err}). réessayez.`;
 }
 
 type AppLockContextValue = {

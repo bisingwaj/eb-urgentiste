@@ -53,6 +53,7 @@
           "cameraPermission": "La caméra permet de photographier le terrain pour documenter l'intervention."
         }
       ],
+      "@react-native-community/datetimepicker",
       "@rnmapbox/maps",
       "expo-secure-store",
       "./plugins/with-notifee-repository",

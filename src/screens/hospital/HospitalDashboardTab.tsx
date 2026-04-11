@@ -5,13 +5,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  StatusBar,
+StatusBar,
   Dimensions,
   ActivityIndicator,
   RefreshControl,
-  Platform,
-} from "react-native";
+  Platform} from "react-native";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
@@ -575,7 +574,7 @@ export function HospitalDashboardTab({ navigation }: any) {
               </>
             )}
           </View>
-          <TouchableOpacity
+          <AppTouchableOpacity
             style={styles.notifBtn}
             onPress={() => navigation.navigate("Notifications")}
             accessibilityLabel="Notifications"
@@ -588,7 +587,7 @@ export function HospitalDashboardTab({ navigation }: any) {
                 </Text>
               </View>
             ) : null}
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
 
         <View style={styles.summaryContainer}>
@@ -649,12 +648,12 @@ export function HospitalDashboardTab({ navigation }: any) {
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Alertes récentes</Text>
           <View style={styles.filterOptions}>
-            <TouchableOpacity onPress={() => setFilter("all")}><Text style={[styles.filterLabel, filter === "all" && styles.filterLabelActive]}>Tous</Text></TouchableOpacity>
-            <TouchableOpacity onPress={() => setFilter("en_attente")}><Text style={[styles.filterLabel, filter === "en_attente" && styles.filterLabelActive]}>Signalés</Text></TouchableOpacity>
+            <AppTouchableOpacity onPress={() => setFilter("all")}><Text style={[styles.filterLabel, filter === "all" && styles.filterLabelActive]}>Tous</Text></AppTouchableOpacity>
+            <AppTouchableOpacity onPress={() => setFilter("en_attente")}><Text style={[styles.filterLabel, filter === "en_attente" && styles.filterLabelActive]}>Signalés</Text></AppTouchableOpacity>
           </View>
         </View>
 
-        {isLoading ? (
+        {isLoading && activeCases.length === 0 ? (
           <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
         ) : sortedFilteredCases.length === 0 ? (
           <View style={{ alignItems: "center", marginTop: 40, paddingHorizontal: 24 }}>
@@ -673,7 +672,7 @@ export function HospitalDashboardTab({ navigation }: any) {
             const sCfg = getStatusConfig(caseItem.status);
             const needsHospitalAnswer = caseItem.hospitalStatus === "pending";
             return (
-              <TouchableOpacity key={caseItem.id} style={styles.alertCard} onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })} activeOpacity={0.9}>
+              <AppTouchableOpacity key={caseItem.id} style={styles.alertCard} onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })} activeOpacity={0.9}>
                 <View style={styles.cardInfo}>
                   <View style={styles.cardHeaderRow}>
                     <View style={styles.timePill}><MaterialCommunityIcons name="clock-outline" color="rgba(255,255,255,0.4)" size={14} /><Text style={styles.timeText}>{caseItem.timestamp}</Text></View>
@@ -695,7 +694,7 @@ export function HospitalDashboardTab({ navigation }: any) {
                   </View>
                 </View>
                 <View style={styles.arrowContainer}><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={24} /></View>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             );
           })
         )}

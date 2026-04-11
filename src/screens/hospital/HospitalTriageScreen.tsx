@@ -3,13 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  TextInput,
+TextInput,
   Platform,
   Alert,
   KeyboardAvoidingView,
-  ScrollView,
-} from "react-native";
+  ScrollView} from "react-native";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -194,7 +193,7 @@ export function HospitalTriageScreen({ route, navigation }: any) {
               {TRIAGE_LEVELS.map((level) => {
                 const isSelected = triageLevel === level.key;
                 return (
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     key={level.key}
                     style={[
                       styles.triageCard,
@@ -239,7 +238,7 @@ export function HospitalTriageScreen({ route, navigation }: any) {
                         <MaterialIcons name="check" color="#FFF" size={14} />
                       </View>
                     )}
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 );
               })}
             </View>
@@ -486,9 +485,9 @@ export function HospitalTriageScreen({ route, navigation }: any) {
         keyboardVerticalOffset={Platform.OS === "ios" ? 56 : 0}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={handlePrev} style={styles.iconBtn}>
+          <AppTouchableOpacity onPress={handlePrev} style={styles.iconBtn}>
             <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
           <View style={styles.progressContainer}>
             <View style={styles.progressBarBg}>
               <View
@@ -502,14 +501,14 @@ export function HospitalTriageScreen({ route, navigation }: any) {
               Évaluation de triage · {step}/{totalSteps}
             </Text>
           </View>
-          <TouchableOpacity
+          <AppTouchableOpacity
             onPress={handleOpenCaseDetail}
             style={styles.headerLinkBtn}
             accessibilityRole="button"
             accessibilityLabel="Voir le suivi et la carte"
           >
             <MaterialIcons name="map" size={22} color={colors.secondary} />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
 
         <View style={styles.content}>{renderStepContent()}</View>
@@ -520,12 +519,12 @@ export function HospitalTriageScreen({ route, navigation }: any) {
             { paddingBottom: Math.max(insets.bottom, 14) },
           ]}
         >
-          <TouchableOpacity style={styles.backStepBtn} onPress={handlePrev}>
+          <AppTouchableOpacity style={styles.backStepBtn} onPress={handlePrev}>
             <Text style={styles.backStepText}>
               {step === 1 ? "Annuler" : "Précédent"}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AppTouchableOpacity>
+          <AppTouchableOpacity
             style={[
               styles.nextBtn,
               step === 1 && !triageLevel && styles.btnDisabled,
@@ -549,7 +548,7 @@ export function HospitalTriageScreen({ route, navigation }: any) {
               color="#FFF"
               size={22}
             />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

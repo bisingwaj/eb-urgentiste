@@ -9,6 +9,7 @@ import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import { INCIDENT_MEDIA_BUCKET } from '../../lib/incidentTerrainPhotos';
 import { readAsStringAsync, EncodingType } from 'expo-file-system/legacy';
+import { AppTouchableOpacity } from "../../components/ui/AppTouchableOpacity";
 
 const CATEGORIES = [
   { id: 'vehicle', label: 'Véhicule', icon: "local-shipping" as const },
@@ -226,9 +227,9 @@ export function SignalerProblemeScreen({ navigation }: any) {
       
       <View style={styles.topHeader}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
           <View>
              <Text style={styles.greetingText}>LOGISTIQUE</Text>
              <Text style={styles.hospitalName}>Rapport d'Incident</Text>
@@ -244,7 +245,7 @@ export function SignalerProblemeScreen({ navigation }: any) {
           {CATEGORIES.map(cat => {
              const isActive = selectedCat === cat.id;
              return (
-                <TouchableOpacity 
+                <AppTouchableOpacity 
                    key={cat.id} 
                    style={[styles.catCard, isActive && styles.catCardActive]} 
                    onPress={() => setSelectedCat(cat.id)}
@@ -255,7 +256,7 @@ export function SignalerProblemeScreen({ navigation }: any) {
                   </View>
                   <Text style={[styles.catText, isActive && styles.catTextActive]}>{cat.label}</Text>
                   {isActive && <View style={styles.checkBadge}><MaterialIcons name="check" color="#FFF" size={10} /></View>}
-                </TouchableOpacity>
+                </AppTouchableOpacity>
              )
           })}
         </View>
@@ -265,7 +266,7 @@ export function SignalerProblemeScreen({ navigation }: any) {
           {SEVERITIES.map((sev, i) => {
              const isActive = selectedSev === sev.id;
              return (
-                <TouchableOpacity
+                <AppTouchableOpacity
                    key={sev.id}
                    style={[styles.sevItem, i === SEVERITIES.length - 1 && { borderBottomWidth: 0 }]}
                    onPress={() => setSelectedSev(sev.id)}
@@ -278,7 +279,7 @@ export function SignalerProblemeScreen({ navigation }: any) {
                   {isActive && <View style={[styles.sevTag, { backgroundColor: sev.color + '15' }]}>
                     <Text style={{ color: sev.color, fontSize: 12, fontWeight: '900', letterSpacing: 1 }}>ACTIF</Text>
                   </View>}
-                </TouchableOpacity>
+                </AppTouchableOpacity>
              )
           })}
         </View>
@@ -368,7 +369,7 @@ export function SignalerProblemeScreen({ navigation }: any) {
       </ScrollView>
 
       <View style={styles.footer}>
-         <TouchableOpacity 
+         <AppTouchableOpacity 
            style={[
               styles.btnSubmit, 
               (!selectedCat || !selectedSev || description.trim().length === 0 || isSubmitting) && { backgroundColor: "#1A1A1A", opacity: 0.5 }
@@ -379,7 +380,7 @@ export function SignalerProblemeScreen({ navigation }: any) {
            <Text style={[styles.btnSubmitText, (!selectedCat || !selectedSev || description.trim().length === 0) && { color: "rgba(255,255,255,0.3)" }]}>
               {isSubmitting ? 'ENVOI EN COURS...' : 'ENVOYER LE RAPPORT'}
            </Text>
-         </TouchableOpacity>
+         </AppTouchableOpacity>
       </View>
     </SafeAreaView>
   );

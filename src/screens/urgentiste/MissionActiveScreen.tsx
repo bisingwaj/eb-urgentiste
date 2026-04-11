@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, StatusBar, Alert, Linking, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TextInput, ScrollView, StatusBar, Alert, Linking, ActivityIndicator } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,10 +8,13 @@ import { useActiveMission } from '../../hooks/useActiveMission';
 import * as Location from 'expo-location';
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from '../../lib/mapbox';
 import { MapboxMapView } from '../../components/map/MapboxMapView';
+import { MePuck } from '../../components/map/mapMarkers';
+import { useMapPuckHeading } from '../../hooks/useMapPuckHeading';
 import { openExternalDirections } from '../../utils/navigation';
 import { formatMissionAddress, formatDescriptionLines } from '../../utils/missionAddress';
 import { alertVoipError, startRescuerToCitizenVoipCall } from '../../lib/rescuerCallCitizen';
 import { canOfferVictimContactCalls } from '../../lib/missionVictimCall';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
 const STATUS_STEPS = [
   { key: 'dispatched', label: 'Dispatché', icon: 'assignment', color: '#FF9500' },
@@ -28,7 +31,8 @@ export function MissionActiveScreen({ navigation }: any) {
   const { activeMission, updateDispatchStatus } = useActiveMission();
   const [noteText, setNoteText] = useState('');
   const [notes, setNotes] = useState<{ text: string; time: string }[]>([]);
-  const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [myLocation, setMyLocation] = useState<Location.LocationObject | null>(null);
+  const myHeadingDeg = useMapPuckHeading(myLocation);
   const [isUpdating, setIsUpdating] = useState(false);
   const [voipLoading, setVoipLoading] = useState(false);
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
@@ -43,11 +47,11 @@ export function MissionActiveScreen({ navigation }: any) {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') return;
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        setMyLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+        setMyLocation(loc);
         sub = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, distanceInterval: 10 },
           (newLoc) => {
-            setMyLocation({ latitude: newLoc.coords.latitude, longitude: newLoc.coords.longitude });
+            setMyLocation(newLoc);
           }
         );
       } catch (err) {
@@ -66,7 +70,7 @@ export function MissionActiveScreen({ navigation }: any) {
     if (now - lastRouteFetch.current < 15000 && routeGeoJSON) return;
     lastRouteFetch.current = now;
     getRoute(
-      [myLocation.longitude, myLocation.latitude],
+      [myLocation.coords.longitude, myLocation.coords.latitude],
       [missionLng, missionLat],
       { profile: 'driving-traffic' },
     ).then((result) => {
@@ -76,7 +80,7 @@ export function MissionActiveScreen({ navigation }: any) {
         setRouteDistance(result.distance);
       }
     });
-  }, [myLocation?.latitude, myLocation?.longitude, missionLat, missionLng]);
+  }, [myLocation?.coords.latitude, myLocation?.coords.longitude, missionLat, missionLng]);
 
   // Si pas de mission active, revenir en arrière
   useEffect(() => {
@@ -91,7 +95,11 @@ export function MissionActiveScreen({ navigation }: any) {
       ? { latitude: activeMission.location.lat, longitude: activeMission.location.lng }
       : null;
 
-  const mapCenter = incidentCoords || myLocation || { latitude: -4.3224, longitude: 15.3070 };
+  const mapCenter =
+    incidentCoords ||
+    (myLocation
+      ? { latitude: myLocation.coords.latitude, longitude: myLocation.coords.longitude }
+      : { latitude: -4.3224, longitude: 15.3070 });
 
   const routeCameraBounds = useMemo(() => {
     if (!routeGeoJSON?.features[0]?.geometry) return null;
@@ -102,11 +110,11 @@ export function MissionActiveScreen({ navigation }: any) {
     if (!myLocation || !incidentCoords) return null;
     const padding = 80;
     return {
-      ne: [Math.max(myLocation.longitude, incidentCoords.longitude), Math.max(myLocation.latitude, incidentCoords.latitude)] as [number, number],
-      sw: [Math.min(myLocation.longitude, incidentCoords.longitude), Math.min(myLocation.latitude, incidentCoords.latitude)] as [number, number],
+      ne: [Math.max(myLocation.coords.longitude, incidentCoords.longitude), Math.max(myLocation.coords.latitude, incidentCoords.latitude)] as [number, number],
+      sw: [Math.min(myLocation.coords.longitude, incidentCoords.longitude), Math.min(myLocation.coords.latitude, incidentCoords.latitude)] as [number, number],
       paddingTop: padding, paddingBottom: padding, paddingLeft: padding, paddingRight: padding,
     };
-  }, [myLocation?.latitude, myLocation?.longitude, incidentCoords?.latitude, incidentCoords?.longitude]);
+  }, [myLocation?.coords.latitude, myLocation?.coords.longitude, incidentCoords?.latitude, incidentCoords?.longitude]);
 
   const mapCameraBounds = useMemo(() => routeCameraBounds ?? cameraBounds, [routeCameraBounds, cameraBounds]);
 
@@ -138,10 +146,10 @@ export function MissionActiveScreen({ navigation }: any) {
   const getDistance = () => {
     if (!myLocation || !incidentCoords) return null;
     const R = 6371;
-    const dLat = (incidentCoords.latitude - myLocation.latitude) * Math.PI / 180;
-    const dLon = (incidentCoords.longitude - myLocation.longitude) * Math.PI / 180;
+    const dLat = (incidentCoords.latitude - myLocation.coords.latitude) * Math.PI / 180;
+    const dLon = (incidentCoords.longitude - myLocation.coords.longitude) * Math.PI / 180;
     const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(myLocation.latitude * Math.PI / 180) * Math.cos(incidentCoords.latitude * Math.PI / 180) *
+      Math.cos(myLocation.coords.latitude * Math.PI / 180) * Math.cos(incidentCoords.latitude * Math.PI / 180) *
       Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return (R * c).toFixed(1);
@@ -249,14 +257,14 @@ export function MissionActiveScreen({ navigation }: any) {
       <View style={{ flex: 1 }}>
         {/* MAP */}
         <View style={styles.mapContainer}>
-          <TouchableOpacity
+          <AppTouchableOpacity
             onPress={() => navigation.goBack()}
             style={[styles.floatingBack, { top: insets.top + 8 }]}
             accessibilityRole="button"
             accessibilityLabel="Retour"
           >
             <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
           <View style={[styles.floatingPriorityChip, { top: insets.top + 8 }]}>
             <View style={[styles.priorityDot, { backgroundColor: priority.color }]} />
             <Text style={[styles.priorityChipText, { color: priority.color }]} numberOfLines={1}>
@@ -286,10 +294,11 @@ export function MissionActiveScreen({ navigation }: any) {
             )}
 
             {myLocation && (
-              <Mapbox.PointAnnotation id="my-location" coordinate={[myLocation.longitude, myLocation.latitude]}>
-                <View style={styles.myMarker}>
-                  <View style={styles.myMarkerDot} />
-                </View>
+              <Mapbox.PointAnnotation
+                id="my-location"
+                coordinate={[myLocation.coords.longitude, myLocation.coords.latitude]}
+              >
+                <MePuck headingDeg={myHeadingDeg} size={34} />
               </Mapbox.PointAnnotation>
             )}
 
@@ -376,9 +385,9 @@ export function MissionActiveScreen({ navigation }: any) {
             </View>
             <View style={styles.locationCard}>
               <Text style={styles.locationText}>{siteAddress || 'Adresse non disponible'}</Text>
-              <TouchableOpacity style={styles.gpsSmallBtn} onPress={openNavigation}>
+              <AppTouchableOpacity style={styles.gpsSmallBtn} onPress={openNavigation}>
                 <MaterialIcons name="navigation" color={colors.secondary} size={20} />
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
           </View>
 
@@ -406,35 +415,35 @@ export function MissionActiveScreen({ navigation }: any) {
               value={noteText}
               onChangeText={setNoteText}
             />
-            <TouchableOpacity style={styles.sendBtn} onPress={handleAddNote}>
+            <AppTouchableOpacity style={styles.sendBtn} onPress={handleAddNote}>
               <MaterialIcons name="send" color="#FFF" size={18} />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
 
           {/* Contextual Actions Bar */}
           <View style={styles.unifiedActionBar}>
             <View style={styles.auxActions}>
               {canCallVictim && (
-                <TouchableOpacity style={styles.auxBtn} onPress={callVictim}>
+                <AppTouchableOpacity style={styles.auxBtn} onPress={callVictim}>
                   <MaterialIcons name="phone" color={colors.success} size={22} />
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               )}
               {activeMission.citizen_id && canCallVictim && (
-                <TouchableOpacity style={styles.auxBtn} onPress={callVictimVoip} disabled={voipLoading}>
+                <AppTouchableOpacity style={styles.auxBtn} onPress={callVictimVoip} disabled={voipLoading}>
                   {voipLoading ? (
                     <ActivityIndicator size="small" color={colors.secondary} />
                   ) : (
                     <MaterialIcons name="phone-in-talk" color={colors.secondary} size={22} />
                   )}
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               )}
-              <TouchableOpacity style={styles.auxBtn} onPress={openNavigation}>
+              <AppTouchableOpacity style={styles.auxBtn} onPress={openNavigation}>
                 <MaterialIcons name="navigation" color="#FFF" size={22} />
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
 
             {activeMission.dispatch_status !== 'completed' && (
-              <TouchableOpacity
+              <AppTouchableOpacity
                 style={[styles.primaryActionBtn, isUpdating && { opacity: 0.6 }]}
                 onPress={handleNextStatus}
                 disabled={isUpdating}
@@ -447,14 +456,14 @@ export function MissionActiveScreen({ navigation }: any) {
                   </Text>
                 )}
                 <MaterialIcons name="chevron-right" size={24} color="#FFF" />
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             )}
           </View>
 
           {canCallVictim && activeMission.citizen_id ? (
             <View style={styles.voipBlock}>
               <Text style={styles.voipTitle}>Appel vers l’app victime (audio — vidéo depuis l’écran d’appel)</Text>
-              <TouchableOpacity
+              <AppTouchableOpacity
                 style={[styles.voipBtnFull, voipLoading && { opacity: 0.6 }]}
                 onPress={() => void callVictimVoip()}
                 disabled={voipLoading}
@@ -467,7 +476,7 @@ export function MissionActiveScreen({ navigation }: any) {
                     <Text style={styles.voipBtnText}>App audio</Text>
                   </>
                 )}
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             </View>
           ) : null}
 

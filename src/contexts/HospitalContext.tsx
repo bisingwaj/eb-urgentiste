@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
@@ -10,6 +10,8 @@ import {
 import { mergeHospitalDataPartial } from '../lib/hospitalMerge';
 import { mapDispatchRowToEmergencyCase } from '../lib/hospitalCaseMapping';
 import { buildHospitalReportPayload } from '../lib/hospitalReportPayload';
+import { readHospitalCasesCache, writeHospitalCasesCache } from '../lib/localAppCache';
+import { APP_FOREGROUND_SYNC } from '../lib/syncEvents';
 
 /** Émis quand un dispatch assigné à la structure exige une réponse hôpital (alignement urgentiste → HospitalAlertManager). */
 export const NEW_HOSPITAL_ALERT = 'NEW_HOSPITAL_ALERT';
@@ -101,11 +103,16 @@ const UNITS_SELECT_MINIMAL = `units (callsign, vehicle_type, vehicle_plate, agen
 export function HospitalProvider({ children }: { children: ReactNode }) {
   const { profile, session } = useAuth();
   const [activeCases, setActiveCases] = useState<EmergencyCase[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [listBlocker, setListBlocker] = useState<HospitalListBlocker>(null);
   const [lastFetchError, setLastFetchError] = useState<string | null>(null);
 
-  const fetchCasesRef = React.useRef<(() => Promise<void>) | null>(null);
+  const activeCasesRef = useRef(activeCases);
+  useEffect(() => {
+    activeCasesRef.current = activeCases;
+  }, [activeCases]);
+
+  const fetchCasesRef = React.useRef<((opts?: { silent?: boolean }) => Promise<void>) | null>(null);
 
   const sendHospitalReport = useCallback(
     async (caseData: EmergencyCase) => {
@@ -161,12 +168,13 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      await fetchCasesRef.current?.();
+      await fetchCasesRef.current?.({ silent: true });
     },
     [profile?.health_structure_id, session?.user?.id]
   );
 
-  const fetchCases = useCallback(async () => {
+  const fetchCases = useCallback(async (options?: { silent?: boolean }) => {
+    const silent = options?.silent ?? false;
     setLastFetchError(null);
 
     if (profile?.role !== 'hopital') {
@@ -191,7 +199,10 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
     setListBlocker(null);
 
     try {
-      setIsLoading(true);
+      const hasData = activeCasesRef.current.length > 0;
+      if (!silent && !hasData) {
+        setIsLoading(true);
+      }
 
       let data: any[] | null = null;
       let lastError: any = null;
@@ -273,6 +284,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         mapDispatchRowToEmergencyCase(d, profileMap, responsesMap, unitPhoneByUnitId),
       );
       setActiveCases(mappedCases);
+      void writeHospitalCasesCache(structureId, mappedCases);
     } catch (err: any) {
       console.error('[HospitalContext] Fetch error:', err);
       setListBlocker('supabase_error');
@@ -286,8 +298,24 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   fetchCasesRef.current = fetchCases;
 
   useEffect(() => {
-    fetchCases();
-  }, [fetchCases]);
+    let cancelled = false;
+    (async () => {
+      if (profile?.role !== 'hopital' || !profile.health_structure_id) {
+        return;
+      }
+      const sid = profile.health_structure_id;
+      const cached = await readHospitalCasesCache(sid);
+      if (cancelled) return;
+      if (cached) {
+        setActiveCases(cached);
+        setListBlocker(null);
+      }
+      await fetchCases({ silent: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchCases, profile?.health_structure_id, profile?.role]);
 
   useEffect(() => {
     const structureId = profile?.health_structure_id;
@@ -304,7 +332,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
           if (dispatchId) {
             DeviceEventEmitter.emit(NEW_HOSPITAL_ALERT, { dispatchId });
           }
-          fetchCases();
+          void fetchCases({ silent: true });
         },
       )
       .subscribe();
@@ -405,12 +433,19 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
 
       if (updateError) throw updateError;
 
-      fetchCases();
+      void fetchCases({ silent: true });
     } catch (error) {
       console.error('[HospitalContext] updateCaseStatus error', error);
       throw error;
     }
   };
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(APP_FOREGROUND_SYNC, () => {
+      void fetchCases({ silent: true });
+    });
+    return () => sub.remove();
+  }, [fetchCases]);
 
   return (
     <HospitalContext.Provider

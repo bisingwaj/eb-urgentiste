@@ -25,6 +25,7 @@ import { GlobalAlert } from './src/components/shared/GlobalAlert';
 import { AlertAlarmManager } from './src/components/alerts/AlertAlarmManager';
 import { HospitalAlertManager } from './src/components/alerts/HospitalAlertManager';
 import { BrandedSplashScreen } from './src/components/splash/BrandedSplashScreen';
+import { ForegroundSync } from './src/components/sync/ForegroundSync';
 
 // Shared entry screens
 import { LoginPage } from './src/screens/LoginPage';
@@ -243,6 +244,7 @@ export default function App() {
               <NavigationContainer ref={navigationRef} theme={navTheme}>
                 <CallSessionProvider>
                   <PushTokenRegistration />
+                  <ForegroundSync />
                   <RootNavigator />
                   <FloatingCallBar />
                   <IncomingCallSubscriber />

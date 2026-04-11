@@ -4,10 +4,9 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+Alert,
+  ActivityIndicator} from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -39,7 +38,7 @@ export function HospitalReportScreen({ route, navigation }: any) {
         { text: 'Terminer', onPress: finishToTabs },
       ]);
     } catch (e: any) {
-      Alert.alert('Erreur', e?.message ?? 'Impossible d’envoyer le rapport. Réessayez.');
+      Alert.alert('Erreur', e?.message ?? 'Impossible d’envoyer le rapport. réessayez.');
     } finally {
       setSending(false);
     }
@@ -59,9 +58,9 @@ export function HospitalReportScreen({ route, navigation }: any) {
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* App bar */}
       <View style={styles.appBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <Text style={styles.appBarTitle}>Rapport Médical Automatisé</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -137,7 +136,7 @@ export function HospitalReportScreen({ route, navigation }: any) {
 
       {/* Primary Action */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={[styles.sendBtn, sending && styles.sendBtnDisabled]}
           onPress={handleSendReport}
           disabled={sending}
@@ -152,7 +151,7 @@ export function HospitalReportScreen({ route, navigation }: any) {
               <MaterialIcons name={alreadySent ? 'check' : 'send'} color="#FFF" size={24} />
             </>
           )}
-        </TouchableOpacity>
+        </AppTouchableOpacity>
       </View>
     </SafeAreaView>
   );
