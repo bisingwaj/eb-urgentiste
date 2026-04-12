@@ -21,14 +21,16 @@ const PulseRadar = ({ isActive }: { isActive: boolean }) => {
     if (isActive) {
       Animated.loop(
         Animated.parallel([
-          Animated.sequence([
-            Animated.timing(scale, { toValue: 1.8, duration: 1500, useNativeDriver: true }),
-            Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
-          ]),
-          Animated.sequence([
-            Animated.timing(opacity, { toValue: 0, duration: 1500, useNativeDriver: true }),
-            Animated.timing(opacity, { toValue: 0.8, duration: 0, useNativeDriver: true }),
-          ])
+          Animated.timing(scale, {
+            toValue: 2,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(opacity, {
+            toValue: 0,
+            duration: 2000,
+            useNativeDriver: true,
+          }),
         ])
       ).start();
     } else {
@@ -130,24 +132,32 @@ export function HomeTab({ navigation }: any) {
       duration: 1000,
       useNativeDriver: true
     }).start(({ finished }) => {
-      // Re-check value to be absolutely sure it's not a cancelled animation reporting finished
       if (finished) {
+        // Toggle state immediately to trigger re-render with new styles
+        // The holdProgress being 1 will be hidden by the new button color
         toggleDuty(!isDutyActive);
-        holdProgress.setValue(0);
         setIsHolding(false);
+        // We don't reset holdProgress here to avoid a flash; 
+        // it will be reset by the logic in onPressOut or subsequent interactions
       }
     });
   };
 
   const handlePressOut = () => {
     setIsHolding(false);
-    holdProgress.stopAnimation(() => {
-      // Smoothly return to 0
-      Animated.timing(holdProgress, {
-        toValue: 0,
-        duration: 250,
-        useNativeDriver: true
-      }).start();
+    holdProgress.stopAnimation((val) => {
+      // If we finished (val >= 1), we are already in the new state.
+      // If we released early, we must return to 0 smoothly.
+      if (val < 1) {
+        Animated.timing(holdProgress, {
+          toValue: 0,
+          duration: 250,
+          useNativeDriver: true
+        }).start();
+      } else {
+        // We reached 100%, now reset for next time after a tiny delay
+        setTimeout(() => holdProgress.setValue(0), 100);
+      }
     });
   };
 
