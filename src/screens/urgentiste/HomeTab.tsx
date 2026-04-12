@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, StatusBar, Animated, Dimensions, Alert } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, Animated, Alert, ActivityIndicator, Modal, Dimensions } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -8,50 +8,83 @@ import { useActiveMission } from '../../hooks/useActiveMission';
 import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useNotifications } from '../../hooks/useNotifications';
 import { supabase } from '../../lib/supabase';
-import { ProfileIcon, NotificationIcon, CallOutgoingIcon, FirstAidBriefcaseIcon, EmergencyBellIcon } from '../../components/icons/TabIcons';
+import { ProfileIcon, NotificationIcon } from '../../components/icons/TabIcons';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
 const { width } = Dimensions.get('window');
 
-const SkeletonItem = ({ width: w, height: h, borderRadius = 8, style }: any) => {
-  const pulseAnim = useRef(new Animated.Value(0.3)).current;
+// Helper component for pulsing the radar core
+const PulseRadar = ({ isActive }: { isActive: boolean }) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.8)).current;
+
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 0.6, duration: 1000, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.3, duration: 1000, useNativeDriver: true })
-      ])
-    ).start();
-  }, []);
-  return <Animated.View style={[{ width: w, height: h, borderRadius, backgroundColor: '#222', opacity: pulseAnim }, style]} />;
+    if (isActive) {
+      Animated.loop(
+        Animated.parallel([
+          Animated.sequence([
+            Animated.timing(scale, { toValue: 1.8, duration: 1500, useNativeDriver: true }),
+            Animated.timing(scale, { toValue: 1, duration: 0, useNativeDriver: true }),
+          ]),
+          Animated.sequence([
+            Animated.timing(opacity, { toValue: 0, duration: 1500, useNativeDriver: true }),
+            Animated.timing(opacity, { toValue: 0.8, duration: 0, useNativeDriver: true }),
+          ])
+        ])
+      ).start();
+    } else {
+      scale.stopAnimation();
+      opacity.stopAnimation();
+      scale.setValue(1);
+      opacity.setValue(0);
+    }
+  }, [isActive]);
+
+  return (
+    <View style={styles.radarContainer}>
+      {isActive && (
+        <Animated.View style={[styles.radarWave, { transform: [{ scale }], opacity }]} />
+      )}
+      <View style={[styles.radarCore, isActive ? { backgroundColor: colors.success } : { backgroundColor: colors.textMuted }]}>
+        <MaterialCommunityIcons name={isActive ? "radar" : "radar-off"} size={48} color="#FFF" />
+      </View>
+    </View>
+  );
 };
 
-const SkeletonText = ({ width: w, style }: { width: any, style?: any }) => (
-  <SkeletonItem width={w} height={14} borderRadius={4} style={[{ marginTop: 6 }, style]} />
-);
-
 export function HomeTab({ navigation }: any) {
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const { activeMission, isLoading: missionLoading } = useActiveMission();
   const { unreadCount } = useNotifications();
-  useLocationTracking(); // Initialise le suivi GPS pour la flotte Admin
-  /** Skeleton uniquement si aucune mission en cache et fetch encore en cours. */
-  const showMissionSkeleton = missionLoading && !activeMission;
-  const radarAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  
+  // Initialize background location tracking (from main)
+  useLocationTracking();
 
-  /** Libellé affiché : `units.callsign` (indicatif), sinon véhicule / type. */
+  const [isDutyActive, setIsDutyActive] = useState(profile?.available ?? false);
   const [unitName, setUnitName] = useState<string | null>(null);
+
+  // Status Hold Action Animation
+  const holdProgress = useRef(new Animated.Value(0)).current;
+  const [isHolding, setIsHolding] = useState(false);
+  const [isModalMinimized, setIsModalMinimized] = useState(false);
+
+  useEffect(() => {
+    if (profile) setIsDutyActive(profile.available);
+  }, [profile?.available]);
+
+  useEffect(() => {
+    if (!activeMission || activeMission.dispatch_status === 'completed') {
+      setIsModalMinimized(false);
+    }
+  }, [activeMission]);
 
   useEffect(() => {
     let cancelled = false;
-
     async function loadUnitName() {
       if (!profile?.assigned_unit_id) {
         setUnitName('Non assignée');
         return;
       }
-      setUnitName(null);
       const { data, error } = await supabase
         .from('units')
         .select('callsign, vehicle_type, type')
@@ -63,545 +96,519 @@ export function HomeTab({ navigation }: any) {
         setUnitName('Non assignée');
         return;
       }
-      const label =
-        (data.callsign && String(data.callsign).trim()) ||
-        (data.vehicle_type && String(data.vehicle_type).trim()) ||
-        (data.type && String(data.type).trim()) ||
-        'Unité';
-      setUnitName(label);
+      setUnitName(data.callsign || data.vehicle_type || data.type || 'Unité');
     }
-
     void loadUnitName();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [profile?.assigned_unit_id]);
 
-  const [sectionsAnim] = useState({
-    header: new Animated.Value(0),
-    dynamic: new Animated.Value(0),
-    shortcuts: new Animated.Value(0),
-  });
+  const toggleDuty = async (newVal: boolean) => {
+    setIsDutyActive(newVal);
+    if (profile?.id) {
+      const { error } = await supabase
+        .from('users_directory')
+        .update({ available: newVal, status: newVal ? 'active' : 'offline' })
+        .eq('id', profile.id);
 
-  useEffect(() => {
-    Animated.stagger(100, [
-      Animated.spring(sectionsAnim.header, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-      Animated.spring(sectionsAnim.dynamic, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-      Animated.spring(sectionsAnim.shortcuts, { toValue: 1, tension: 50, friction: 8, useNativeDriver: true }),
-    ]).start();
+      if (error) {
+        Alert.alert('Erreur', 'Impossible de modifier le statut de service.');
+        setIsDutyActive(!newVal);
+      } else {
+        refreshProfile();
+      }
+    }
+  };
 
-    Animated.loop(
-      Animated.parallel([
-        Animated.sequence([
-          Animated.timing(radarAnim, { toValue: 1, duration: 2400, useNativeDriver: true }),
-          Animated.timing(radarAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
-        ]),
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.04, duration: 1200, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
-        ]),
-      ]),
-    ).start();
-  }, []);
+  const handlePressIn = () => {
+    setIsHolding(true);
+    Animated.timing(holdProgress, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: false
+    }).start(({ finished }) => {
+      if (finished) {
+        toggleDuty(!isDutyActive);
+        holdProgress.setValue(0);
+        setIsHolding(false);
+      }
+    });
+  };
+
+  const handlePressOut = () => {
+    if (isHolding) {
+      Animated.timing(holdProgress, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false
+      }).start();
+      setIsHolding(false);
+    }
+  };
+
+  const hasActiveAlert = !!activeMission && activeMission.dispatch_status !== 'completed';
 
   return (
     <TabScreenSafeArea style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#050505" />
 
-      {/* Harmonized Header */}
-      <View style={styles.topHeader}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextCol}>
-            <Text style={styles.hospitalName}>Bonjour {profile?.first_name || ' '},</Text>
-            <View style={styles.metaInfoColumn}>
-              <View style={styles.metaRowWithIcon}>
-                <View style={styles.metaIconSlot}>
-                  <MaterialIcons
-                    name="local-shipping"
-                    size={16}
-                    color={colors.secondary}
-                  />
-                </View>
-                <View style={styles.metaRowText}>
-                  <Text style={styles.locationLabel}>Unité</Text>
-                  {unitName === null ? (
-                    <SkeletonText width={80} style={{ marginTop: 8 }} />
-                  ) : (
-                    <Text style={styles.userMetaText} numberOfLines={2}>
-                      {unitName}
-                    </Text>
-                  )}
-                </View>
-              </View>
-              {/* <View style={[styles.metaRowWithIcon, styles.metaBlockSpacing]}>
-                <View style={styles.metaIconSlot}>
-                  <MaterialIcons name="badge" size={16} color="#90CAF9" />
-                </View>
-                <View style={styles.metaRowText}>
-                  <Text style={styles.locationLabel}>Grade • statut</Text>
-                  <Text style={styles.userMetaText}>
-                    {(profile?.grade?.trim() || '—') +
-                      ' • ' +
-                      (isDutyActive ? 'En service' : 'Hors service')}
-                  </Text>
-                </View>
-              </View>
-              <View style={[styles.metaRowWithIcon, styles.metaBlockSpacing]}>
-                <View style={styles.metaIconSlot}>
-                  <MaterialIcons
-                    name="my-location"
-                    size={16}
-                    color={colors.success}
-                  />
-                </View>
-                <View style={styles.metaRowText}>
-                  <Text style={styles.locationLabel}>Zone</Text>
-                  <Text style={styles.zoneValue} numberOfLines={3}>
-                    {profile?.zone?.trim()
-                      ? profile.zone.trim()
-                      : 'Non renseignée'}
-                  </Text>
-                </View>
-              </View> */}
+      {/* EMERGENCY MODAL TAKEOVER - Our approach prioritize Modal hijacking */}
+      <Modal
+        visible={hasActiveAlert && !isModalMinimized}
+        animationType="slide"
+        presentationStyle="overFullScreen"
+        transparent={false}
+      >
+        <View style={styles.missionModalContainer}>
+          <View style={styles.missionModalHeader}>
+            <AppTouchableOpacity
+              style={styles.minimizeBtn}
+              onPress={() => setIsModalMinimized(true)}
+            >
+              <MaterialIcons name="keyboard-arrow-down" size={36} color="#FFF" />
+            </AppTouchableOpacity>
+
+            <MaterialIcons name="warning" size={48} color={colors.primary} />
+            <Text style={styles.missionModalPulseTxt}>APPEL D'URGENCE</Text>
+          </View>
+
+          <View style={styles.missionModalBody}>
+            <Text style={styles.missionModalTitle}>{activeMission?.title}</Text>
+
+            <View style={styles.missionModalRow}>
+              <MaterialIcons name="place" size={24} color={colors.textMuted} />
+              <Text style={styles.missionModalLoc}>{typeof activeMission?.location === 'string' ? activeMission.location : (activeMission?.location?.address || 'Localisation inconnue')}</Text>
+            </View>
+
+            <Text style={styles.missionModalTime}>Référence : {activeMission?.reference || 'N/A'}</Text>
+            <Text style={[styles.missionModalPriority, { color: activeMission?.priority === 'critical' ? colors.primary : colors.secondary }]}>
+              PRIORITÉ {activeMission?.priority === 'critical' ? 'MAXIMALE' : 'HAUTE'}
+            </Text>
+          </View>
+
+          <View style={styles.missionModalFooter}>
+            <Text style={styles.missionModalHint}>Votre interface de navigation va s'ouvrir. Ne fermez pas l'application.</Text>
+            <AppTouchableOpacity
+              style={styles.missionModalActionBtn}
+              onPress={() => {
+                setIsModalMinimized(true);
+                navigation.navigate('Signalement', { mission: activeMission });
+              }}
+            >
+              <MaterialIcons name="assignment-turned-in" size={32} color="#FFF" />
+              <Text style={styles.missionModalBtnTxt}>GÉRER L'INTERVENTION</Text>
+            </AppTouchableOpacity>
+
+            {activeMission?.dispatch_status === 'dispatched' && (
+              <AppTouchableOpacity
+                style={{ marginTop: 24, alignItems: 'center' }}
+                onPress={() => {
+                  setIsModalMinimized(true);
+                  navigation.navigate('CallCenter');
+                }}
+              >
+                <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '700' }}>APPELER LA CENTRALE (REFUSER)</Text>
+              </AppTouchableOpacity>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* MAIN UI - Using Fixed Layout (our approach) but integrating Header elements from main */}
+      <View style={styles.standbyLayout}>
+        <View style={styles.header}>
+          <View style={styles.headerTopRow}>
+            <View>
+              <Text style={styles.greetingText}>Bonjour {profile?.first_name || ' '}</Text>
+              <Text style={styles.unitName}>{unitName || 'Chargement...'}</Text>
+            </View>
+            <View style={styles.headerIcons}>
+               <AppTouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
+                  <NotificationIcon color={unreadCount > 0 ? colors.secondary : '#FFF'} size={24} />
+                  {unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount}</Text></View>}
+               </AppTouchableOpacity>
+               <AppTouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Profil')}>
+                  <ProfileIcon color="#FFF" size={24} />
+               </AppTouchableOpacity>
             </View>
           </View>
-          <View style={styles.headerIconRow}>
-            <AppTouchableOpacity style={styles.notifBtn} onPress={() => navigation.navigate('Notifications')}>
-              <NotificationIcon color={unreadCount > 0 ? colors.secondary : '#FFF'} size={24} />
-              {unreadCount > 0 && (
-                <View style={styles.notifBadge}>
-                  <Text style={styles.notifBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                </View>
-              )}
+        </View>
+
+        <View style={styles.centerStage}>
+          {hasActiveAlert && isModalMinimized ? (
+            <View style={{ alignItems: 'center' }}>
+              <MaterialIcons name="warning" size={48} color={colors.primary} style={{ marginBottom: 16 }} />
+              <Text style={[styles.statusText, { color: colors.primary }]}>MISSION EN COURS</Text>
+              <AppTouchableOpacity
+                style={styles.restoreBtn}
+                onPress={() => setIsModalMinimized(false)}
+              >
+                <Text style={styles.restoreBtnTxt}>AFFICHER L'ALERTE</Text>
+              </AppTouchableOpacity>
+            </View>
+          ) : (
+            <>
+              <PulseRadar isActive={isDutyActive} />
+              <Text style={[styles.statusText, isDutyActive ? { color: colors.success } : { color: colors.textMuted }]}>
+                {isDutyActive ? "SERVICE ACTIF" : "SERVICE DÉSACTIVÉ"}
+              </Text>
+              <Text style={styles.agentInfo}>👤 {profile?.last_name || profile?.first_name || 'Agent'}</Text>
+              <Text style={styles.statusSubText}>
+                {isDutyActive
+                  ? "Vous êtes connecté et visible par la centrale.\nEn attente d'une nouvelle mission..."
+                  : "Vous êtes hors ligne.\nAucune mission ne vous sera assignée."}
+              </Text>
+            </>
+          )}
+        </View>
+
+        <View style={styles.actionContainer}>
+          <Text style={styles.actionHintText}>Maintenez appuyé pour basculer votre statut</Text>
+          <AppTouchableOpacity
+            activeOpacity={1}
+            onPressIn={handlePressIn}
+            onPressOut={handlePressOut}
+            style={[
+              styles.dutyButton,
+              isDutyActive ? styles.dutyButtonOffline : styles.dutyButtonOnline
+            ]}
+          >
+            <Animated.View style={[
+              styles.dutyButtonProgress,
+              isDutyActive ? { backgroundColor: 'rgba(0,0,0,0.3)' } : { backgroundColor: 'rgba(255,255,255,0.2)' },
+              {
+                width: holdProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
+              }
+            ]} />
+
+            <View style={styles.dutyButtonContext}>
+              <MaterialIcons
+                name={isDutyActive ? "power-settings-new" : "play-circle-filled"}
+                size={28}
+                color={isDutyActive ? "#FFF" : colors.success}
+              />
+              <Text style={[styles.dutyButtonTxt, !isDutyActive && { color: colors.success }]}>
+                {isDutyActive ? "DÉSACTIVER LE SERVICE" : "ACTIVER LE SERVICE"}
+              </Text>
+            </View>
+          </AppTouchableOpacity>
+
+          <View style={styles.quickAccessRow}>
+            <AppTouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('CallCenter')}>
+              <View style={[styles.quickIconBox, { backgroundColor: colors.success + '15' }]}>
+                <MaterialIcons name="phone" color={colors.success} size={22} />
+              </View>
+              <Text style={styles.quickBtnTxt}>Appeler centrale</Text>
             </AppTouchableOpacity>
-            <AppTouchableOpacity style={styles.headerAvatarBtn} onPress={() => navigation.navigate('Profil')}>
-              <ProfileIcon color="#FFF" size={24} />
+
+            <AppTouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Protocoles')}>
+              <View style={[styles.quickIconBox, { backgroundColor: colors.secondary + '15' }]}>
+                <MaterialIcons name="medical-services" color={colors.secondary} size={22} />
+              </View>
+              <Text style={styles.quickBtnTxt}>Protocoles</Text>
+            </AppTouchableOpacity>
+
+            <AppTouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('SignalerProbleme')}>
+              <View style={[styles.quickIconBox, { backgroundColor: colors.primary + '15' }]}>
+                <MaterialIcons name="campaign" color={colors.primary} size={22} />
+              </View>
+              <Text style={styles.quickBtnTxt}>Signalement</Text>
             </AppTouchableOpacity>
           </View>
         </View>
       </View>
-
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-
-        {/* Dynamic Alert / Standby Section */}
-        <Animated.View style={[
-          styles.dynamicSection,
-          { 
-            opacity: sectionsAnim.dynamic,
-            transform: [{ translateY: sectionsAnim.dynamic.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }]
-          }
-        ]}>
-          {showMissionSkeleton ? (
-            <View style={styles.standbyCard}>
-               <View style={styles.standbyContent}>
-                  <SkeletonItem width={48} height={48} borderRadius={18} />
-                  <View style={{ flex: 1 }}>
-                    <SkeletonText width="60%" />
-                    <SkeletonText width="90%" />
-                  </View>
-               </View>
-            </View>
-          ) : activeMission && activeMission.dispatch_status !== 'completed' ? (
-            /* ACTIVE ALERT CASE (DYNAMIC) */
-            <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-              <AppTouchableOpacity
-                style={styles.alertCard}
-                onPress={() => navigation.navigate('Signalement', { mission: activeMission })}
-              >
-                <View style={styles.alertHeader}>
-                  <View style={[styles.priorityBadge, { backgroundColor: activeMission.priority === 'critical' ? colors.primary + '20' : colors.secondary + '20' }]}>
-                    <View style={[styles.priorityDot, { backgroundColor: activeMission.priority === 'critical' ? colors.primary : colors.secondary }]} />
-                    <Text style={[styles.priorityText, { color: activeMission.priority === 'critical' ? colors.primary : colors.secondary }]}>
-                      Urgence {activeMission.priority === 'critical' ? 'critique' : 'élevée'}
-                    </Text>
-                  </View>
-                  <Text style={styles.alertTime}>Mission en cours</Text>
-                </View>
-
-                <Text style={styles.alertType}>{activeMission.title}</Text>
-                <View style={styles.alertLocRow}>
-                  <MaterialIcons name="place" size={16} color="rgba(255,255,255,0.4)" />
-                  <Text style={styles.alertLocText}>
-                    {typeof activeMission.location === 'string' ? activeMission.location : (activeMission.location?.address || 'Adresse inconnue')}
-                  </Text>
-                </View>
-
-                <View style={styles.alertFooter}>
-                  <AppTouchableOpacity
-                    style={styles.consultButton}
-                    onPress={() => navigation.navigate('Signalement', { mission: activeMission })}
-                  >
-                    <Text style={styles.consultButtonText}>Gérer l'intervention</Text>
-                    <MaterialIcons name="chevron-right" size={20} color="#fff" />
-                  </AppTouchableOpacity>
-                </View>
-              </AppTouchableOpacity>
-            </Animated.View>
-          ) : (
-            /* STANDBY / READY CASE */
-            <View style={styles.standbyCard}>
-              <View style={styles.standbyContent}>
-                <View style={styles.standbyIconBox}>
-                  <Animated.View style={[styles.radarCircle, { transform: [{ scale: radarAnim }], opacity: Animated.subtract(1, radarAnim) }]} />
-                  <MaterialCommunityIcons name="radar" size={28} color={colors.secondary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.standbyTitle}>Prêt pour intervention</Text>
-                  <Text style={styles.standbyDesc}>
-                    Votre unité est suivie par la centrale. Indiquez votre disponibilité dans l’onglet Profil pour recevoir les alertes.
-                  </Text>
-                </View>
-              </View>
-            </View>
-          )}
-        </Animated.View>
-
-        {/* Shortcuts Section */}
-        <Animated.View style={{ 
-          opacity: sectionsAnim.shortcuts,
-          transform: [{ translateY: sectionsAnim.shortcuts.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }]
-        }}>
-          <Text style={styles.sectionHeading}>Accès rapides</Text>
-          <View style={styles.shortcutsGrid}>
-            {showMissionSkeleton ? (
-              [1, 2, 3, 4].map(i => (
-                <View key={i} style={[styles.shortcutCard, { opacity: 0.6 }]}>
-                   <SkeletonItem width={48} height={48} borderRadius={16} style={{ marginBottom: 16 }} />
-                   <SkeletonText width="70%" />
-                   <SkeletonText width="40%" />
-                </View>
-              ))
-            ) : (
-              <>
-                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => {
-                  if (activeMission) {
-                    navigation.navigate('Signalement', { mission: activeMission });
-                  } else {
-                    Alert.alert('Aucune alerte', 'Aucune mission en cours. Restez en attente, la centrale vous notifiera.');
-                  }
-                }}>
-                  <View style={[styles.shortcutIconBox, { backgroundColor: colors.secondary + '10' }]}>
-                    <NotificationIcon color={activeMission ? colors.primary : "#1564bf"} size={28} />
-                  </View>
-                  <Text style={styles.shortcutTitle}>{activeMission ? 'Mission en cours' : 'Alertes'}</Text>
-                  <Text style={styles.shortcutDesc}>{activeMission ? activeMission.reference : 'Aucune alerte'}</Text>
-                </AppTouchableOpacity>
-  
-                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('CallCenter')}>
-                  <View style={[styles.shortcutIconBox, { backgroundColor: colors.success + '10' }]}>
-                    <CallOutgoingIcon color={colors.success} size={28} />
-                  </View>
-                  <Text style={styles.shortcutTitle}>Contacter la centrale</Text>
-                  <Text style={styles.shortcutDesc}>Appel sécurisé</Text>
-                </AppTouchableOpacity>
-  
-                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('Protocoles')}>
-                  <View style={[styles.shortcutIconBox, { backgroundColor: '#E3242B15' }]}>
-                    <FirstAidBriefcaseIcon color="#E3242B" size={28} />
-                  </View>
-                  <Text style={styles.shortcutTitle}>Protocoles</Text>
-                  <Text style={styles.shortcutDesc}>SMUR / SAMU</Text>
-                </AppTouchableOpacity>
-  
-                <AppTouchableOpacity style={styles.shortcutCard} onPress={() => navigation.navigate('SignalementHub')}>
-                  <View style={[styles.shortcutIconBox, { backgroundColor: '#FF950015' }]}>
-                    <EmergencyBellIcon color="#FF9500" size={28} />
-                  </View>
-                  <Text style={styles.shortcutTitle}>Signalement</Text>
-                  <Text style={styles.shortcutDesc}>Incident terrain</Text>
-                </AppTouchableOpacity>
-              </>
-            )}
-          </View>
-        </Animated.View>
-
-      </ScrollView>
     </TabScreenSafeArea>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.mainBackground },
-  scrollContent: { padding: 20, paddingBottom: 24 },
-
-  // Harmonized Header
-  topHeader: {
+  container: {
+    flex: 1,
+    backgroundColor: '#050505',
+  },
+  standbyLayout: {
+    flex: 1,
+    justifyContent: 'space-between',
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 24,
-    borderBottomLeftRadius: 36,
-    borderBottomRightRadius: 36,
-    backgroundColor: "#0A0A0A",
+    paddingVertical: 32,
   },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 0,
-  },
-  headerTextCol: {
-    flex: 1,
-    minWidth: 0,
-    paddingRight: 8,
-  },
-  hospitalName: {
-    color: "#FFF",
-    fontSize: 26,
-    fontWeight: "900",
-  },
-  /** Colonne d’icônes fixe : même alignement que la carte « Prêt pour intervention » */
-  metaInfoColumn: {
+  header: {
     marginTop: 10,
   },
-  locationLabel: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 12,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  metaBlockSpacing: {
-    marginTop: 10,
-  },
-  metaRowWithIcon: {
+  headerTopRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 20,
-  },
-  metaIconSlot: {
-    width: 24,
+    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 2,
-    flexShrink: 0,
   },
-  metaRowText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  unitNameValue: {
-    color: '#FFF',
-    fontSize: 17,
-    fontWeight: '800',
-    marginTop: 4,
-    lineHeight: 22,
-  },
-  zoneValue: {
-    color: '#FFF',
-    fontSize: 15,
+  greetingText: {
+    color: colors.textMuted,
+    fontSize: 14,
     fontWeight: '700',
-    marginTop: 4,
-    lineHeight: 20,
+    marginBottom: 4,
   },
-  userMetaText: {
-    color: "#FFF",
-    opacity: 0.8,
-    fontSize: 13,
-    fontWeight: "700",
-    marginTop: 4,
+  unitName: {
+    color: '#FFF',
+    fontSize: 24,
+    fontWeight: '900',
   },
-  headerIconRow: {
+  headerIcons: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 12,
   },
-  notifBtn: {
+  iconBtn: {
     width: 44,
     height: 44,
     borderRadius: 16,
-    backgroundColor: "#1A1A1A",
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)"
-  },
-  notifBadge: {
-    position: "absolute",
-    top: 6,
-    right: 4,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: colors.primary,
-    borderWidth: 2,
-    borderColor: "#1A1A1A",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 3,
-  },
-  notifBadgeText: {
-    color: "#FFF",
-    fontSize: 11,
-    fontWeight: "900",
-  },
-  headerAvatarBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: "#1A1A1A",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: '#1A1A1A',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
   },
-
-  // Dynamic Alert Section
-  dynamicSection: {
-    marginTop: -15,
-    marginBottom: 30,
-  },
-  alertCard: {
-    backgroundColor: colors.surfaceElevated,
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-  },
-  alertHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  badge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: colors.primary,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    paddingHorizontal: 4,
   },
-  priorityBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 12,
-    gap: 6,
-  },
-  priorityDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  priorityText: {
+  badgeText: {
+    color: '#FFF',
     fontSize: 10,
     fontWeight: '900',
-    letterSpacing: 0.5,
   },
-  alertTime: {
-    color: 'rgba(255,255,255,0.3)',
+  centerStage: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radarContainer: {
+    width: 160,
+    height: 160,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  radarWave: {
+    position: 'absolute',
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: colors.success,
+  },
+  radarCore: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.4,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  restoreBtn: {
+    marginTop: 20,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 16,
+  },
+  restoreBtnTxt: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  statusText: {
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 1,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  agentInfo: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.6)',
+    marginBottom: 16,
   },
-  alertType: {
+  statusSubText: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 20,
+  },
+  actionContainer: {
+    paddingBottom: 10,
+  },
+  actionHintText: {
+    color: 'rgba(255,255,255,0.3)',
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  dutyButton: {
+    height: 72,
+    borderRadius: 36,
+    overflow: 'hidden',
+    borderWidth: 2,
+    justifyContent: 'center',
+  },
+  dutyButtonOnline: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  dutyButtonOffline: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  dutyButtonProgress: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+  },
+  dutyButtonContext: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  dutyButtonTxt: {
     color: '#FFF',
     fontSize: 18,
     fontWeight: '900',
-    marginBottom: 4,
+    letterSpacing: 1,
   },
-  alertLocRow: {
+  missionModalContainer: {
+    flex: 1,
+    backgroundColor: '#0A0A0A',
+    justifyContent: 'space-between',
+    padding: 32,
+  },
+  missionModalHeader: {
+    alignItems: 'center',
+    marginTop: 60,
+  },
+  minimizeBtn: {
+    position: 'absolute',
+    top: -20,
+    right: -10,
+    width: 48,
+    height: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    borderRadius: 24,
+  },
+  missionModalPulseTxt: {
+    color: colors.primary,
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: 4,
+    marginTop: 16,
+  },
+  missionModalBody: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  missionModalTitle: {
+    color: '#FFF',
+    fontSize: 32,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  missionModalRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.05)',
+    padding: 16,
+    borderRadius: 16,
+    gap: 12,
+    marginBottom: 20,
+  },
+  missionModalLoc: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  missionModalTime: {
+    color: colors.textMuted,
+    fontSize: 16,
+    fontWeight: '700',
     marginBottom: 12,
   },
-  alertLocText: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  alertFooter: {
-    marginTop: 4,
-  },
-  consultButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.secondary,
-    paddingVertical: 10,
-    borderRadius: 14,
-    gap: 8,
-  },
-  consultButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  standbyCard: {
-    backgroundColor: colors.glassBackground,
-    borderRadius: 24,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: colors.borderHairline,
-  },
-  standbyContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  standbyIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 18,
-    backgroundColor: colors.secondary + '10',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  radarCircle: {
-    position: 'absolute',
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    borderWidth: 2,
-    borderColor: colors.secondary,
-  },
-  standbyTitle: {
-    color: '#FFF',
-    fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 2,
-  },
-  standbyDesc: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 12,
-    lineHeight: 16,
-    fontWeight: '500',
-  },
-  // Shortcuts
-  sectionHeading: {
-    fontSize: 13,
+  missionModalPriority: {
+    fontSize: 22,
     fontWeight: '900',
-    color: colors.textMuted,
-    letterSpacing: 1,
-    marginBottom: 20,
-    marginTop: 10,
-    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
-  shortcutsGrid: {
+  missionModalFooter: {
+    paddingBottom: 40,
+  },
+  missionModalHint: {
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center',
+    fontSize: 14,
+    marginBottom: 24,
+  },
+  missionModalActionBtn: {
+    backgroundColor: colors.success,
+    height: 80,
+    borderRadius: 40,
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  shortcutCard: {
-    width: '48%',
-    backgroundColor: colors.glassBackground,
-    borderRadius: 32,
-    padding: 24,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: colors.borderHairline,
-  },
-  shortcutIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 16,
+    gap: 16,
+    shadowColor: colors.success,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
   },
-  shortcutTitle: {
-    fontSize: 15,
-    fontWeight: '800',
+  missionModalBtnTxt: {
     color: '#FFF',
-    marginBottom: 4,
+    fontSize: 20,
+    fontWeight: '900',
+    letterSpacing: 1,
   },
-  shortcutDesc: {
-    fontSize: 12,
+  quickAccessRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 32,
+    paddingHorizontal: 8,
+  },
+  quickBtn: {
+    alignItems: 'center',
+    width: '30%',
+  },
+  quickIconBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.05)',
+  },
+  quickBtnTxt: {
     color: colors.textMuted,
-    fontWeight: '500',
-    lineHeight: 16,
-  },
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  }
 });
