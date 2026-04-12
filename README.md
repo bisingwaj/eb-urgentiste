@@ -15,22 +15,17 @@ L'application permet d'intercepter les alertes de la centrale, gérer son statut
 
 ## 🚀 Démarrage Rapide (First-Time Setup)
 
-Ce projet nécessite une configuration d'environnement minutieuse. Si vous utilisez macOS, des précautions spécifiques sont à prendre pour éviter les pertes de temps.
+Ce projet nécessite un environnement de développement mobile robuste (React Native / Expo). Voici les étapes standards pour initialiser l'environnement, que vous soyez sur macOS, Windows ou Linux.
 
 ### 1. Prérequis & Outils
 
-#### 🍎 Utilisateurs macOS (Attention requise)
-L'installation sur macOS peut s'avérer fastidieuse si votre machine n'est pas récente (ex: Mac de 2017 sous Ventura).
-- **Xcode** : Le dernier Xcode de l'App Store ne s'installera probablement pas sur les anciens OS. **Ne forcez pas la mise à jour**. Rendez-vous sur le site [Apple Developer Downloads](https://developer.apple.com/download/all/) pour télécharger manuellement l'archive `.xip` de la version d'Xcode compatible avec votre version exacte de macOS (ex: Xcode 14.x pour Ventura).
-- **Java (JDK)** : Requis absolu pour compiler la partie Android sur votre Mac.
-  1. Installez Java depuis le site officiel d'Oracle.
-  2. Ouvrez le terminal et tapez `java -version`. 
-  3. **Vérification** : La commande DOIT retourner une version valide (ex: `java version "17.0.x"`). Si la commande échoue, l'application Android ne se compilera pas.
-
-#### 🪟🐧 Utilisateurs Windows / Linux
-- Un environnement Node.js valide (LTS).
-- [Android Studio](https://developer.android.com/studio) avec le SDK Android configuré dans vos variables d'environnement (ex: `ANDROID_HOME`).
-- Java (JDK) installé et accessible via `java -version`.
+1. **Node.js (LTS)** : Assurez-vous d'avoir une version LTS de Node.js installée.
+2. **Java Development Kit (JDK 17+)** : Requis pour la compilation de l'application Android.
+   - Installez le JDK depuis Oracle ou via votre gestionnaire de paquets.
+   - Vérifiez l'installation dans votre terminal : `java -version`. L'intégration d'Android Studio échouera sans cela.
+3. **Environnements Natifs** :
+   - **Pour iOS (macOS uniquement)** : Installez **Xcode** via l'App Store ou l'Apple Developer Platform. Assurez-vous d'installer les *Command Line Tools*.
+   - **Pour Android (Cross-platform)** : Installez **Android Studio**. Configurez le SDK Android et vos variables système (`ANDROID_HOME`, `JAVA_HOME`).
 
 ### 2. Configuration du Projet
 
@@ -42,28 +37,28 @@ L'installation sur macOS peut s'avérer fastidieuse si votre machine n'est pas r
    ```
 
 2. **Setup des Variables d'Environnement** :
-   L'application dépend massivement de Supabase et de clés externes (Mapbox, Agora).
+   L'application interagit avec Supabase et des SDK externes (Mapbox, Agora).
    ```bash
    cp .local.env.example .local.env
    ```
-   *Remplissez le fichier `.local.env` avec vos clés secrètes d'environnement.*
+   *Remplissez impérativement le fichier `.local.env` avec toutes vos clés.*
 
-### 3. Lancer l'Application (Device Physique Recommandé)
+### 3. Lancer l'Application (Device Physique vs Virtuel)
 
-> [!WARNING]  
-> **Avertissement de Performance** : 
-> L'utilisation d'un émulateur Android ou du Simulateur iOS natif consomme énormément de RAM et ralentira excessivement les ordinateurs (particulièrement les anciens Mac).
+> [!TIP]  
+> **Recommandation de Développement** : 
+> Les émulateurs virtuels peuvent consommer énormément de RAM. Pour une boucle de développement très rapide et fluide, **nous recommandons fortement l'utilisation d'un téléphone physique**.
 
-**Méthode recommandée : Appareil externe via Expo Go**
-Pour un retour visuel ultra-rapide et tester l'application dans des conditions réelles (ex: Samsung Galaxy S20 Ultra, iPhone) :
+**Option A : Appareil Physique via Expo Go (Recommandée)**
+1. Téléchargez l'application **Expo Go** sur vote mobile (App Store / Google Play).
+2. Vérifiez que votre mobile et votre ordinateur sont sur le même réseau local (Wi-Fi).
+3. Lancez le serveur local : `npx expo start --clear`
+4. Scannez le **QR Code** qui s'affiche dans votre terminal via Expo Go (Android) ou l'appareil photo (iOS).
 
-1. Téléchargez l'application **Expo Go** sur votre téléphone marin (disponible sur [App Store](https://apps.apple.com/app/expo-go/id982107779) / [Play Store](https://play.google.com/store/apps/details?id=host.exp.exponent)).
-2. Connectez votre téléphone au même réseau Wi-Fi que votre ordinateur.
-3. Lancez le serveur local :
-   ```bash
-   npx expo start --clear
-   ```
-4. Scannez le **QR Code** qui s'affiche dans votre terminal avec l'appareil photo de votre téléphone (ou directement dans l'app Expo Go sur Android).
+**Option B : Dispositif Virtuel (Émulateur)**
+1. Ouvrez initialement votre émulateur via Android Studio (AVD Manager) ou votre simulateur iOS via Xcode.
+2. Lancez le serveur local : `npx expo start`
+3. Appuyez sur la touche `a` (Android) ou `i` (iOS) dans le terminal pour y lancer l'application.
 
 ---
 
