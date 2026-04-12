@@ -57,9 +57,9 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             });
           };
 
-          const activeColor = colors.secondary;
-          const inactiveColor = 'rgba(255, 255, 255, 0.52)';
-          const activeBg = 'rgba(255, 255, 255, 0.96)';
+          const activeColor = '#FFFFFF';
+          const inactiveColor = 'rgba(255, 255, 255, 0.4)';
+          const activeBg = 'rgba(255, 255, 255, 0.12)';
 
           return (
             <TouchableOpacity
@@ -109,12 +109,13 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     height: 64,
-    backgroundColor: colors.secondary,
+    backgroundColor: 'rgba(15, 15, 15, 0.95)',
     borderRadius: 32,
     alignItems: 'center',
     paddingHorizontal: 8,
     justifyContent: 'space-between',
-    borderWidth: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   tabItem: {
     height: 48,
