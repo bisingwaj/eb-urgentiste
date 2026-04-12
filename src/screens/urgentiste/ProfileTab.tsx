@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useAuth } from "../../contexts/AuthContext";
 import { useAppLock } from "../../contexts/AppLockContext";
+import { useNotifications } from "../../hooks/useNotifications";
 import { colors } from "../../theme/colors";
 import { MaterialIcons } from "@expo/vector-icons";
 
@@ -50,6 +51,7 @@ function InfoRow({ icon, iconTint, label, value, valueLines = 3 }: InfoRowProps)
 
 export function ProfileTab({ navigation }: any) {
   const { profile, signOut } = useAuth();
+  const { unreadCount } = useNotifications();
   const [avatarLoadError, setAvatarLoadError] = useState(false);
 
   useEffect(() => {
@@ -137,6 +139,29 @@ export function ProfileTab({ navigation }: any) {
             </View>
           </View>
         </View>
+
+        <SectionLabel>Général</SectionLabel>
+        <Card>
+          <TouchableOpacity
+            style={styles.navRow}
+            activeOpacity={0.7}
+            onPress={() => navigation.navigate("Notifications")}
+          >
+            <View style={[styles.infoIconWrap, { backgroundColor: `${colors.primary}18` }]}>
+              <MaterialIcons name="notifications" color={colors.primary} size={18} />
+              {unreadCount > 0 && (
+                <View style={styles.badgeIndicator} />
+              )}
+            </View>
+            <View style={styles.navRowBody}>
+              <Text style={styles.navRowTitle}>Notifications</Text>
+              <Text style={styles.navRowSub}>
+                {unreadCount > 0 ? `${unreadCount} nouvelle(s) notification(s)` : "Aucune nouvelle notification"}
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" color={colors.textMuted} size={22} />
+          </TouchableOpacity>
+        </Card>
 
         <SectionLabel>Identité</SectionLabel>
         <Card>
@@ -379,6 +404,17 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "500",
     color: colors.textMuted,
+  },
+  badgeIndicator: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#FF5252",
+    borderWidth: 1.5,
+    borderColor: colors.surface,
   },
 
   logoutBtn: {
