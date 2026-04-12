@@ -40,7 +40,11 @@ const PulseRadar = ({ isActive }: { isActive: boolean }) => {
         <Animated.View style={[styles.radarWave, { transform: [{ scale }], opacity }]} />
       )}
       <View style={[styles.radarCore, isActive ? { backgroundColor: colors.success } : { backgroundColor: colors.textMuted }]}>
-        <MaterialCommunityIcons name={isActive ? "radar" : "radar-off"} size={48} color="#FFF" />
+        {isActive ? (
+          <MaterialCommunityIcons name="radar" size={48} color="#FFF" />
+        ) : (
+          <MaterialIcons name="portable-wifi-off" size={44} color="#FFF" />
+        )}
       </View>
     </View>
   );
