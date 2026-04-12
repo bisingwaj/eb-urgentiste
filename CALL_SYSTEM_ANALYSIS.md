@@ -214,7 +214,7 @@ supabase
 
 ```
 MOBILE SECOURISTE                 BACKEND                         DASHBOARD WEB
-     │                                │                                │
+     │                                 │                                 │
      ├── INSERT call_history ─────────►│                                │
      │   (call_type: internal,         │                                │
      │    role: secouriste,            │                                │
@@ -234,9 +234,9 @@ MOBILE SECOURISTE                 BACKEND                         DASHBOARD WEB
      │                                 │    voient le status changer    │
      │                                 │    et dismissent l'overlay     │
      │                                 │                                │
-     │   Agora joinChannel() ◄─────────│────── Agora joinChannel() ────┤
+     │   Agora joinChannel() ◄─────────│────── Agora joinChannel() ──── ┤
      │                                 │                                │
-     │◄──────────── AUDIO ────────────────────────────────────────────►│
+     │◄──────────── AUDIO ────────────────────────────── ──────────────►│
 ```
 
 **Mécanisme de claiming** : Le premier opérateur UPDATE avec `operator_id = self` ET `status = active` WHERE `status = ringing`. Si un autre a déjà claim, l'UPDATE ne match pas (0 rows affected).
