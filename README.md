@@ -1,74 +1,94 @@
-# 🚑 Étoile Bleue - Portail Urgentiste & Hôpital (Mobile)
+# 🚑 Étoile Bleue - Emergency Responder & Hospital Portal
 
-Bienvenue sur le dépôt d'**Étoile Bleue (Mobile)**. Il s'agit de l'application "Mission-Critical" dédiée aux Sapeurs-Pompiers, Médecins Urgentistes et services d'Accueil Hospitalier.
-L'application permet d'intercepter les alertes de la centrale, gérer son statut (standby) et remonter le parcours médical d'urgence en temps réel.
-
----
-
-## 🛠 Tech Stack
-- **Framework** : React Native (Expo SDK 54 / `expo-router`)
-- **Base de données / Auth** : Supabase (PostgreSQL, Realtime, Edge Functions)
-- **Carte & GPS** : RNMapbox
-- **Appels & Visio** : Agora SDK (`react-native-agora`)
+Welcome to the **Étoile Bleue (Mobile)** repository. This "Mission-Critical" application is designed for First Responders, Emergency Physicians, and Hospital Admissions services. 
+It enables real-time interception of emergency alerts, duty status management, and medical intervention tracking.
 
 ---
 
-## 🚀 Démarrage Rapide (First-Time Setup)
+## 🛠 Technology Stack
 
-Ce projet nécessite un environnement de développement mobile robuste (React Native / Expo). Voici les étapes standards pour initialiser l'environnement, que vous soyez sur macOS, Windows ou Linux.
+- **Framework**: React Native with Expo (SDK 54)
+- **Navigation**: Expo Router (File-based routing)
+- **Backend & Auth**: Supabase (PostgreSQL, Realtime, Edge Functions)
+- **Maps & Location**: RNMapbox
+- **Communication**: Agora SDK (Live RTC)
 
-### 1. Prérequis & Outils
+---
 
-1. **Node.js (LTS)** : Assurez-vous d'avoir une version LTS de Node.js installée.
-2. **Java Development Kit (JDK 17+)** : Requis pour la compilation de l'application Android.
-   - Installez le JDK depuis Oracle ou via votre gestionnaire de paquets.
-   - Vérifiez l'installation dans votre terminal : `java -version`. L'intégration d'Android Studio échouera sans cela.
-3. **Environnements Natifs** :
-   - **Pour iOS (macOS uniquement)** : Installez **Xcode** via l'App Store ou l'Apple Developer Platform. Assurez-vous d'installer les *Command Line Tools*.
-   - **Pour Android (Cross-platform)** : Installez **Android Studio**. Configurez le SDK Android et vos variables système (`ANDROID_HOME`, `JAVA_HOME`).
+## 🚀 Getting Started
 
-### 2. Configuration du Projet
+Setting up the project requires a properly configured mobile development environment.
 
-1. **Cloner et installer les dépendances** :
+### 1. Prerequisites
+
+Before starting, ensure you have the following installed on your machine:
+
+- **Node.js (LTS)**: We recommend using NVM to manage Node versions.
+- **Java Development Kit (JDK 17+)**: Essential for Android builds. Ensure `java -version` returns a valid version in your terminal.
+- **Package Manager**: `npm` (Standard)
+
+### 2. Environment Setup
+
+#### 🍏 macOS (iOS & Android)
+- **Xcode**: Required for iOS development. Install via the App Store or download from the [Apple Developer Portal](https://developer.apple.com/download/). Ensure *Command Line Tools* are installed.
+- **CocoaPods**: Required for native iOS dependencies (`brew install cocoapods`).
+
+#### 🪟 Windows / 🐧 Linux (Android)
+- **Android Studio**: Download and install [Android Studio](https://developer.android.com/studio).
+- **Android SDK**: Install the required SDK platforms and build tools via the SDK Manager.
+- **Environment Variables**: Configure `ANDROID_HOME` and add the platform-tools to your `PATH`.
+
+### 3. Installation
+
+1. **Clone the repository**:
    ```bash
    git clone git@github.com:bisingwaj/eb-urgentiste.git
    cd eb-urgentiste
+   ```
+
+2. **Install dependencies**:
+   ```bash
    npm install
    ```
 
-2. **Setup des Variables d'Environnement** :
-   L'application interagit avec Supabase et des SDK externes (Mapbox, Agora).
+3. **Configure Environment Variables**:
    ```bash
    cp .local.env.example .local.env
    ```
-   *Remplissez impérativement le fichier `.local.env` avec toutes vos clés.*
-
-### 3. Lancer l'Application (Device Physique vs Virtuel)
-
-> [!TIP]  
-> **Recommandation de Développement** : 
-> Les émulateurs virtuels peuvent consommer énormément de RAM. Pour une boucle de développement très rapide et fluide, **nous recommandons fortement l'utilisation d'un téléphone physique**.
-
-**Option A : Appareil Physique via Expo Go (Recommandée)**
-1. Téléchargez l'application **Expo Go** sur vote mobile (App Store / Google Play).
-2. Vérifiez que votre mobile et votre ordinateur sont sur le même réseau local (Wi-Fi).
-3. Lancez le serveur local : `npx expo start --clear`
-4. Scannez le **QR Code** qui s'affiche dans votre terminal via Expo Go (Android) ou l'appareil photo (iOS).
-
-**Option B : Dispositif Virtuel (Émulateur)**
-1. Ouvrez initialement votre émulateur via Android Studio (AVD Manager) ou votre simulateur iOS via Xcode.
-2. Lancez le serveur local : `npx expo start`
-3. Appuyez sur la touche `a` (Android) ou `i` (iOS) dans le terminal pour y lancer l'application.
+   *Fill in `.local.env` with your Supabase, Mapbox, and Agora credentials.*
 
 ---
 
-## 📂 Architecture de la Documentation
+## 📱 Development & Testing
 
-La documentation métier approfondie a été rationalisée pour éviter la surcharge cognitive lors de votre intégration. Toutes les documentations de référence se trouvent dans le dossier `docs/` :
+You can run the application on either a physical device or a virtual emulator.
 
-- `docs/APPELS_MOBILE_ET_DASHBOARD.md` : Fonctionnement global de l'interface métier.
-- `docs/HOSPITAL_APP_INTEGRATION.md` & `FLOW_NOUVELLE_ALERTE.md` : Logique de routage des alertes.
-- `docs/PLAN_ACTION_MIGRATION.md` : Suivi technique.
-- `docs/archive/` : Historique des prompts IA et des notes d'idéation brutes pour référence archéologique.
+### Option A: Physical Device (Recommended)
+This is the fastest and most reliable way to test hardware features like GPS and Camera.
+1. Install the **Expo Go** app on your device ([iOS](https://apps.apple.com/app/expo-go/id982107779) / [Android](https://play.google.com/store/apps/details?id=host.exp.exponent)).
+2. Connect your device and computer to the same Wi-Fi network.
+3. Start the project: `npx expo start`
+4. Scan the QR code with your device.
 
-Bon courage pour votre intégration dans l'équipe d'Étoile Bleue !
+### Option B: Virtual Device (Simulator/Emulator)
+Use this if you don't have a physical device available.
+1. **iOS Simulator**: Open Xcode and start a simulator, then press `i` in the terminal.
+2. **Android Emulator**: Open Android Studio, start an AVD (Android Virtual Device), then press `a` in the terminal.
+
+---
+
+## 📂 Documentation Structure
+
+To avoid clutter, documentation is organized into thematic subfolders within the `/docs` directory:
+
+- **/docs/specs**: Technical specifications and architecture overviews.
+- **/docs/workflow**: Detailed emergency and responder workflow diagrams.
+- **/docs/integration**: Guides for integrating with Hospital systems and external SDKs.
+- **/docs/strategy**: Migration plans and project roadmaps.
+- **/docs/analysis**: Deep dives into system components and performance.
+
+*For historical context or legacy prompt logs, refer to the subfolders within `docs/` or previous commit history.*
+
+---
+
+Happy coding for **Étoile Bleue**!
