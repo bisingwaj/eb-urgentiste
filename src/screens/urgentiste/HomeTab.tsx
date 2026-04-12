@@ -8,7 +8,6 @@ import { useActiveMission } from '../../hooks/useActiveMission';
 import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useNotifications } from '../../hooks/useNotifications';
 import { supabase } from '../../lib/supabase';
-import { ProfileIcon, NotificationIcon } from '../../components/icons/TabIcons';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
 const { width } = Dimensions.get('window');
@@ -128,7 +127,7 @@ export function HomeTab({ navigation }: any) {
     Animated.timing(holdProgress, {
       toValue: 1,
       duration: 1000,
-      useNativeDriver: false
+      useNativeDriver: true
     }).start(({ finished }) => {
       if (finished) {
         toggleDuty(!isDutyActive);
@@ -143,7 +142,7 @@ export function HomeTab({ navigation }: any) {
       Animated.timing(holdProgress, {
         toValue: 0,
         duration: 200,
-        useNativeDriver: false
+        useNativeDriver: true
       }).start();
       setIsHolding(false);
     }
@@ -220,21 +219,8 @@ export function HomeTab({ navigation }: any) {
       {/* MAIN UI - Using Fixed Layout (our approach) but integrating Header elements from main */}
       <View style={styles.standbyLayout}>
         <View style={styles.header}>
-          <View style={styles.headerTopRow}>
-            <View>
-              <Text style={styles.greetingText}>Bonjour {profile?.first_name || ' '}</Text>
-              <Text style={styles.unitName}>{unitName || 'Chargement...'}</Text>
-            </View>
-            <View style={styles.headerIcons}>
-               <AppTouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Notifications')}>
-                  <NotificationIcon color={unreadCount > 0 ? colors.secondary : '#FFF'} size={24} />
-                  {unreadCount > 0 && <View style={styles.badge}><Text style={styles.badgeText}>{unreadCount}</Text></View>}
-               </AppTouchableOpacity>
-               <AppTouchableOpacity style={styles.iconBtn} onPress={() => navigation.navigate('Profil')}>
-                  <ProfileIcon color="#FFF" size={24} />
-               </AppTouchableOpacity>
-            </View>
-          </View>
+          <Text style={styles.unitLabel}>UNITÉ ASSIGNÉE</Text>
+          <Text style={styles.unitName}>{unitName || 'Chargement...'}</Text>
         </View>
 
         <View style={styles.centerStage}>
@@ -255,7 +241,7 @@ export function HomeTab({ navigation }: any) {
               <Text style={[styles.statusText, isDutyActive ? { color: colors.success } : { color: colors.textMuted }]}>
                 {isDutyActive ? "SERVICE ACTIF" : "SERVICE DÉSACTIVÉ"}
               </Text>
-              <Text style={styles.agentInfo}>👤 {profile?.last_name || profile?.first_name || 'Agent'}</Text>
+              <Text style={styles.agentInfo}>Agent: {profile?.last_name || profile?.first_name || 'Inconnu'}</Text>
               <Text style={styles.statusSubText}>
                 {isDutyActive
                   ? "Vous êtes connecté et visible par la centrale.\nEn attente d'une nouvelle mission..."
@@ -280,7 +266,12 @@ export function HomeTab({ navigation }: any) {
               styles.dutyButtonProgress,
               isDutyActive ? { backgroundColor: 'rgba(0,0,0,0.3)' } : { backgroundColor: 'rgba(255,255,255,0.2)' },
               {
-                width: holdProgress.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] })
+                width: '100%',
+                transform: [
+                  { translateX: -((width - 48) / 2) },
+                  { scaleX: holdProgress },
+                  { translateX: ((width - 48) / 2) }
+                ]
               }
             ]} />
 
@@ -337,53 +328,21 @@ const styles = StyleSheet.create({
   },
   header: {
     marginTop: 10,
-  },
-  headerTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  greetingText: {
+  unitLabel: {
     color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 2,
     marginBottom: 4,
+    textAlign: 'center',
   },
   unitName: {
     color: '#FFF',
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '900',
-  },
-  headerIcons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  iconBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: '#1A1A1A',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  badge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    backgroundColor: colors.primary,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-  },
-  badgeText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: '900',
+    textAlign: 'center',
   },
   centerStage: {
     flex: 1,
@@ -441,6 +400,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: 'rgba(255,255,255,0.6)',
     marginBottom: 16,
+    textAlign: 'center',
   },
   statusSubText: {
     color: 'rgba(255,255,255,0.4)',
