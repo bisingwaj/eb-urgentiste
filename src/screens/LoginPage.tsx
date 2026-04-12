@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, ActivityIndicator, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ActivityIndicator, LayoutAnimation, Platform, UIManager, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -23,6 +23,15 @@ export function LoginPage({ navigation }: any) {
   const [pin, setPin] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const pinValueAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.timing(pinValueAnim, {
+      toValue: activeInput === 'PIN' ? 1 : 0,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  }, [activeInput]);
 
   const onNumpadTap = (number: string) => {
     setErrorMessage(null);
@@ -142,33 +151,43 @@ export function LoginPage({ navigation }: any) {
             </AppTouchableOpacity>
 
             {/* PIN FIELD */}
-            {identifier.length === 6 && (
-              <View style={styles.pinSection}>
-                <Text style={styles.stepTitle}>CODE PIN SECRET</Text>
-                <View style={styles.boxRow}>
-                  {[0, 1, 2, 3, 4, 5].map((index) => {
-                    const isFilled = index < pin.length;
-                    const isCurrent = activeInput === 'PIN' && index === pin.length;
+            <Animated.View 
+              style={[
+                styles.pinSection,
+                {
+                  opacity: pinValueAnim,
+                  transform: [
+                    { translateY: pinValueAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) },
+                    { scale: pinValueAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }
+                  ]
+                }
+              ]}
+              pointerEvents={activeInput === 'PIN' ? 'auto' : 'none'}
+            >
+              <Text style={styles.stepTitle}>CODE PIN SECRET</Text>
+              <View style={styles.boxRow}>
+                {[0, 1, 2, 3, 4, 5].map((index) => {
+                  const isFilled = index < pin.length;
+                  const isCurrent = activeInput === 'PIN' && index === pin.length;
 
-                    return (
-                      <View
-                        key={`pin-${index}`}
-                        style={[
-                          styles.box,
-                          {
-                            backgroundColor: isFilled ? 'rgba(255,255,255,0.1)' : 'transparent',
-                            borderColor: isCurrent ? colors.secondary : (isFilled ? 'rgba(255,255,255,0.54)' : 'rgba(255,255,255,0.24)'),
-                            borderWidth: isCurrent ? 2 : 1,
-                          }
-                        ]}
-                      >
-                        {isFilled && <View style={styles.dot} />}
-                      </View>
-                    );
-                  })}
-                </View>
+                  return (
+                    <View
+                      key={`pin-${index}`}
+                      style={[
+                        styles.box,
+                        {
+                          backgroundColor: isFilled ? 'rgba(255,255,255,0.1)' : 'transparent',
+                          borderColor: isCurrent ? colors.secondary : (isFilled ? 'rgba(255,255,255,0.54)' : 'rgba(255,255,255,0.24)'),
+                          borderWidth: isCurrent ? 2 : 1,
+                        }
+                      ]}
+                    >
+                      {isFilled && <View style={styles.dot} />}
+                    </View>
+                  );
+                })}
               </View>
-            )}
+            </Animated.View>
           </View>
 
           <View style={styles.actionArea}>
