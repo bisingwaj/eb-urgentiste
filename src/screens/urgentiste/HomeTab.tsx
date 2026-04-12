@@ -124,11 +124,13 @@ export function HomeTab({ navigation }: any) {
 
   const handlePressIn = () => {
     setIsHolding(true);
+    holdProgress.setValue(0);
     Animated.timing(holdProgress, {
       toValue: 1,
       duration: 1000,
       useNativeDriver: true
     }).start(({ finished }) => {
+      // Re-check value to be absolutely sure it's not a cancelled animation reporting finished
       if (finished) {
         toggleDuty(!isDutyActive);
         holdProgress.setValue(0);
@@ -138,14 +140,15 @@ export function HomeTab({ navigation }: any) {
   };
 
   const handlePressOut = () => {
-    if (isHolding) {
+    setIsHolding(false);
+    holdProgress.stopAnimation(() => {
+      // Smoothly return to 0
       Animated.timing(holdProgress, {
         toValue: 0,
-        duration: 200,
+        duration: 250,
         useNativeDriver: true
       }).start();
-      setIsHolding(false);
-    }
+    });
   };
 
   const hasActiveAlert = !!activeMission && activeMission.dispatch_status !== 'completed';
