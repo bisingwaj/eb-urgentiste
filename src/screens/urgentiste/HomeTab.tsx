@@ -109,6 +109,7 @@ export function HomeTab({ navigation }: any) {
   const holdProgress = useRef(new Animated.Value(0)).current;
   const confirmProgress = useRef(new Animated.Value(0)).current; // For mission confirmation
   const [isHolding, setIsHolding] = useState(false);
+  const [isCalling, setIsCalling] = useState(false);
   const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [showMapPreview, setShowMapPreview] = useState(false);
@@ -309,6 +310,12 @@ export function HomeTab({ navigation }: any) {
   };
 
   const handleCallCentral = () => {
+    if (isCalling) return;
+    setIsCalling(true);
+    
+    // Safety timeout to re-enable button if something fails or after navigation
+    setTimeout(() => setIsCalling(false), 3000);
+
     if (activeCall) {
       navigation.navigate('CallCenter', { resume: true });
     } else {
