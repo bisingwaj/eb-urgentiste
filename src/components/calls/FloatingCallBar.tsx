@@ -6,6 +6,7 @@ import { navigationRef } from '../../navigation/navigationRef';
 import { colors } from '../../theme/colors';
 import { useCallSession } from '../../contexts/CallSessionContext';
 import { AppTouchableOpacity } from '../ui/AppTouchableOpacity';
+import { TAB_BAR_FLOAT_GAP, FLOATING_TAB_BAR_HEIGHT } from '../../navigation/tabBarLayout';
 
 export function FloatingCallBar() {
   const insets = useSafeAreaInsets();
@@ -21,13 +22,14 @@ export function FloatingCallBar() {
     }
   };
 
+  const bottomOffset = insets.bottom + TAB_BAR_FLOAT_GAP + FLOATING_TAB_BAR_HEIGHT + (Platform.OS === 'android' ? 16 : 0) + 12;
+
   return (
     <View
       style={[
         styles.wrap,
         {
-          paddingBottom: Math.max(insets.bottom, 10),
-          paddingTop: 8,
+          bottom: bottomOffset,
         },
       ]}
       pointerEvents="box-none"
