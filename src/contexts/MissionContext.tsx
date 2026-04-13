@@ -362,14 +362,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           console.log('[Mission] 🚨 NOUVELLE MISSION REÇUE !', payload.new?.id);
           // Déclencher l'alarme sonore continue (gérée par AlertAlarmManager)
           DeviceEventEmitter.emit('NEW_MISSION_ALERT');
-          fetchActiveMission({ silent: true }).then(() => {
-            Alert.alert(
-              '🚨 NOUVELLE MISSION',
-              'La centrale vous a assigné une intervention urgente.',
-              [{ text: 'VOIR LA MISSION', style: 'default' }],
-              { cancelable: false }
-            );
-          });
+          void fetchActiveMission({ silent: true });
         }
       )
       .on(
