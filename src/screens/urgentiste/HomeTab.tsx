@@ -216,6 +216,8 @@ export function HomeTab({ navigation }: any) {
         // SUCCESS
         confirmProgress.setValue(0);
         setIsModalMinimized(true);
+        // CRITICAL: Mark mission as in-progress in Supabase
+        void updateDispatchStatus('en_route');
         navigation.navigate('Signalement', { mission: activeMission });
       } else {
         // RESET
