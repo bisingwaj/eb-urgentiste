@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, StatusBar, Animated, Alert, ActivityIndicator, Modal, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, Animated, Alert, ActivityIndicator, Modal, Dimensions, Platform, ScrollView } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -9,6 +9,8 @@ import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useNotifications } from '../../hooks/useNotifications';
 import { supabase } from '../../lib/supabase';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
+import * as Location from 'expo-location';
+import Mapbox from '@rnmapbox/maps';
 
 const { width } = Dimensions.get('window');
 
@@ -70,8 +72,12 @@ export function HomeTab({ navigation }: any) {
 
   // Status Hold Action Animation
   const holdProgress = useRef(new Animated.Value(0)).current;
+  const alertPulse = useRef(new Animated.Value(0)).current;
   const [isHolding, setIsHolding] = useState(false);
   const [isModalMinimized, setIsModalMinimized] = useState(false);
+  const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
+  const [showMapPreview, setShowMapPreview] = useState(false);
+  const [showSymptoms, setShowSymptoms] = useState(false);
 
   useEffect(() => {
     if (profile) setIsDutyActive(profile.available);
@@ -80,8 +86,18 @@ export function HomeTab({ navigation }: any) {
   useEffect(() => {
     if (!activeMission || activeMission.dispatch_status === 'completed') {
       setIsModalMinimized(false);
+      alertPulse.stopAnimation();
+      alertPulse.setValue(0);
+    } else {
+      // Start subtle pulsing for the alert icon in the dashboard
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(alertPulse, { toValue: 1, duration: 1000, useNativeDriver: true }),
+          Animated.timing(alertPulse, { toValue: 0, duration: 1000, useNativeDriver: true }),
+        ])
+      ).start();
     }
-  }, [activeMission]);
+  }, [activeMission?.id, activeMission?.dispatch_status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,12 +149,11 @@ export function HomeTab({ navigation }: any) {
       useNativeDriver: true
     }).start(({ finished }) => {
       if (finished) {
-        // Toggle state immediately to trigger re-render with new styles
-        // The holdProgress being 1 will be hidden by the new button color
+        // Toggle state immediately
         toggleDuty(!isDutyActive);
         setIsHolding(false);
-        // We don't reset holdProgress here to avoid a flash; 
-        // it will be reset by the logic in onPressOut or subsequent interactions
+        // FIX: Reset immediately to avoid flash when re-rendering with new state
+        holdProgress.setValue(0);
       }
     });
   };
@@ -146,19 +161,59 @@ export function HomeTab({ navigation }: any) {
   const handlePressOut = () => {
     setIsHolding(false);
     holdProgress.stopAnimation((val) => {
-      // If we finished (val >= 1), we are already in the new state.
-      // If we released early, we must return to 0 smoothly.
-      if (val < 1) {
+      // If we released early (val < 1), we return to 0 smoothly
+      if (val < 1 && val > 0) {
         Animated.timing(holdProgress, {
           toValue: 0,
           duration: 250,
           useNativeDriver: true
         }).start();
-      } else {
-        // We reached 100%, now reset for next time after a tiny delay
-        setTimeout(() => holdProgress.setValue(0), 100);
       }
+      // If val was already 1 (finished), it was handled in handlePressIn
     });
+  };
+
+  // Fetch user location for distance calculation
+  useEffect(() => {
+    if (activeMission && !isModalMinimized) {
+      (async () => {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') return;
+        let loc = await Location.getCurrentPositionAsync({});
+        setUserLocation(loc);
+      })();
+    }
+  }, [activeMission?.id, isModalMinimized]);
+
+  const calculateDistance = () => {
+    if (!userLocation || !activeMission?.location?.lat || !activeMission?.location?.lng) return null;
+    const R = 6371; // km
+    const dLat = (activeMission.location.lat - userLocation.coords.latitude) * (Math.PI / 180);
+    const dLon = (activeMission.location.lng - userLocation.coords.longitude) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(userLocation.coords.latitude * (Math.PI / 180)) *
+        Math.cos(activeMission.location.lat * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return (R * c).toFixed(1);
+  };
+
+  const getVictimMetadata = () => {
+    if (!activeMission) return { age: '—', gender: '—' };
+    const ageResp = activeMission.sos_responses?.find(r => 
+      ['age', 'age_approx', 'Tranche d’âge'].includes(r.question_key) || 
+      r.question_text?.toLowerCase().includes('âge')
+    );
+    const genderResp = activeMission.sos_responses?.find(r => 
+      ['sexe', 'gender', 'Sexe'].includes(r.question_key) || 
+      r.question_text?.toLowerCase().includes('sexe')
+    );
+    return {
+      age: ageResp?.answer || '—',
+      gender: genderResp?.answer || '—'
+    };
   };
 
   const hasActiveAlert = !!activeMission && activeMission.dispatch_status !== 'completed';
@@ -167,64 +222,163 @@ export function HomeTab({ navigation }: any) {
     <TabScreenSafeArea style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#050505" />
 
-      {/* EMERGENCY MODAL TAKEOVER - Our approach prioritize Modal hijacking */}
+      {/* MAP PREVIEW MODAL */}
+      <Modal visible={showMapPreview} animationType="slide" transparent={false}>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <Mapbox.MapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Dark}>
+            <Mapbox.Camera
+              zoomLevel={14}
+              centerCoordinate={
+                activeMission?.location?.lng != null && activeMission?.location?.lat != null
+                  ? [activeMission.location.lng, activeMission.location.lat]
+                  : [15.3070, -4.3224]
+              }
+            />
+            {activeMission?.location?.lng != null && activeMission?.location?.lat != null && (
+              <Mapbox.PointAnnotation id="victim" coordinate={[activeMission.location.lng, activeMission.location.lat]}>
+                <View style={styles.victimMarker} />
+              </Mapbox.PointAnnotation>
+            )}
+            {userLocation && (
+              <Mapbox.PointAnnotation id="me" coordinate={[userLocation.coords.longitude, userLocation.coords.latitude]}>
+                <View style={styles.meMarker} />
+              </Mapbox.PointAnnotation>
+            )}
+          </Mapbox.MapView>
+          <AppTouchableOpacity style={styles.closeMapBtn} onPress={() => setShowMapPreview(false)}>
+            <MaterialIcons name="close" size={28} color="#FFF" />
+          </AppTouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* EMERGENCY DASHBOARD MODAL */}
       <Modal
         visible={hasActiveAlert && !isModalMinimized}
-        animationType="slide"
+        animationType="fade"
         presentationStyle="overFullScreen"
         transparent={false}
       >
         <View style={styles.missionModalContainer}>
           <View style={styles.missionModalHeader}>
-            <AppTouchableOpacity
-              style={styles.minimizeBtn}
-              onPress={() => setIsModalMinimized(true)}
-            >
-              <MaterialIcons name="keyboard-arrow-down" size={36} color="#FFF" />
-            </AppTouchableOpacity>
-
-            <MaterialIcons name="warning" size={48} color={colors.primary} />
-            <Text style={styles.missionModalPulseTxt}>APPEL D'URGENCE</Text>
-          </View>
-
-          <View style={styles.missionModalBody}>
-            <Text style={styles.missionModalTitle}>{activeMission?.title}</Text>
-
-            <View style={styles.missionModalRow}>
-              <MaterialIcons name="place" size={24} color={colors.textMuted} />
-              <Text style={styles.missionModalLoc}>{typeof activeMission?.location === 'string' ? activeMission.location : (activeMission?.location?.address || 'Localisation inconnue')}</Text>
+            <View style={styles.headerTopRow}>
+               <View style={styles.refBadge}>
+                  <Text style={styles.refBadgeTxt}>REF: {activeMission?.reference || '---'}</Text>
+               </View>
+               <AppTouchableOpacity
+                style={styles.minimizeBtnDashboard}
+                onPress={() => setIsModalMinimized(true)}
+              >
+                <MaterialIcons name="keyboard-arrow-down" size={28} color="#FFF" />
+              </AppTouchableOpacity>
             </View>
 
-            <Text style={styles.missionModalTime}>Référence : {activeMission?.reference || 'N/A'}</Text>
-            <Text style={[styles.missionModalPriority, { color: activeMission?.priority === 'critical' ? colors.primary : colors.secondary }]}>
-              PRIORITÉ {activeMission?.priority === 'critical' ? 'MAXIMALE' : 'HAUTE'}
-            </Text>
+            <View style={styles.urgentHeaderRow}>
+               <MaterialIcons name="warning" size={32} color={colors.primary} />
+               <Text style={styles.urgentTitle}>MISSION ASSIGNÉE</Text>
+            </View>
           </View>
 
-          <View style={styles.missionModalFooter}>
-            <Text style={styles.missionModalHint}>Votre interface de navigation va s'ouvrir. Ne fermez pas l'application.</Text>
-            <AppTouchableOpacity
-              style={styles.missionModalActionBtn}
-              onPress={() => {
-                setIsModalMinimized(true);
-                navigation.navigate('Signalement', { mission: activeMission });
-              }}
-            >
-              <MaterialIcons name="assignment-turned-in" size={32} color="#FFF" />
-              <Text style={styles.missionModalBtnTxt}>GÉRER L'INTERVENTION</Text>
-            </AppTouchableOpacity>
+          <ScrollView style={styles.dashboardScroll} showsVerticalScrollIndicator={false}>
+            {/* CARD: WHO */}
+            <View style={styles.dashboardCard}>
+              <View style={styles.cardHeaderRow}>
+                <MaterialIcons name="person" size={20} color={colors.secondary} />
+                <Text style={styles.cardLabel}>IDENTITÉ VICTIME</Text>
+              </View>
+              <Text style={styles.victimNamePrimary}>{activeMission?.caller?.name || 'Anonyme'}</Text>
+              <View style={styles.victimMetaRow}>
+                <View style={styles.metaBadge}>
+                   <Text style={styles.metaBadgeLbl}>ÂGE</Text>
+                   <Text style={styles.metaBadgeVal}>{getVictimMetadata().age}</Text>
+                </View>
+                <View style={styles.metaBadge}>
+                   <Text style={styles.metaBadgeLbl}>SEXE</Text>
+                   <Text style={styles.metaBadgeVal}>{getVictimMetadata().gender}</Text>
+                </View>
+              </View>
+            </View>
 
-            {activeMission?.dispatch_status === 'dispatched' && (
+            {/* CARD: WHAT */}
+            <View style={styles.dashboardCard}>
+              <View style={styles.cardHeaderRow}>
+                <MaterialIcons name="medical-services" size={20} color={colors.secondary} />
+                <Text style={styles.cardLabel}>MOTIF D'APPEL</Text>
+              </View>
+              <Text style={styles.incidentMotifTxt}>{activeMission?.title}</Text>
+              
+              <AppTouchableOpacity 
+                style={styles.symptomsToggle} 
+                onPress={() => setShowSymptoms(!showSymptoms)}
+              >
+                <Text style={styles.symptomsToggleTxt}>
+                  {showSymptoms ? "Masquer les détails" : "Voir symptômes & questionnaire"}
+                </Text>
+                <MaterialIcons name={showSymptoms ? "expand-less" : "expand-more"} size={20} color={colors.secondary} />
+              </AppTouchableOpacity>
+
+              {showSymptoms && (
+                <View style={styles.symptomsList}>
+                  {activeMission?.sos_responses && activeMission.sos_responses.length > 0 ? (
+                    activeMission.sos_responses.map((resp, i) => (
+                      <View key={i} style={styles.symptomItem}>
+                        <Text style={styles.symptomQuest}>{resp.question_text || resp.question_key}:</Text>
+                        <Text style={styles.symptomAns}>{resp.answer || '---'}</Text>
+                      </View>
+                    ))
+                  ) : (
+                    <Text style={styles.noSymptomsTxt}>Aucune donnée supplémentaire disponible.</Text>
+                  )}
+                  {activeMission?.description && (
+                     <Text style={styles.incidentDescTxt}>Note: {activeMission.description}</Text>
+                  )}
+                </View>
+              )}
+            </View>
+
+            {/* CARD: WHERE */}
+            <View style={styles.dashboardCard}>
+              <View style={styles.cardHeaderRow}>
+                <MaterialIcons name="place" size={20} color={colors.secondary} />
+                <Text style={styles.cardLabel}>LOCALISATION</Text>
+              </View>
+              <Text style={styles.locationAddrTxt}>{activeMission?.location?.address || 'Adresse non disponible'}</Text>
+              
+              <View style={styles.distRow}>
+                <View style={styles.distInfo}>
+                   <Text style={styles.distVal}>{calculateDistance() || '---'}</Text>
+                   <Text style={styles.distUnit}>KM de votre position</Text>
+                </View>
+                <AppTouchableOpacity style={styles.mapPreviewBtn} onPress={() => setShowMapPreview(true)}>
+                   <MaterialIcons name="map" size={20} color="#FFF" />
+                   <Text style={styles.mapPreviewBtnTxt}>VOIR CARTE</Text>
+                </AppTouchableOpacity>
+              </View>
+            </View>
+          </ScrollView>
+
+          <View style={styles.missionModalFooter}>
+            <View style={styles.emergencyActionsRow}>
               <AppTouchableOpacity
-                style={{ marginTop: 24, alignItems: 'center' }}
+                style={styles.btnDashboardPrimary}
                 onPress={() => {
                   setIsModalMinimized(true);
-                  navigation.navigate('CallCenter');
+                  navigation.navigate('Signalement', { mission: activeMission });
                 }}
               >
-                <Text style={{ color: colors.primary, fontSize: 16, fontWeight: '700' }}>APPELER LA CENTRALE (REFUSER)</Text>
+                <MaterialIcons name="check-circle" size={24} color="#000" />
+                <Text style={styles.btnDashboardPrimaryTxt}>CONFIRMER RÉCEPTION</Text>
               </AppTouchableOpacity>
-            )}
+            </View>
+
+            <AppTouchableOpacity
+              style={styles.refuseBtn}
+              onPress={() => {
+                setIsModalMinimized(true);
+                navigation.navigate('CallCenter');
+              }}
+            >
+              <Text style={styles.refuseBtnTxtLabel}>APPELER LA CENTRALE / ANNULER</Text>
+            </AppTouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -469,102 +623,264 @@ const styles = StyleSheet.create({
   },
   missionModalContainer: {
     flex: 1,
-    backgroundColor: '#0A0A0A',
-    justifyContent: 'space-between',
-    padding: 32,
+    backgroundColor: '#050505',
+    padding: 24,
   },
   missionModalHeader: {
-    alignItems: 'center',
-    marginTop: 60,
-  },
-  minimizeBtn: {
-    position: 'absolute',
-    top: -20,
-    right: -10,
-    width: 48,
-    height: 48,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    borderRadius: 24,
-  },
-  missionModalPulseTxt: {
-    color: colors.primary,
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: 4,
-    marginTop: 16,
-  },
-  missionModalBody: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  missionModalTitle: {
-    color: '#FFF',
-    fontSize: 32,
-    fontWeight: '900',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  missionModalRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    padding: 16,
-    borderRadius: 16,
-    gap: 12,
+    marginTop: 40,
     marginBottom: 20,
   },
-  missionModalLoc: {
-    color: '#FFF',
-    fontSize: 18,
-    fontWeight: '600',
-    flexShrink: 1,
-  },
-  missionModalTime: {
-    color: colors.textMuted,
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 12,
-  },
-  missionModalPriority: {
-    fontSize: 22,
-    fontWeight: '900',
-    letterSpacing: 2,
-  },
-  missionModalFooter: {
-    paddingBottom: 40,
-  },
-  missionModalHint: {
-    color: 'rgba(255,255,255,0.4)',
-    textAlign: 'center',
-    fontSize: 14,
-    marginBottom: 24,
-  },
-  missionModalActionBtn: {
-    backgroundColor: colors.success,
-    height: 80,
-    borderRadius: 40,
+  headerTopRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  refBadge: {
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  refBadgeTxt: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  minimizeBtnDashboard: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.05)',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 16,
-    shadowColor: colors.success,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.5,
-    shadowRadius: 20,
   },
-  missionModalBtnTxt: {
-    color: '#FFF',
+  urgentHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  urgentTitle: {
+    color: colors.primary,
     fontSize: 20,
     fontWeight: '900',
     letterSpacing: 1,
   },
+  dashboardScroll: {
+    flex: 1,
+  },
+  dashboardCard: {
+    backgroundColor: '#111',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.06)',
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  cardLabel: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+  },
+  victimNamePrimary: {
+    color: '#FFF',
+    fontSize: 24,
+    fontWeight: '900',
+    marginBottom: 16,
+  },
+  victimMetaRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  metaBadge: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    padding: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.04)',
+  },
+  metaBadgeLbl: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 9,
+    fontWeight: '800',
+    marginBottom: 4,
+  },
+  metaBadgeVal: {
+    color: '#FFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  incidentMotifTxt: {
+    color: '#FFF',
+    fontSize: 20,
+    fontWeight: '800',
+    lineHeight: 28,
+  },
+  symptomsToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 16,
+    gap: 4,
+  },
+  symptomsToggleTxt: {
+    color: colors.secondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  symptomsList: {
+    marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.05)',
+  },
+  symptomItem: {
+    marginBottom: 10,
+  },
+  symptomQuest: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  symptomAns: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  noSymptomsTxt: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 13,
+    fontStyle: 'italic',
+  },
+  incidentDescTxt: {
+    marginTop: 12,
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 13,
+    lineHeight: 18,
+    backgroundColor: 'rgba(255,255,255,0.02)',
+    padding: 10,
+    borderRadius: 8,
+  },
+  locationAddrTxt: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
+    marginBottom: 16,
+  },
+  distRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    padding: 12,
+    borderRadius: 16,
+  },
+  distInfo: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  distVal: {
+    color: colors.secondary,
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  distUnit: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  mapPreviewBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#333',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  mapPreviewBtnTxt: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  missionModalFooter: {
+    paddingTop: 20,
+    paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+  },
+  emergencyActionsRow: {
+    marginBottom: 12,
+  },
+  btnDashboardPrimary: {
+    backgroundColor: colors.success,
+    height: 72,
+    borderRadius: 20,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: colors.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  btnDashboardPrimaryTxt: {
+    color: '#000',
+    fontSize: 18,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  refuseBtn: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  refuseBtnTxtLabel: {
+    color: colors.primary,
+    fontSize: 13,
+    fontWeight: '800',
+    textDecorationLine: 'underline',
+  },
+  closeMapBtn: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  victimMarker: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    borderWidth: 3,
+    borderColor: '#FFF',
+  },
+  meMarker: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: colors.secondary,
+    borderWidth: 3,
+    borderColor: '#FFF',
+  },
   quickAccessRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 32,
+    marginTop: 32, // <--- RESTORED MARGIN
     paddingHorizontal: 8,
   },
   quickBtn: {
