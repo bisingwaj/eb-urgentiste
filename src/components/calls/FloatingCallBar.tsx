@@ -22,7 +22,7 @@ export function FloatingCallBar() {
     }
   };
 
-  const bottomOffset = insets.bottom + TAB_BAR_FLOAT_GAP + FLOATING_TAB_BAR_HEIGHT + (Platform.OS === 'android' ? 16 : 0) + 12;
+  const bottomOffset = insets.bottom + TAB_BAR_FLOAT_GAP + FLOATING_TAB_BAR_HEIGHT + 8;
 
   return (
     <View
