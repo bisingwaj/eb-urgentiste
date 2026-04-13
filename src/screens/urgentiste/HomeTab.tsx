@@ -83,10 +83,10 @@ const AlertPulseIcon = () => {
   return (
     <View style={styles.alertIconPulseContainer}>
       <Animated.View style={[styles.alertRadarWave, { transform: [{ scale }], opacity }]} />
-      <MaterialIcons 
-        name="warning" 
-        size={46} 
-        color={colors.primary} 
+      <MaterialIcons
+        name="warning"
+        size={46}
+        color={colors.primary}
         style={{ marginTop: -5 }} // Nudge up for optical centering
       />
     </View>
@@ -95,7 +95,7 @@ const AlertPulseIcon = () => {
 
 export function HomeTab({ navigation }: any) {
   const { profile, refreshProfile } = useAuth();
-  const { activeMission, isLoading: missionLoading } = useActiveMission();
+  const { activeMission, isLoading: missionLoading, updateDispatchStatus } = useActiveMission();
   const { unreadCount } = useNotifications();
   const { minimized: activeCall } = useCallSession();
 
@@ -631,30 +631,30 @@ export function HomeTab({ navigation }: any) {
         )}
 
         <View style={[styles.quickAccessRow, hasActiveAlert && { marginTop: 0, paddingBottom: 20 }]}>
-            <AppTouchableOpacity style={styles.quickBtn} onPress={handleCallCentral}>
-              <View style={[styles.quickIconBox, { backgroundColor: colors.success + '15' }]}>
-                <MaterialIcons name="phone" color={colors.success} size={22} />
-              </View>
-              <Text style={styles.quickBtnTxt}>Appeler centrale</Text>
-            </AppTouchableOpacity>
+          <AppTouchableOpacity style={styles.quickBtn} onPress={handleCallCentral}>
+            <View style={[styles.quickIconBox, { backgroundColor: colors.success + '15' }]}>
+              <MaterialIcons name="phone" color={colors.success} size={22} />
+            </View>
+            <Text style={styles.quickBtnTxt}>Appeler centrale</Text>
+          </AppTouchableOpacity>
 
-            <AppTouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Protocoles')}>
-              <View style={[styles.quickIconBox, { backgroundColor: colors.secondary + '15' }]}>
-                <MaterialIcons name="medical-services" color={colors.secondary} size={22} />
-              </View>
-              <Text style={styles.quickBtnTxt}>Protocoles</Text>
-            </AppTouchableOpacity>
+          <AppTouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Protocoles')}>
+            <View style={[styles.quickIconBox, { backgroundColor: colors.secondary + '15' }]}>
+              <MaterialIcons name="medical-services" color={colors.secondary} size={22} />
+            </View>
+            <Text style={styles.quickBtnTxt}>Protocoles</Text>
+          </AppTouchableOpacity>
 
-            <AppTouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('SignalerProbleme')}>
-              <View style={[styles.quickIconBox, { backgroundColor: colors.primary + '15' }]}>
-                <MaterialIcons name="campaign" color={colors.primary} size={22} />
-              </View>
-              <Text style={styles.quickBtnTxt}>Signalement</Text>
-            </AppTouchableOpacity>
-          </View>
+          <AppTouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('SignalerProbleme')}>
+            <View style={[styles.quickIconBox, { backgroundColor: colors.primary + '15' }]}>
+              <MaterialIcons name="campaign" color={colors.primary} size={22} />
+            </View>
+            <Text style={styles.quickBtnTxt}>Signalement</Text>
+          </AppTouchableOpacity>
         </View>
       </View>
-    </TabScreenSafeArea>
+    </View>
+    </TabScreenSafeArea >
   );
 }
 
