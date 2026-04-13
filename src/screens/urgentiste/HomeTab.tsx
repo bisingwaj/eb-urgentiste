@@ -30,7 +30,7 @@ const PulseRadar = ({ isActive }: { isActive: boolean }) => {
       Animated.loop(
         Animated.parallel([
           Animated.timing(scale, {
-            toValue: 2,
+            toValue: 2.2,
             duration: 2000,
             useNativeDriver: true,
           }),
@@ -65,6 +65,33 @@ const PulseRadar = ({ isActive }: { isActive: boolean }) => {
   );
 };
 
+// Minimal Alert Pulse for Minimized Dashboard
+const AlertPulseIcon = () => {
+  const scale = useRef(new Animated.Value(1)).current;
+  const opacity = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    Animated.loop(
+      Animated.parallel([
+        Animated.timing(scale, { toValue: 2.2, duration: 2000, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0, duration: 2000, useNativeDriver: true }),
+      ])
+    ).start();
+  }, []);
+
+  return (
+    <View style={styles.alertIconPulseContainer}>
+      <Animated.View style={[styles.alertRadarWave, { transform: [{ scale }], opacity }]} />
+      <MaterialIcons 
+        name="warning" 
+        size={46} 
+        color={colors.primary} 
+        style={{ marginTop: -5 }} // Nudge up for optical centering
+      />
+    </View>
+  );
+};
+
 export function HomeTab({ navigation }: any) {
   const { profile, refreshProfile } = useAuth();
   const { activeMission, isLoading: missionLoading } = useActiveMission();
@@ -79,7 +106,6 @@ export function HomeTab({ navigation }: any) {
   // Status Hold Action Animation
   const holdProgress = useRef(new Animated.Value(0)).current;
   const confirmProgress = useRef(new Animated.Value(0)).current; // For mission confirmation
-  const alertPulse = useRef(new Animated.Value(0)).current;
   const [isHolding, setIsHolding] = useState(false);
   const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
@@ -95,17 +121,6 @@ export function HomeTab({ navigation }: any) {
   useEffect(() => {
     if (!activeMission || activeMission.dispatch_status === 'completed') {
       setIsModalMinimized(false);
-      alertPulse.stopAnimation();
-      alertPulse.setValue(0);
-    } else {
-      // Continuous radar pulse for the active mission alert
-      Animated.loop(
-        Animated.timing(alertPulse, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        })
-      ).start();
     }
   }, [activeMission?.id, activeMission?.dispatch_status]);
 
@@ -523,18 +538,7 @@ export function HomeTab({ navigation }: any) {
         <View style={styles.centerStage}>
           {hasActiveAlert && isModalMinimized ? (
             <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-              <View style={styles.alertIconPulseContainer}>
-                <Animated.View
-                  style={[
-                    styles.alertRadarWave,
-                    {
-                      transform: [{ scale: alertPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.5] }) }],
-                      opacity: alertPulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] })
-                    }
-                  ]}
-                />
-                <MaterialIcons name="warning" size={48} color={colors.primary} />
-              </View>
+              <AlertPulseIcon />
               <Text style={[styles.statusText, { color: colors.primary, marginTop: 16 }]}>MISSION EN COURS</Text>
               <AppTouchableOpacity
                 style={styles.restoreBtn}
@@ -1054,12 +1058,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 4,
   },
-  restoreBtnTxt: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 1,
-  },
+
   alertIconPulseContainer: {
     width: 64,
     height: 64,
@@ -1069,12 +1068,10 @@ const styles = StyleSheet.create({
   },
   alertRadarWave: {
     position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    backgroundColor: colors.primary + '33',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.primary + '44', // Increased visibility (27% opacity)
   },
   quickAccessRow: {
     flexDirection: 'row',
