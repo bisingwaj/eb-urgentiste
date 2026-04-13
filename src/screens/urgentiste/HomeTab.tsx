@@ -11,6 +11,12 @@ import { supabase } from '../../lib/supabase';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import * as Location from 'expo-location';
 import Mapbox from '@rnmapbox/maps';
+import { Navigation2, Activity } from 'lucide-react-native';
+import {
+  getRouteWithAlternatives,
+  buildRouteFeature,
+  geometryToCameraBounds
+} from '../../lib/mapbox';
 
 const { width } = Dimensions.get('window');
 
@@ -63,7 +69,7 @@ export function HomeTab({ navigation }: any) {
   const { profile, refreshProfile } = useAuth();
   const { activeMission, isLoading: missionLoading } = useActiveMission();
   const { unreadCount } = useNotifications();
-  
+
   // Initialize background location tracking (from main)
   useLocationTracking();
 
@@ -72,12 +78,15 @@ export function HomeTab({ navigation }: any) {
 
   // Status Hold Action Animation
   const holdProgress = useRef(new Animated.Value(0)).current;
+  const confirmProgress = useRef(new Animated.Value(0)).current; // For mission confirmation
   const alertPulse = useRef(new Animated.Value(0)).current;
   const [isHolding, setIsHolding] = useState(false);
   const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [showMapPreview, setShowMapPreview] = useState(false);
   const [showSymptoms, setShowSymptoms] = useState(false);
+  const [routeFeature, setRouteFeature] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [routeBounds, setRouteBounds] = useState<any>(null);
 
   useEffect(() => {
     if (profile) setIsDutyActive(profile.available);
@@ -89,12 +98,13 @@ export function HomeTab({ navigation }: any) {
       alertPulse.stopAnimation();
       alertPulse.setValue(0);
     } else {
-      // Start subtle pulsing for the alert icon in the dashboard
+      // Continuous radar pulse for the active mission alert
       Animated.loop(
-        Animated.sequence([
-          Animated.timing(alertPulse, { toValue: 1, duration: 1000, useNativeDriver: true }),
-          Animated.timing(alertPulse, { toValue: 0, duration: 1000, useNativeDriver: true }),
-        ])
+        Animated.timing(alertPulse, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        })
       ).start();
     }
   }, [activeMission?.id, activeMission?.dispatch_status]);
@@ -147,29 +157,56 @@ export function HomeTab({ navigation }: any) {
       toValue: 1,
       duration: 1000,
       useNativeDriver: true
-    }).start(({ finished }) => {
-      if (finished) {
-        // Toggle state immediately
-        toggleDuty(!isDutyActive);
-        setIsHolding(false);
-        // FIX: Reset immediately to avoid flash when re-rendering with new state
-        holdProgress.setValue(0);
-      }
-    });
+    }).start();
+    // Logic is now centralized in handlePressOut to avoid race conditions
   };
 
   const handlePressOut = () => {
     setIsHolding(false);
     holdProgress.stopAnimation((val) => {
-      // If we released early (val < 1), we return to 0 smoothly
-      if (val < 1 && val > 0) {
+      if (val >= 0.98) {
+        // Success: threshold reached
+        toggleDuty(!isDutyActive);
+        // Reset immediately to 0
+        holdProgress.setValue(0);
+      } else if (val > 0) {
+        // Failure: release before 100%, smooth bounce back
         Animated.timing(holdProgress, {
           toValue: 0,
           duration: 250,
           useNativeDriver: true
         }).start();
+      } else {
+        // Already at 0
+        holdProgress.setValue(0);
       }
-      // If val was already 1 (finished), it was handled in handlePressIn
+    });
+  };
+
+  const handleConfirmPressIn = () => {
+    confirmProgress.setValue(0);
+    Animated.timing(confirmProgress, {
+      toValue: 1,
+      duration: 800, // Slightly faster than duty toggle for better responsiveness
+      useNativeDriver: true
+    }).start();
+  };
+
+  const handleConfirmPressOut = () => {
+    confirmProgress.stopAnimation((val) => {
+      if (val >= 0.95) {
+        // SUCCESS
+        confirmProgress.setValue(0);
+        setIsModalMinimized(true);
+        navigation.navigate('Signalement', { mission: activeMission });
+      } else {
+        // RESET
+        Animated.timing(confirmProgress, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true
+        }).start();
+      }
     });
   };
 
@@ -185,6 +222,35 @@ export function HomeTab({ navigation }: any) {
     }
   }, [activeMission?.id, isModalMinimized]);
 
+  // Fetch itinerary route for map preview
+  useEffect(() => {
+    if (showMapPreview && userLocation && activeMission?.location?.lat && activeMission?.location?.lng) {
+      let cancelled = false;
+      const origin: [number, number] = [userLocation.coords.longitude, userLocation.coords.latitude];
+      const destination: [number, number] = [activeMission.location.lng, activeMission.location.lat];
+
+      (async () => {
+        try {
+          const result = await getRouteWithAlternatives(origin, destination);
+          if (cancelled || !result) return;
+
+          const feature = buildRouteFeature(result.primary.geometry);
+          const bounds = geometryToCameraBounds(result.primary.geometry, 80);
+
+          setRouteFeature(feature);
+          setRouteBounds(bounds);
+        } catch (err) {
+          console.error('[MapRoute] Error fetching route:', err);
+        }
+      })();
+
+      return () => { cancelled = true; };
+    } else if (!showMapPreview) {
+      setRouteFeature(null);
+      setRouteBounds(null);
+    }
+  }, [showMapPreview, userLocation, activeMission?.location]);
+
   const calculateDistance = () => {
     if (!userLocation || !activeMission?.location?.lat || !activeMission?.location?.lng) return null;
     const R = 6371; // km
@@ -193,27 +259,36 @@ export function HomeTab({ navigation }: any) {
     const a =
       Math.sin(dLat / 2) * Math.sin(dLat / 2) +
       Math.cos(userLocation.coords.latitude * (Math.PI / 180)) *
-        Math.cos(activeMission.location.lat * (Math.PI / 180)) *
-        Math.sin(dLon / 2) *
-        Math.sin(dLon / 2);
+      Math.cos(activeMission.location.lat * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return (R * c).toFixed(1);
   };
 
   const getVictimMetadata = () => {
-    if (!activeMission) return { age: '—', gender: '—' };
-    const ageResp = activeMission.sos_responses?.find(r => 
-      ['age', 'age_approx', 'Tranche d’âge'].includes(r.question_key) || 
-      r.question_text?.toLowerCase().includes('âge')
-    );
-    const genderResp = activeMission.sos_responses?.find(r => 
-      ['sexe', 'gender', 'Sexe'].includes(r.question_key) || 
-      r.question_text?.toLowerCase().includes('sexe')
-    );
+    if (!activeMission) return { age: null, gender: null, height: null };
+
+    const findResp = (keys: string[], textMatch: string) =>
+      activeMission.sos_responses?.find(r =>
+        keys.includes(r.question_key) ||
+        r.question_text?.toLowerCase().includes(textMatch.toLowerCase())
+      )?.answer;
+
+    const age = findResp(['age', 'age_approx', 'Tranche d’âge'], 'âge');
+    const gender = findResp(['sexe', 'gender', 'Sexe'], 'sexe');
+    const height = findResp(['taille', 'height', 'Taille'], 'taille');
+
     return {
-      age: ageResp?.answer || '—',
-      gender: genderResp?.answer || '—'
+      age: age && age !== '—' ? age : null,
+      gender: gender && gender !== '—' ? gender : null,
+      height: height && height !== '—' ? height : null
     };
+  };
+
+  const capitalize = (str?: string) => {
+    if (!str) return 'ANONYME';
+    return str.toUpperCase();
   };
 
   const hasActiveAlert = !!activeMission && activeMission.dispatch_status !== 'completed';
@@ -226,22 +301,49 @@ export function HomeTab({ navigation }: any) {
       <Modal visible={showMapPreview} animationType="slide" transparent={false}>
         <View style={{ flex: 1, backgroundColor: '#000' }}>
           <Mapbox.MapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Dark}>
-            <Mapbox.Camera
-              zoomLevel={14}
-              centerCoordinate={
-                activeMission?.location?.lng != null && activeMission?.location?.lat != null
-                  ? [activeMission.location.lng, activeMission.location.lat]
-                  : [15.3070, -4.3224]
-              }
-            />
+            {routeBounds ? (
+              <Mapbox.Camera
+                bounds={routeBounds}
+                animationDuration={1000}
+              />
+            ) : (
+              <Mapbox.Camera
+                zoomLevel={14}
+                centerCoordinate={
+                  activeMission?.location?.lng != null && activeMission?.location?.lat != null
+                    ? [activeMission.location.lng, activeMission.location.lat]
+                    : [15.3070, -4.3224]
+                }
+              />
+            )}
+
+            {routeFeature && (
+              <Mapbox.ShapeSource id="previewRouteSource" shape={routeFeature}>
+                <Mapbox.LineLayer
+                  id="previewRouteLayer"
+                  style={{
+                    lineColor: colors.secondary,
+                    lineWidth: 4,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                    lineOpacity: 0.8
+                  }}
+                />
+              </Mapbox.ShapeSource>
+            )}
+
             {activeMission?.location?.lng != null && activeMission?.location?.lat != null && (
               <Mapbox.PointAnnotation id="victim" coordinate={[activeMission.location.lng, activeMission.location.lat]}>
-                <View style={styles.victimMarker} />
+                <View style={[styles.victimMarker, { backgroundColor: colors.markerIncident }]}>
+                  <Activity size={18} color="#FFF" />
+                </View>
               </Mapbox.PointAnnotation>
             )}
             {userLocation && (
               <Mapbox.PointAnnotation id="me" coordinate={[userLocation.coords.longitude, userLocation.coords.latitude]}>
-                <View style={styles.meMarker} />
+                <View style={[styles.meMarker, { backgroundColor: colors.markerMe }]}>
+                  <Navigation2 size={16} color="#FFF" style={{ transform: [{ rotate: '45deg' }] }} />
+                </View>
               </Mapbox.PointAnnotation>
             )}
           </Mapbox.MapView>
@@ -261,10 +363,10 @@ export function HomeTab({ navigation }: any) {
         <View style={styles.missionModalContainer}>
           <View style={styles.missionModalHeader}>
             <View style={styles.headerTopRow}>
-               <View style={styles.refBadge}>
-                  <Text style={styles.refBadgeTxt}>REF: {activeMission?.reference || '---'}</Text>
-               </View>
-               <AppTouchableOpacity
+              <View style={styles.refBadge}>
+                <Text style={styles.refBadgeTxt}>REF: {activeMission?.reference || '---'}</Text>
+              </View>
+              <AppTouchableOpacity
                 style={styles.minimizeBtnDashboard}
                 onPress={() => setIsModalMinimized(true)}
               >
@@ -273,45 +375,78 @@ export function HomeTab({ navigation }: any) {
             </View>
 
             <View style={styles.urgentHeaderRow}>
-               <MaterialIcons name="warning" size={32} color={colors.primary} />
-               <Text style={styles.urgentTitle}>MISSION ASSIGNÉE</Text>
+              <MaterialIcons name="warning" size={28} color={colors.primary} />
+              <Text style={styles.urgentTitle}>MISSION ASSIGNÉE</Text>
             </View>
           </View>
 
           <ScrollView style={styles.dashboardScroll} showsVerticalScrollIndicator={false}>
-            {/* CARD: WHO */}
+            {/* CARD 1: WHO (Identity) */}
             <View style={styles.dashboardCard}>
               <View style={styles.cardHeaderRow}>
                 <MaterialIcons name="person" size={20} color={colors.secondary} />
-                <Text style={styles.cardLabel}>IDENTITÉ VICTIME</Text>
+                <Text style={styles.cardLabel}>IDENTITÉ PATIENT</Text>
               </View>
-              <Text style={styles.victimNamePrimary}>{activeMission?.caller?.name || 'Anonyme'}</Text>
-              <View style={styles.victimMetaRow}>
-                <View style={styles.metaBadge}>
-                   <Text style={styles.metaBadgeLbl}>ÂGE</Text>
-                   <Text style={styles.metaBadgeVal}>{getVictimMetadata().age}</Text>
+              <Text style={styles.victimNamePrimary}>{capitalize(activeMission?.caller?.name)}</Text>
+
+              {(getVictimMetadata().age || getVictimMetadata().gender || getVictimMetadata().height) && (
+                <View style={styles.victimMetaRow}>
+                  {getVictimMetadata().age && (
+                    <View style={styles.metaBadge}>
+                      <Text style={styles.metaBadgeLbl}>ÂGE</Text>
+                      <Text style={styles.metaBadgeVal}>{getVictimMetadata().age}</Text>
+                    </View>
+                  )}
+                  {getVictimMetadata().gender && (
+                    <View style={styles.metaBadge}>
+                      <Text style={styles.metaBadgeLbl}>SEXE</Text>
+                      <Text style={styles.metaBadgeVal}>{getVictimMetadata().gender}</Text>
+                    </View>
+                  )}
+                  {getVictimMetadata().height && (
+                    <View style={styles.metaBadge}>
+                      <Text style={styles.metaBadgeLbl}>TAILLE</Text>
+                      <Text style={styles.metaBadgeVal}>{getVictimMetadata().height}</Text>
+                    </View>
+                  )}
                 </View>
-                <View style={styles.metaBadge}>
-                   <Text style={styles.metaBadgeLbl}>SEXE</Text>
-                   <Text style={styles.metaBadgeVal}>{getVictimMetadata().gender}</Text>
+              )}
+            </View>
+
+            {/* CARD 2: WHERE (Location) */}
+            <View style={styles.dashboardCard}>
+              <View style={styles.cardHeaderRow}>
+                <MaterialIcons name="place" size={20} color={colors.secondary} />
+                <Text style={styles.cardLabel}>LOCALISATION & NAVIGATION</Text>
+              </View>
+              <Text style={styles.locationAddrTxt}>{activeMission?.location?.address || 'Adresse non disponible'}</Text>
+
+              <View style={styles.distRow}>
+                <View style={styles.distInfo}>
+                  <Text style={styles.distVal}>{calculateDistance() || '---'}</Text>
+                  <Text style={styles.distUnit}>KM</Text>
                 </View>
+                <AppTouchableOpacity style={styles.mapPreviewBtn} onPress={() => setShowMapPreview(true)}>
+                  <MaterialIcons name="map" size={20} color="#FFF" />
+                  <Text style={styles.mapPreviewBtnTxt}>VOIR CARTE</Text>
+                </AppTouchableOpacity>
               </View>
             </View>
 
-            {/* CARD: WHAT */}
-            <View style={styles.dashboardCard}>
+            {/* CARD 3: WHY (Incident Motif) */}
+            <View style={[styles.dashboardCard, { paddingVertical: 16 }]}>
               <View style={styles.cardHeaderRow}>
-                <MaterialIcons name="medical-services" size={20} color={colors.secondary} />
-                <Text style={styles.cardLabel}>MOTIF D'APPEL</Text>
+                <MaterialIcons name="medical-services" size={18} color="rgba(255,255,255,0.4)" />
+                <Text style={[styles.cardLabel, { color: 'rgba(255,255,255,0.2)' }]}>MOTIF D'APPEL</Text>
               </View>
-              <Text style={styles.incidentMotifTxt}>{activeMission?.title}</Text>
-              
-              <AppTouchableOpacity 
-                style={styles.symptomsToggle} 
+              <Text style={styles.incidentMotifTxtSmall}>{activeMission?.title}</Text>
+
+              <AppTouchableOpacity
+                style={styles.symptomsToggle}
                 onPress={() => setShowSymptoms(!showSymptoms)}
               >
                 <Text style={styles.symptomsToggleTxt}>
-                  {showSymptoms ? "Masquer les détails" : "Voir symptômes & questionnaire"}
+                  {showSymptoms ? "Masquer les détails" : "Détails & Symptômes"}
                 </Text>
                 <MaterialIcons name={showSymptoms ? "expand-less" : "expand-more"} size={20} color={colors.secondary} />
               </AppTouchableOpacity>
@@ -326,47 +461,42 @@ export function HomeTab({ navigation }: any) {
                       </View>
                     ))
                   ) : (
-                    <Text style={styles.noSymptomsTxt}>Aucune donnée supplémentaire disponible.</Text>
+                    <Text style={styles.noSymptomsTxt}>Aucune donnée supplémentaire.</Text>
                   )}
                   {activeMission?.description && (
-                     <Text style={styles.incidentDescTxt}>Note: {activeMission.description}</Text>
+                    <Text style={styles.incidentDescTxt}>Note: {activeMission.description}</Text>
                   )}
                 </View>
               )}
-            </View>
-
-            {/* CARD: WHERE */}
-            <View style={styles.dashboardCard}>
-              <View style={styles.cardHeaderRow}>
-                <MaterialIcons name="place" size={20} color={colors.secondary} />
-                <Text style={styles.cardLabel}>LOCALISATION</Text>
-              </View>
-              <Text style={styles.locationAddrTxt}>{activeMission?.location?.address || 'Adresse non disponible'}</Text>
-              
-              <View style={styles.distRow}>
-                <View style={styles.distInfo}>
-                   <Text style={styles.distVal}>{calculateDistance() || '---'}</Text>
-                   <Text style={styles.distUnit}>KM de votre position</Text>
-                </View>
-                <AppTouchableOpacity style={styles.mapPreviewBtn} onPress={() => setShowMapPreview(true)}>
-                   <MaterialIcons name="map" size={20} color="#FFF" />
-                   <Text style={styles.mapPreviewBtnTxt}>VOIR CARTE</Text>
-                </AppTouchableOpacity>
-              </View>
             </View>
           </ScrollView>
 
           <View style={styles.missionModalFooter}>
             <View style={styles.emergencyActionsRow}>
+              <Text style={styles.actionHintTextModal}>Maintenez appuyé pour accepter</Text>
               <AppTouchableOpacity
+                activeOpacity={1}
                 style={styles.btnDashboardPrimary}
-                onPress={() => {
-                  setIsModalMinimized(true);
-                  navigation.navigate('Signalement', { mission: activeMission });
-                }}
+                onPressIn={handleConfirmPressIn}
+                onPressOut={handleConfirmPressOut}
               >
-                <MaterialIcons name="check-circle" size={24} color="#000" />
-                <Text style={styles.btnDashboardPrimaryTxt}>CONFIRMER RÉCEPTION</Text>
+                <Animated.View
+                  style={[
+                    styles.confirmButtonProgress,
+                    {
+                      transform: [
+                        { translateX: - (width - 48) }, // Start off-screen left
+                        {
+                          translateX: confirmProgress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, width - 48]
+                          })
+                        }
+                      ]
+                    }
+                  ]}
+                />
+                <Text style={styles.btnDashboardPrimaryTxt}>ACCEPTER LA MISSION</Text>
               </AppTouchableOpacity>
             </View>
 
@@ -377,7 +507,7 @@ export function HomeTab({ navigation }: any) {
                 navigation.navigate('CallCenter');
               }}
             >
-              <Text style={styles.refuseBtnTxtLabel}>APPELER LA CENTRALE / ANNULER</Text>
+              <Text style={styles.refuseBtnTxtLabel}>APPELER LA CENTRALE / REFUSER</Text>
             </AppTouchableOpacity>
           </View>
         </View>
@@ -392,15 +522,31 @@ export function HomeTab({ navigation }: any) {
 
         <View style={styles.centerStage}>
           {hasActiveAlert && isModalMinimized ? (
-            <View style={{ alignItems: 'center' }}>
-              <MaterialIcons name="warning" size={48} color={colors.primary} style={{ marginBottom: 16 }} />
-              <Text style={[styles.statusText, { color: colors.primary }]}>MISSION EN COURS</Text>
+            <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+              <View style={styles.alertIconPulseContainer}>
+                <Animated.View
+                  style={[
+                    styles.alertRadarWave,
+                    {
+                      transform: [{ scale: alertPulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.5] }) }],
+                      opacity: alertPulse.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] })
+                    }
+                  ]}
+                />
+                <MaterialIcons name="warning" size={48} color={colors.primary} />
+              </View>
+              <Text style={[styles.statusText, { color: colors.primary, marginTop: 16 }]}>MISSION EN COURS</Text>
               <AppTouchableOpacity
                 style={styles.restoreBtn}
                 onPress={() => setIsModalMinimized(false)}
               >
                 <Text style={styles.restoreBtnTxt}>AFFICHER L'ALERTE</Text>
               </AppTouchableOpacity>
+
+              <View style={[styles.agentInfoRow, { marginTop: 12 }]}>
+                <MaterialIcons name="person" size={14} color="rgba(255,255,255,0.4)" />
+                <Text style={styles.agentInfo}>Agent: {profile?.last_name || profile?.first_name || 'Inconnu'}</Text>
+              </View>
             </View>
           ) : (
             <>
@@ -408,7 +554,10 @@ export function HomeTab({ navigation }: any) {
               <Text style={[styles.statusText, isDutyActive ? { color: colors.success } : { color: colors.textMuted }]}>
                 {isDutyActive ? "SERVICE ACTIF" : "SERVICE DÉSACTIVÉ"}
               </Text>
-              <Text style={styles.agentInfo}>Agent: {profile?.last_name || profile?.first_name || 'Inconnu'}</Text>
+              <View style={styles.agentInfoRow}>
+                <MaterialIcons name="person" size={14} color="rgba(255,255,255,0.4)" />
+                <Text style={styles.agentInfo}>Agent: {profile?.last_name || profile?.first_name || 'Inconnu'}</Text>
+              </View>
               <Text style={styles.statusSubText}>
                 {isDutyActive
                   ? "Vous êtes connecté et visible par la centrale.\nEn attente d'une nouvelle mission..."
@@ -565,9 +714,9 @@ const styles = StyleSheet.create({
   agentInfo: {
     fontSize: 13,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.6)',
-    marginBottom: 16,
+    color: 'rgba(255,255,255,0.4)',
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
   statusSubText: {
     color: 'rgba(255,255,255,0.4)',
@@ -659,13 +808,16 @@ const styles = StyleSheet.create({
   urgentHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
+    marginVertical: 24, // ADDED MARGIN
   },
   urgentTitle: {
     color: colors.primary,
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 2,
+    textAlign: 'center',
   },
   dashboardScroll: {
     flex: 1,
@@ -692,7 +844,7 @@ const styles = StyleSheet.create({
   },
   victimNamePrimary: {
     color: '#FFF',
-    fontSize: 24,
+    fontSize: 20, // REDUCED FROM 24
     fontWeight: '900',
     marginBottom: 16,
   },
@@ -719,11 +871,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
-  incidentMotifTxt: {
-    color: '#FFF',
-    fontSize: 20,
-    fontWeight: '800',
-    lineHeight: 28,
+  incidentMotifTxtSmall: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 22,
   },
   symptomsToggle: {
     flexDirection: 'row',
@@ -823,22 +975,37 @@ const styles = StyleSheet.create({
   },
   btnDashboardPrimary: {
     backgroundColor: colors.success,
-    height: 72,
-    borderRadius: 20,
+    height: 64,
+    borderRadius: 32, // PILL SHAPE
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 12,
+    overflow: 'hidden',
     shadowColor: colors.success,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+  },
+  actionHintTextModal: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  confirmButtonProgress: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: '100%',
+    backgroundColor: 'rgba(0,0,0,0.12)',
   },
   btnDashboardPrimaryTxt: {
     color: '#000',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
-    letterSpacing: 0.5,
+    letterSpacing: 1,
   },
   refuseBtn: {
     alignItems: 'center',
@@ -862,26 +1029,65 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   victimMarker: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: colors.primary,
-    borderWidth: 3,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
     borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
   meMarker: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: colors.secondary,
-    borderWidth: 3,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
     borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  restoreBtnTxt: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  alertIconPulseContainer: {
+    width: 64,
+    height: 64,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  alertRadarWave: {
+    position: 'absolute',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    backgroundColor: colors.primary + '33',
   },
   quickAccessRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 32, // <--- RESTORED MARGIN
+    marginTop: 32,
     paddingHorizontal: 8,
+  },
+  agentInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    justifyContent: 'center',
+    marginBottom: 16, // MOVED FROM agentInfo
   },
   quickBtn: {
     alignItems: 'center',
