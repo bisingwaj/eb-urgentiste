@@ -110,7 +110,6 @@ export function HomeTab({ navigation }: any) {
   const confirmProgress = useRef(new Animated.Value(0)).current; // For mission confirmation
   const [isHolding, setIsHolding] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
-  const callPulseAnim = useRef(new Animated.Value(0)).current;
   const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [showMapPreview, setShowMapPreview] = useState(false);
@@ -312,33 +311,8 @@ export function HomeTab({ navigation }: any) {
 
   const isPhonePulseActive = isCalling || !!activeCall;
 
-  useEffect(() => {
-    let anim: Animated.CompositeAnimation | null = null;
-    if (isPhonePulseActive) {
-      anim = Animated.loop(
-        Animated.sequence([
-          Animated.timing(callPulseAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
-          Animated.timing(callPulseAnim, { toValue: 0, duration: 1200, useNativeDriver: true })
-        ])
-      );
-      anim.start();
-    } else {
-      callPulseAnim.setValue(0);
-    }
-    return () => {
-      if (anim) anim.stop();
-    };
-  }, [isPhonePulseActive]);
-
   const handleCallCentral = () => {
-    // If we have an active call, we WANT to reopen it (resume)
-    if (activeCall) {
-      navigation.navigate('CallCenter', { resume: true });
-      return;
-    }
-
-    // If we are already trying to establish a call, don't trigger twice
-    if (isCalling) return;
+    if (isPhonePulseActive) return;
     
     setIsCalling(true);
     setTimeout(() => setIsCalling(false), 3000);
@@ -661,25 +635,23 @@ export function HomeTab({ navigation }: any) {
 
         <View style={[styles.quickAccessRow, hasActiveAlert && { marginTop: 0, paddingBottom: 20 }]}>
           <AppTouchableOpacity 
-            style={[styles.quickBtn, isPhonePulseActive && { opacity: 1 }]} 
+            style={[styles.quickBtn, isPhonePulseActive && { opacity: 0.5 }]} 
             onPress={handleCallCentral}
+            disabled={isPhonePulseActive}
           >
-            <View style={[styles.quickIconBox, { backgroundColor: colors.success + '15', overflow: 'hidden' }]}>
-              <MaterialIcons name="phone" color={colors.success} size={22} />
-              {isPhonePulseActive && (
-                <Animated.View 
-                  style={{
-                    ...StyleSheet.absoluteFillObject,
-                    backgroundColor: '#000',
-                    opacity: callPulseAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [0, 0.7]
-                    })
-                  }}
-                />
-              )}
+            <View style={[
+              styles.quickIconBox, 
+              { backgroundColor: isPhonePulseActive ? 'rgba(255,255,255,0.05)' : colors.success + '15' }
+            ]}>
+              <MaterialIcons 
+                name="phone" 
+                color={isPhonePulseActive ? 'rgba(255,255,255,0.3)' : colors.success} 
+                size={22} 
+              />
             </View>
-            <Text style={styles.quickBtnTxt}>Appeler centrale</Text>
+            <Text style={[styles.quickBtnTxt, isPhonePulseActive && { color: 'rgba(255,255,255,0.3)' }]}>
+              Appeler centrale
+            </Text>
           </AppTouchableOpacity>
 
           <AppTouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('Protocoles')}>
