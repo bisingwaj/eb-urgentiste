@@ -239,12 +239,16 @@ export function ProfileTab({ navigation }: any) {
           <SectionLabel>Sécurité & Service</SectionLabel>
           <Card>
             <View style={styles.switchRow}>
-              <View style={[styles.infoIconWrap, { backgroundColor: `${colors.success}18` }]}>
-                <MaterialIcons name="radio-button-checked" color={colors.success} size={18} />
+              <View style={[styles.infoIconWrap, { backgroundColor: !!activeMission ? 'rgba(255,255,255,0.05)' : `${colors.success}18` }]}>
+                <MaterialIcons 
+                  name="radio-button-checked" 
+                  color={!!activeMission ? "rgba(255,255,255,0.3)" : colors.success} 
+                  size={18} 
+                />
               </View>
               <View style={styles.switchBody}>
                 <Text style={styles.switchTitle}>Disponibilité</Text>
-                <Text style={[styles.switchSub, !!activeMission && { color: colors.primary, fontWeight: '700' }]}>
+                <Text style={[styles.switchSub, !!activeMission && { color: 'rgba(255, 82, 82, 0.65)', fontWeight: '600' }]}>
                   {!!activeMission ? "Verrouillé pendant la mission" : (isDutyActive ? "En service" : "Hors service")}
                 </Text>
               </View>
@@ -252,8 +256,11 @@ export function ProfileTab({ navigation }: any) {
                 value={isDutyActive}
                 disabled={!!activeMission}
                 onValueChange={(v) => void handleToggleDuty(v)}
-                trackColor={{ false: "#2C2C2C", true: `${colors.success}88` }}
-                thumbColor={isDutyActive ? colors.success : "#9E9E9E"}
+                trackColor={{ 
+                  false: "#2C2C2C", 
+                  true: !!activeMission ? "rgba(255,255,255,0.1)" : `${colors.success}88` 
+                }}
+                thumbColor={!!activeMission ? "#4A4A4A" : (isDutyActive ? colors.success : "#9E9E9E")}
               />
             </View>
             <View style={styles.rowSep} />
