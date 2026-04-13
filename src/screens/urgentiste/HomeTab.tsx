@@ -631,7 +631,11 @@ export function HomeTab({ navigation }: any) {
         )}
 
         <View style={[styles.quickAccessRow, hasActiveAlert && { marginTop: 0, paddingBottom: 20 }]}>
-          <AppTouchableOpacity style={styles.quickBtn} onPress={handleCallCentral}>
+          <AppTouchableOpacity 
+            style={[styles.quickBtn, isCalling && { opacity: 0.5 }]} 
+            onPress={handleCallCentral}
+            disabled={isCalling}
+          >
             <View style={[styles.quickIconBox, { backgroundColor: colors.success + '15' }]}>
               <MaterialIcons name="phone" color={colors.success} size={22} />
             </View>
@@ -653,8 +657,7 @@ export function HomeTab({ navigation }: any) {
           </AppTouchableOpacity>
         </View>
       </View>
-    </View>
-    </TabScreenSafeArea >
+    </TabScreenSafeArea>
   );
 }
 
