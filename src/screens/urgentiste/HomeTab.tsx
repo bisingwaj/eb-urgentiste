@@ -7,6 +7,7 @@ import { useAuth } from '../../contexts/AuthContext';
 import { useActiveMission } from '../../hooks/useActiveMission';
 import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useNotifications } from '../../hooks/useNotifications';
+import { useCallSession } from '../../contexts/CallSessionContext';
 import { supabase } from '../../lib/supabase';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import * as Location from 'expo-location';
@@ -96,6 +97,7 @@ export function HomeTab({ navigation }: any) {
   const { profile, refreshProfile } = useAuth();
   const { activeMission, isLoading: missionLoading } = useActiveMission();
   const { unreadCount } = useNotifications();
+  const { minimized: activeCall } = useCallSession();
 
   // Initialize background location tracking (from main)
   useLocationTracking();
@@ -306,7 +308,17 @@ export function HomeTab({ navigation }: any) {
     return str.toUpperCase();
   };
 
+  const handleCallCentral = () => {
+    if (activeCall) {
+      navigation.navigate('CallCenter', { resume: true });
+    } else {
+      navigation.navigate('CallCenter');
+    }
+  };
+
   const hasActiveAlert = !!activeMission && activeMission.dispatch_status !== 'completed';
+
+  const isMissionAccepted = hasActiveAlert && activeMission?.dispatch_status !== 'dispatched';
 
   return (
     <TabScreenSafeArea style={styles.container}>
@@ -542,9 +554,17 @@ export function HomeTab({ navigation }: any) {
               <Text style={[styles.statusText, { color: colors.primary, marginTop: 16 }]}>MISSION EN COURS</Text>
               <AppTouchableOpacity
                 style={styles.restoreBtn}
-                onPress={() => setIsModalMinimized(false)}
+                onPress={() => {
+                  if (isMissionAccepted) {
+                    navigation.navigate('Signalement', { mission: activeMission });
+                  } else {
+                    setIsModalMinimized(false);
+                  }
+                }}
               >
-                <Text style={styles.restoreBtnTxt}>AFFICHER L'ALERTE</Text>
+                <Text style={styles.restoreBtnTxt}>
+                  {isMissionAccepted ? "CONTINUER LE PROCESSUS" : "AFFICHER L'ALERTE"}
+                </Text>
               </AppTouchableOpacity>
 
               <View style={[styles.agentInfoRow, { marginTop: 12 }]}>
@@ -571,44 +591,47 @@ export function HomeTab({ navigation }: any) {
           )}
         </View>
 
-        <View style={styles.actionContainer}>
-          <Text style={styles.actionHintText}>Maintenez appuyé pour basculer votre statut</Text>
-          <AppTouchableOpacity
-            activeOpacity={1}
-            onPressIn={handlePressIn}
-            onPressOut={handlePressOut}
-            style={[
-              styles.dutyButton,
-              isDutyActive ? styles.dutyButtonOffline : styles.dutyButtonOnline
-            ]}
-          >
-            <Animated.View style={[
-              styles.dutyButtonProgress,
-              isDutyActive ? { backgroundColor: 'rgba(0,0,0,0.3)' } : { backgroundColor: 'rgba(255,255,255,0.2)' },
-              {
-                width: '100%',
-                transform: [
-                  { translateX: -((width - 48) / 2) },
-                  { scaleX: holdProgress },
-                  { translateX: ((width - 48) / 2) }
-                ]
-              }
-            ]} />
+        {!hasActiveAlert && (
+          <View style={styles.actionContainer}>
+            <Text style={styles.actionHintText}>Maintenez appuyé pour basculer votre statut</Text>
+            <AppTouchableOpacity
+              activeOpacity={1}
+              onPressIn={handlePressIn}
+              onPressOut={handlePressOut}
+              style={[
+                styles.dutyButton,
+                isDutyActive ? styles.dutyButtonOffline : styles.dutyButtonOnline
+              ]}
+            >
+              <Animated.View style={[
+                styles.dutyButtonProgress,
+                isDutyActive ? { backgroundColor: 'rgba(0,0,0,0.3)' } : { backgroundColor: 'rgba(255,255,255,0.2)' },
+                {
+                  width: '100%',
+                  transform: [
+                    { translateX: -((width - 48) / 2) },
+                    { scaleX: holdProgress },
+                    { translateX: ((width - 48) / 2) }
+                  ]
+                }
+              ]} />
 
-            <View style={styles.dutyButtonContext}>
-              <MaterialIcons
-                name={isDutyActive ? "power-settings-new" : "play-circle-filled"}
-                size={28}
-                color={isDutyActive ? "#FFF" : colors.success}
-              />
-              <Text style={[styles.dutyButtonTxt, !isDutyActive && { color: colors.success }]}>
-                {isDutyActive ? "DÉSACTIVER LE SERVICE" : "ACTIVER LE SERVICE"}
-              </Text>
-            </View>
-          </AppTouchableOpacity>
+              <View style={styles.dutyButtonContext}>
+                <MaterialIcons
+                  name={isDutyActive ? "power-settings-new" : "play-circle-filled"}
+                  size={28}
+                  color={isDutyActive ? "#FFF" : colors.success}
+                />
+                <Text style={[styles.dutyButtonTxt, !isDutyActive && { color: colors.success }]}>
+                  {isDutyActive ? "DÉSACTIVER LE SERVICE" : "ACTIVER LE SERVICE"}
+                </Text>
+              </View>
+            </AppTouchableOpacity>
+          </View>
+        )}
 
-          <View style={styles.quickAccessRow}>
-            <AppTouchableOpacity style={styles.quickBtn} onPress={() => navigation.navigate('CallCenter')}>
+        <View style={[styles.quickAccessRow, hasActiveAlert && { marginTop: 0, paddingBottom: 20 }]}>
+            <AppTouchableOpacity style={styles.quickBtn} onPress={handleCallCentral}>
               <View style={[styles.quickIconBox, { backgroundColor: colors.success + '15' }]}>
                 <MaterialIcons name="phone" color={colors.success} size={22} />
               </View>

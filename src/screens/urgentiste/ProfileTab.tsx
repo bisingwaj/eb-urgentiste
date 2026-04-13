@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { useAuth } from "../../contexts/AuthContext";
+import { useActiveMission } from "../../hooks/useActiveMission";
 import { useAppLock } from "../../contexts/AppLockContext";
 import { useNotifications } from "../../hooks/useNotifications";
 import { colors } from "../../theme/colors";
@@ -44,6 +45,7 @@ function InfoRow({ icon, label, value, iconTint, valueLines = 1 }: any) {
 
 export function ProfileTab({ navigation }: any) {
   const { profile, signOut, refreshProfile } = useAuth();
+  const { activeMission } = useActiveMission();
   const { unreadCount } = useNotifications();
   const [avatarLoadError, setAvatarLoadError] = useState(false);
   const [isDutyActive, setIsDutyActive] = useState(profile?.available ?? false);
@@ -242,12 +244,13 @@ export function ProfileTab({ navigation }: any) {
               </View>
               <View style={styles.switchBody}>
                 <Text style={styles.switchTitle}>Disponibilité</Text>
-                <Text style={styles.switchSub}>
-                  {isDutyActive ? "En service" : "Hors service"}
+                <Text style={[styles.switchSub, !!activeMission && { color: colors.primary, fontWeight: '700' }]}>
+                  {!!activeMission ? "Verrouillé pendant la mission" : (isDutyActive ? "En service" : "Hors service")}
                 </Text>
               </View>
               <Switch
                 value={isDutyActive}
+                disabled={!!activeMission}
                 onValueChange={(v) => void handleToggleDuty(v)}
                 trackColor={{ false: "#2C2C2C", true: `${colors.success}88` }}
                 thumbColor={isDutyActive ? colors.success : "#9E9E9E"}
