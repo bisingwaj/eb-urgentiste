@@ -81,7 +81,7 @@ export function LocationGatekeeper({ children }: { children: React.ReactNode }) 
         <View style={styles.centerBlock}>
           <View style={[styles.iconContainer, isGpsDisabled && { backgroundColor: 'rgba(251, 140, 0, 0.1)' }]}>
             <MaterialCommunityIcons 
-              name={isGpsDisabled ? "location-off" : "map-marker-off"} 
+              name={(isGpsDisabled ? "location-off" : "map-marker-off") as any} 
               size={80} 
               color={isGpsDisabled ? "#FB8C00" : colors.primary} 
             />
