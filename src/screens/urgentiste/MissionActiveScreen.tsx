@@ -376,7 +376,7 @@ export function MissionActiveScreen({ navigation }: any) {
               setIsCalling(true);
               try {
                 await startRescuerToCitizenVoipCall({
-                  incidentId: activeMission.id,
+                  incidentId: activeMission.incident_id,
                   citizenId: activeMission.citizen_id,
                   callType: 'audio',
                   patientName: activeMission.caller?.name || 'Patient'
@@ -435,7 +435,7 @@ export function MissionActiveScreen({ navigation }: any) {
                       return;
                     }
                     await startRescuerToCitizenVoipCall({
-                      incidentId: activeMission.id,
+                      incidentId: activeMission.incident_id,
                       citizenId: activeMission.citizen_id,
                       callType: 'audio',
                       patientName: activeMission.caller?.name || 'Patient'
