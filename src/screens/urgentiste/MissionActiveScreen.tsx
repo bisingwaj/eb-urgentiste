@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, StatusBar, Alert, Linking, ActivityIndicator, Dimensions, Platform, LayoutAnimation, UIManager } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, Alert, Linking, ActivityIndicator, Dimensions, Platform, LayoutAnimation, UIManager, Modal } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -60,6 +60,7 @@ export function MissionActiveScreen({ navigation }: any) {
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
+  const [showCallModal, setShowCallModal] = useState(false);
   
   const lastRouteCoords = useRef<number[][]>([]);
   const lastFetchPos = useRef<[number, number] | null>(null);
@@ -148,6 +149,13 @@ export function MissionActiveScreen({ navigation }: any) {
   const showProximityCluster = distanceToIncident < 25 && zoomLevel < 18;
 
   const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === activeMission?.dispatch_status);
+
+  const isLocalNumber = (phone: string | undefined): boolean => {
+    if (!phone) return false;
+    const clean = phone.replace(/\s/g, '').replace(/-/g, '');
+    // DRC prefixes: +243, 00243, or local operators 081, 082, 084, 085, 089, 09
+    return clean.startsWith('+243') || clean.startsWith('00243') || /^(081|082|084|085|089|09)/.test(clean);
+  };
 
   const handleNextStatus = async () => {
     const nextStatuses: Record<string, string> = { dispatched: 'en_route', en_route: 'on_scene', on_scene: 'completed' };
@@ -359,13 +367,78 @@ export function MissionActiveScreen({ navigation }: any) {
             <Text style={styles.callBtnText}>CENTRALE</Text>
           </AppTouchableOpacity>
           <AppTouchableOpacity style={styles.callBtn} onPress={() => {
-            if (activeMission.caller?.phone) Linking.openURL(`tel:${activeMission.caller.phone}`);
+            if (!activeMission.caller?.phone) return;
+            if (isLocalNumber(activeMission.caller.phone)) {
+              setShowCallModal(true);
+            } else {
+              // Direct App Call for international
+              setIsCalling(true);
+              setTimeout(() => setIsCalling(false), 3000);
+              navigation.navigate('CallCenter');
+            }
           }}>
             <MaterialIcons name="person" size={20} color={colors.success} />
             <Text style={styles.callBtnText}>PATIENT</Text>
           </AppTouchableOpacity>
         </View>
       </View>
+
+      {/* CALL SELECTION MODAL */}
+      <Modal
+        visible={showCallModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCallModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <MaterialIcons name="contact-phone" size={32} color={colors.secondary} />
+              <Text style={styles.modalTitle}>Appeler le patient</Text>
+              <Text style={styles.patientNum}>{activeMission.caller?.phone}</Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <AppTouchableOpacity 
+                style={[styles.modalBtn, styles.primaryBtn]} 
+                onPress={() => {
+                  setShowCallModal(false);
+                  Linking.openURL(`tel:${activeMission.caller?.phone}`);
+                }}
+              >
+                <MaterialIcons name="phone" size={24} color="#000" />
+                <View style={styles.btnTextSet}>
+                  <Text style={[styles.btnTitle, { color: '#000' }]}>Appel Normal</Text>
+                  <Text style={[styles.btnSub, { color: 'rgba(0,0,0,0.6)' }]}>Passer par le réseau GSM</Text>
+                </View>
+              </AppTouchableOpacity>
+
+              <AppTouchableOpacity 
+                style={[styles.modalBtn, styles.secondaryBtn]} 
+                onPress={() => {
+                  setShowCallModal(false);
+                  setIsCalling(true);
+                  setTimeout(() => setIsCalling(false), 3000);
+                  navigation.navigate('CallCenter');
+                }}
+              >
+                <MaterialIcons name="headset-mic" size={24} color={colors.secondary} />
+                <View style={styles.btnTextSet}>
+                  <Text style={[styles.btnTitle, { color: '#FFF' }]}>Appel via App</Text>
+                  <Text style={[styles.btnSub, { color: 'rgba(255,255,255,0.6)' }]}>Passer par la VoIP</Text>
+                </View>
+              </AppTouchableOpacity>
+
+              <AppTouchableOpacity 
+                style={styles.cancelBtn} 
+                onPress={() => setShowCallModal(false)}
+              >
+                <Text style={styles.cancelText}>ANNULER L'APPEL</Text>
+              </AppTouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -435,5 +508,33 @@ const styles = StyleSheet.create({
     width: 14, height: 14, borderRadius: 7, backgroundColor: colors.primary,
     borderWidth: 2, borderColor: '#FFF',
     shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 10, elevation: 10
-  }
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', 
+    justifyContent: 'center', alignItems: 'center', padding: 20 
+  },
+  modalContent: {
+    width: '100%', maxWidth: 340, backgroundColor: '#1A1A1A', 
+    borderRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    padding: 24, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 30, elevation: 15
+  },
+  modalHeader: { alignItems: 'center', marginBottom: 24, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)', paddingBottom: 20 },
+  modalTitle: { color: '#FFF', fontSize: 22, fontWeight: '900', marginTop: 12 },
+  patientNum: { color: colors.secondary, fontSize: 18, fontWeight: '900', marginTop: 4, letterSpacing: 1 },
+  modalBody: { gap: 14 },
+  modalBtn: { 
+    flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, gap: 16 
+  },
+  primaryBtn: { backgroundColor: colors.success },
+  secondaryBtn: { backgroundColor: 'rgba(68, 138, 255, 0.15)', borderWidth: 1, borderColor: 'rgba(68, 138, 255, 0.3)' },
+  btnTextSet: { flex: 1 },
+  btnTitle: { fontSize: 16, fontWeight: '900', color: '#000' },
+  btnSub: { fontSize: 12, color: 'rgba(0,0,0,0.7)', fontWeight: '700', marginTop: 1 },
+  cancelBtn: { 
+    paddingVertical: 14, alignItems: 'center', marginTop: 8, 
+    borderRadius: 16, backgroundColor: 'rgba(211, 47, 47, 0.12)', borderWidth: 1, borderColor: 'rgba(211, 47, 47, 0.3)' 
+  },
+  cancelText: { color: '#FF5252', fontSize: 13, fontWeight: '900', letterSpacing: 2, opacity: 0.9 }
 });
