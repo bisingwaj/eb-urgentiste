@@ -203,6 +203,8 @@ export function MissionActiveScreen({ navigation }: any) {
           style={styles.map} 
           styleURL={Mapbox.StyleURL.Dark} 
           compassEnabled={false}
+          scaleBarEnabled={true}
+          scaleBarPosition={{ top: 120, left: 16 }}
           onCameraChanged={(e) => setZoomLevel(e.properties.zoom)}
         >
           <Mapbox.Camera
