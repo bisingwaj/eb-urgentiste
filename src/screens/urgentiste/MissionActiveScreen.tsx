@@ -53,6 +53,7 @@ export function MissionActiveScreen({ navigation }: any) {
   const myHeadingDeg = useMapPuckHeading(myLocation);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isCalling, setIsCalling] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [isAddressExpanded, setIsAddressExpanded] = useState(false);
   const [mapMode, setMapMode] = useState<'2D' | '3D'>('2D');
   const [zoomLevel, setZoomLevel] = useState(15);
@@ -165,13 +166,18 @@ export function MissionActiveScreen({ navigation }: any) {
 
     // No more manual confirmation needed for on-scene transition
     setIsUpdating(true);
+    setIsTransitioning(true);
     try {
       await updateDispatchStatus(next as any);
+      // Small stabilization delay for Mapbox sync
+      await new Promise(r => setTimeout(r, 100));
+      
       if (next === 'on_scene') {
         navigation.replace('Signalement', { mission: activeMission });
       }
     } catch (err) {
       Alert.alert('Erreur', 'Mise à jour échouée.');
+      setIsTransitioning(false);
     } finally {
       setIsUpdating(false);
     }
@@ -206,7 +212,11 @@ export function MissionActiveScreen({ navigation }: any) {
           compassEnabled={false}
           scaleBarEnabled={true}
           scaleBarPosition={{ top: 120, left: 16 }}
-          onCameraChanged={(e) => setZoomLevel(e.properties.zoom)}
+          onCameraChanged={(e) => {
+            if (!isTransitioning) {
+              setZoomLevel(e.properties.zoom);
+            }
+          }}
         >
           <Mapbox.Camera
             followUserLocation={mapMode === '3D'}
@@ -215,7 +225,7 @@ export function MissionActiveScreen({ navigation }: any) {
             heading={mapMode === '3D' ? myHeadingDeg : 0}
             zoomLevel={mapMode === '3D' ? 16.5 : zoomLevel}
             animationMode="flyTo"
-            animationDuration={600}
+            animationDuration={isTransitioning ? 0 : 600}
             defaultSettings={{
               centerCoordinate: missionCoords || undefined,
               zoomLevel: 15,
