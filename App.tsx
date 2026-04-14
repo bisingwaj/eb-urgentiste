@@ -25,7 +25,9 @@ import { GlobalAlert } from './src/components/shared/GlobalAlert';
 import { AlertAlarmManager } from './src/components/alerts/AlertAlarmManager';
 import { HospitalAlertManager } from './src/components/alerts/HospitalAlertManager';
 import { BrandedSplashScreen } from './src/components/splash/BrandedSplashScreen';
+import { GlobalDialogProvider } from './src/contexts/GlobalDialogContext';
 import { ForegroundSync } from './src/components/sync/ForegroundSync';
+import { LocationGatekeeper } from './src/components/shared/LocationGatekeeper';
 
 // Shared entry screens
 import { LoginPage } from './src/screens/LoginPage';
@@ -234,28 +236,32 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <MissionProvider>
-        <HospitalProvider>
-          <AppLockProvider>
-            <SafeAreaProvider>
-              <StatusBar barStyle="light-content" backgroundColor="#000000" />
-              <NavigationContainer ref={navigationRef} theme={navTheme}>
-                <CallSessionProvider>
-                  <PushTokenRegistration />
-                  <ForegroundSync />
-                  <RootNavigator />
-                  <FloatingCallBar />
-                  <IncomingCallSubscriber />
-                  <IncomingCallNotificationHandler />
-                  <GlobalAlert />
-                  <AlertAlarmManager />
-                  <HospitalAlertManager />
-                </CallSessionProvider>
-              </NavigationContainer>
-            </SafeAreaProvider>
-          </AppLockProvider>
-        </HospitalProvider>
-      </MissionProvider>
+      <GlobalDialogProvider>
+        <MissionProvider>
+          <HospitalProvider>
+            <AppLockProvider>
+              <SafeAreaProvider>
+                <StatusBar barStyle="light-content" backgroundColor="#000000" />
+                <LocationGatekeeper>
+                  <NavigationContainer ref={navigationRef} theme={navTheme}>
+                    <CallSessionProvider>
+                      <PushTokenRegistration />
+                      <ForegroundSync />
+                      <RootNavigator />
+                      <FloatingCallBar />
+                      <IncomingCallSubscriber />
+                      <IncomingCallNotificationHandler />
+                      <GlobalAlert />
+                      <AlertAlarmManager />
+                      <HospitalAlertManager />
+                    </CallSessionProvider>
+                  </NavigationContainer>
+                </LocationGatekeeper>
+              </SafeAreaProvider>
+            </AppLockProvider>
+          </HospitalProvider>
+        </MissionProvider>
+      </GlobalDialogProvider>
     </AuthProvider>
   );
 }

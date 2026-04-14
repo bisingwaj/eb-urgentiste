@@ -8,6 +8,8 @@ import { useActiveMission } from '../../hooks/useActiveMission';
 import { useLocationTracking } from '../../hooks/useLocationTracking';
 import { useNotifications } from '../../hooks/useNotifications';
 import { useCallSession } from '../../contexts/CallSessionContext';
+import { useConnectivity } from '../../hooks/useConnectivity';
+import { useDialog } from '../../contexts/GlobalDialogContext';
 import { supabase } from '../../lib/supabase';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import * as Location from 'expo-location';
@@ -22,12 +24,12 @@ import {
 const { width } = Dimensions.get('window');
 
 // Helper component for pulsing the radar core
-const PulseRadar = ({ isActive }: { isActive: boolean }) => {
+const PulseRadar = ({ isActive, isConnected = true }: { isActive: boolean, isConnected?: boolean }) => {
   const scale = useRef(new Animated.Value(1)).current;
   const opacity = useRef(new Animated.Value(0.8)).current;
 
   useEffect(() => {
-    if (isActive) {
+    if (isActive && isConnected) {
       Animated.loop(
         Animated.parallel([
           Animated.timing(scale, {
@@ -46,21 +48,35 @@ const PulseRadar = ({ isActive }: { isActive: boolean }) => {
       scale.stopAnimation();
       opacity.stopAnimation();
       scale.setValue(1);
-      opacity.setValue(0);
+      if (isActive && !isConnected) {
+        opacity.setValue(0.3); // Static subtle glow when searching but offline? Or just 0?
+      } else {
+        opacity.setValue(0);
+      }
     }
-  }, [isActive]);
+  }, [isActive, isConnected]);
+
+  const getRadarColor = () => {
+    if (!isConnected) return '#FB8C00'; // Orange for offline
+    return isActive ? colors.success : colors.textMuted;
+  };
+
+  const getIcon = () => {
+    if (!isConnected) return <MaterialCommunityIcons name="cloud-off-outline" size={44} color="#FFF" />;
+    return isActive ? (
+      <MaterialCommunityIcons name="radar" size={48} color="#FFF" />
+    ) : (
+      <MaterialIcons name="portable-wifi-off" size={44} color="#FFF" />
+    );
+  };
 
   return (
     <View style={styles.radarContainer}>
-      {isActive && (
+      {isActive && isConnected && (
         <Animated.View style={[styles.radarWave, { transform: [{ scale }], opacity }]} />
       )}
-      <View style={[styles.radarCore, isActive ? { backgroundColor: colors.success } : { backgroundColor: colors.textMuted }]}>
-        {isActive ? (
-          <MaterialCommunityIcons name="radar" size={48} color="#FFF" />
-        ) : (
-          <MaterialIcons name="portable-wifi-off" size={44} color="#FFF" />
-        )}
+      <View style={[styles.radarCore, { backgroundColor: getRadarColor() }]}>
+        {getIcon()}
       </View>
     </View>
   );
@@ -98,6 +114,8 @@ export function HomeTab({ navigation }: any) {
   const { activeMission, isLoading: missionLoading, updateDispatchStatus } = useActiveMission();
   const { unreadCount } = useNotifications();
   const { minimized: activeCall } = useCallSession();
+  const { isConnected } = useConnectivity();
+  const { showDialog } = useDialog();
 
   // Initialize background location tracking (from main)
   useLocationTracking();
@@ -152,6 +170,18 @@ export function HomeTab({ navigation }: any) {
   }, [profile?.assigned_unit_id]);
 
   const toggleDuty = async (newVal: boolean) => {
+    if (!isConnected) {
+      showDialog({
+        title: 'Connexion requise',
+        message: 'Veuillez activer votre connexion internet (Wi-Fi ou données mobiles) pour modifier votre statut de service.',
+        icon: 'cloud-off-outline',
+        iconType: 'community',
+        isError: true,
+        confirmText: 'COMPRIS'
+      });
+      return;
+    }
+
     setIsDutyActive(newVal);
     if (profile?.id) {
       const { error } = await supabase
@@ -160,7 +190,13 @@ export function HomeTab({ navigation }: any) {
         .eq('id', profile.id);
 
       if (error) {
-        Alert.alert('Erreur', 'Impossible de modifier le statut de service.');
+        showDialog({
+          title: 'Erreur réseau',
+          message: 'Impossible de modifier le statut de service. Vérifiez votre connexion.',
+          icon: 'wifi-off',
+          isError: true,
+          confirmText: 'RÉESSAYER'
+        });
         setIsDutyActive(!newVal);
       } else {
         refreshProfile();
@@ -315,7 +351,7 @@ export function HomeTab({ navigation }: any) {
 
   const handleCallCentral = () => {
     if (isPhonePulseActive) return;
-    
+
     setIsCalling(true);
     setTimeout(() => setIsCalling(false), 3000);
     navigation.navigate('CallCenter');
@@ -555,6 +591,12 @@ export function HomeTab({ navigation }: any) {
         <View style={styles.centerStage}>
           {hasActiveAlert && isModalMinimized ? (
             <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+              {!isConnected && (
+                <View style={styles.offlineMissionBanner}>
+                  <MaterialCommunityIcons name="cloud-off-outline" size={16} color="#FFF" />
+                  <Text style={styles.offlineMissionText}>CONNEXION PERDUE</Text>
+                </View>
+              )}
               <AlertPulseIcon />
               <Text style={[styles.statusText, { color: colors.primary, marginTop: 16 }]}>MISSION EN COURS</Text>
               <AppTouchableOpacity
@@ -574,23 +616,29 @@ export function HomeTab({ navigation }: any) {
 
               <View style={[styles.agentInfoRow, { marginTop: 12 }]}>
                 <MaterialIcons name="person" size={14} color="rgba(255,255,255,0.4)" />
-                <Text style={styles.agentInfo}>Agent: {profile?.last_name || profile?.first_name || 'Inconnu'}</Text>
+                <Text style={styles.agentInfoText}>Agent: {profile?.last_name || profile?.first_name || 'Inconnu'}</Text>
               </View>
             </View>
           ) : (
             <>
-              <PulseRadar isActive={isDutyActive} />
-              <Text style={[styles.statusText, isDutyActive ? { color: colors.success } : { color: colors.textMuted }]}>
-                {isDutyActive ? "SERVICE ACTIF" : "SERVICE DÉSACTIVÉ"}
+              <PulseRadar isActive={isDutyActive} isConnected={isConnected} />
+              <Text style={[
+                styles.statusText,
+                !isConnected ? { color: '#FB8C00' } : (isDutyActive ? { color: colors.success } : { color: colors.textMuted })
+              ]}>
+                {!isConnected ? "HORS LIGNE" : (isDutyActive ? "SERVICE ACTIF" : "SERVICE DÉSACTIVÉ")}
               </Text>
               <View style={styles.agentInfoRow}>
                 <MaterialIcons name="person" size={14} color="rgba(255,255,255,0.4)" />
-                <Text style={styles.agentInfo}>Agent: {profile?.last_name || profile?.first_name || 'Inconnu'}</Text>
+                <Text style={styles.agentInfoText}>Agent: {profile?.last_name || profile?.first_name || 'Inconnu'}</Text>
               </View>
               <Text style={styles.statusSubText}>
-                {isDutyActive
-                  ? "Vous êtes connecté et visible par la centrale.\nEn attente d'une nouvelle mission..."
-                  : "Vous êtes hors ligne.\nAucune mission ne vous sera assignée."}
+                {!isConnected
+                  ? "Votre connexion internet est interrompue.\nLe suivi GPS et les missions sont suspendus."
+                  : (isDutyActive
+                    ? "Vous êtes connecté et visible par la centrale.\nEn attente d'une nouvelle mission..."
+                    : "Vous êtes hors ligne.\nAucune mission ne vous sera assignée.")
+                }
               </Text>
             </>
           )}
@@ -636,19 +684,19 @@ export function HomeTab({ navigation }: any) {
         )}
 
         <View style={[styles.quickAccessRow, hasActiveAlert && { marginTop: 0, paddingBottom: 20 }]}>
-          <AppTouchableOpacity 
-            style={[styles.quickBtn, isPhonePulseActive && { opacity: 0.5 }]} 
+          <AppTouchableOpacity
+            style={[styles.quickBtn, isPhonePulseActive && { opacity: 0.5 }]}
             onPress={handleCallCentral}
             disabled={isPhonePulseActive}
           >
             <View style={[
-              styles.quickIconBox, 
+              styles.quickIconBox,
               { backgroundColor: isPhonePulseActive ? 'rgba(255,255,255,0.05)' : colors.success + '15' }
             ]}>
-              <MaterialIcons 
-                name="phone" 
-                color={isPhonePulseActive ? 'rgba(255,255,255,0.3)' : colors.success} 
-                size={22} 
+              <MaterialIcons
+                name="phone"
+                color={isPhonePulseActive ? 'rgba(255,255,255,0.3)' : colors.success}
+                size={22}
               />
             </View>
             <Text style={[styles.quickBtnTxt, isPhonePulseActive && { color: 'rgba(255,255,255,0.3)' }]}>
@@ -755,7 +803,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  agentInfo: {
+  agentInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  agentInfoText: {
     fontSize: 13,
     fontWeight: '700',
     color: 'rgba(255,255,255,0.4)',
@@ -1119,12 +1174,23 @@ const styles = StyleSheet.create({
     marginTop: 32,
     paddingHorizontal: 8,
   },
-  agentInfoRow: {
+  offlineMissionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    justifyContent: 'center',
-    marginBottom: 16, // MOVED FROM agentInfo
+    backgroundColor: '#FB8C00',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginBottom: 12,
+    position: 'absolute',
+    top: -60,
+  },
+  offlineMissionText: {
+    color: '#FFF',
+    fontSize: 11,
+    fontWeight: '900',
+    marginLeft: 6,
+    letterSpacing: 1,
   },
   quickBtn: {
     alignItems: 'center',
@@ -1146,5 +1212,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     letterSpacing: 0.5,
-  }
+  },
 });
