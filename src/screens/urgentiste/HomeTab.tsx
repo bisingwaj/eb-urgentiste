@@ -254,7 +254,7 @@ export function HomeTab({ navigation }: any) {
         setIsModalMinimized(true);
         // CRITICAL: Mark mission as in-progress in Supabase
         void updateDispatchStatus('en_route');
-        navigation.navigate('Signalement', { mission: activeMission });
+        navigation.navigate('MissionActive', { mission: activeMission });
       } else {
         // RESET
         Animated.timing(confirmProgress, {
@@ -603,7 +603,7 @@ export function HomeTab({ navigation }: any) {
                 style={styles.restoreBtn}
                 onPress={() => {
                   if (isMissionAccepted) {
-                    navigation.navigate('Signalement', { mission: activeMission });
+                    navigation.navigate('MissionActive', { mission: activeMission });
                   } else {
                     setIsModalMinimized(false);
                   }
