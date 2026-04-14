@@ -55,7 +55,7 @@ export function MissionActiveScreen({ navigation }: any) {
   const [isCalling, setIsCalling] = useState(false);
   const [isAddressExpanded, setIsAddressExpanded] = useState(false);
   const [mapMode, setMapMode] = useState<'2D' | '3D'>('2D');
-  const [zoomLevel, setZoomLevel] = useState(14);
+  const [zoomLevel, setZoomLevel] = useState(15);
   
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
@@ -208,12 +208,37 @@ export function MissionActiveScreen({ navigation }: any) {
           <Mapbox.Camera
             followUserLocation={mapMode === '3D'}
             followUserMode={Mapbox.UserTrackingMode.FollowWithCourse}
-            pitch={mapMode === '3D' ? 60 : 0}
+            pitch={mapMode === '3D' ? 62 : 0}
             heading={mapMode === '3D' ? myHeadingDeg : 0}
-            zoomLevel={mapMode === '2D' ? zoomLevel : 16}
+            zoomLevel={mapMode === '3D' ? 16.5 : zoomLevel}
             animationMode="flyTo"
-            animationDuration={1500}
-            centerCoordinate={mapMode === '2D' && myLocation ? [myLocation.coords.longitude, myLocation.coords.latitude] : undefined}
+            animationDuration={600}
+            defaultSettings={{
+              centerCoordinate: missionCoords || undefined,
+              zoomLevel: 15,
+            }}
+            centerCoordinate={
+              mapMode === '3D' 
+                ? undefined 
+                : (distanceToIncident < 400 && myLocation)
+                  ? [myLocation.coords.longitude, myLocation.coords.latitude] 
+                  : (missionCoords || undefined)
+            }
+            padding={{ paddingLeft: 40, paddingRight: 40, paddingTop: 180, paddingBottom: 120 }}
+            bounds={
+              mapMode === '2D' && distanceToIncident > 400 && myLocation && missionCoords
+                ? {
+                    ne: [
+                      Math.max(myLocation.coords.longitude, missionCoords[0]),
+                      Math.max(myLocation.coords.latitude, missionCoords[1]),
+                    ],
+                    sw: [
+                      Math.min(myLocation.coords.longitude, missionCoords[0]),
+                      Math.min(myLocation.coords.latitude, missionCoords[1]),
+                    ],
+                  }
+                : undefined
+            }
           />
 
           {/* 3D BUILDINGS & SKY */}
