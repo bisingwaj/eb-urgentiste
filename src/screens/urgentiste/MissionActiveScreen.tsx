@@ -368,7 +368,7 @@ export function MissionActiveScreen({ navigation }: any) {
             <Text style={styles.callBtnText}>CENTRALE</Text>
           </AppTouchableOpacity>
           <AppTouchableOpacity style={[styles.callBtn, isPhonePulseActive && { opacity: 0.4 }]} onPress={async () => {
-            if (isPhonePulseActive || !activeMission.caller?.phone) return;
+            if (isPhonePulseActive || !activeMission.caller?.phone || !activeMission.citizen_id) return;
             if (isLocalNumber(activeMission.caller.phone)) {
               setShowCallModal(true);
             } else {
@@ -430,6 +430,10 @@ export function MissionActiveScreen({ navigation }: any) {
                   setShowCallModal(false);
                   setIsCalling(true);
                   try {
+                    if (!activeMission.citizen_id) {
+                      Alert.alert('Erreur', 'Impossible d\'identifier le patient pour l\'appel VoIP.');
+                      return;
+                    }
                     await startRescuerToCitizenVoipCall({
                       incidentId: activeMission.id,
                       citizenId: activeMission.citizen_id,
