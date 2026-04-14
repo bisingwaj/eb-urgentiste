@@ -163,17 +163,18 @@ export function MissionActiveScreen({ navigation }: any) {
     const next = nextStatuses[activeMission?.dispatch_status || ''];
     if (!next) return;
 
-    Alert.alert('Changement de statut', `Confirmer le passage à "${next}" ?`, [
-      { text: 'Annuler', style: 'cancel' },
-      { text: 'Confirmer', onPress: async () => {
-          setIsUpdating(true);
-          try {
-            await updateDispatchStatus(next as any);
-            if (next === 'on_scene') navigation.replace('Signalement', { mission: activeMission });
-          } catch (err) { Alert.alert('Erreur', 'Mise à jour échouée.'); }
-          setIsUpdating(false);
-      }}
-    ]);
+    // No more manual confirmation needed for on-scene transition
+    setIsUpdating(true);
+    try {
+      await updateDispatchStatus(next as any);
+      if (next === 'on_scene') {
+        navigation.replace('Signalement', { mission: activeMission });
+      }
+    } catch (err) {
+      Alert.alert('Erreur', 'Mise à jour échouée.');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const toggleMapMode = () => {
