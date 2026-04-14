@@ -14,6 +14,7 @@ import { openExternalDirections } from '../../utils/navigation';
 import { formatMissionAddress } from '../../utils/missionAddress';
 import { useCallSession } from '../../contexts/CallSessionContext';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
+import { startRescuerToCitizenVoipCall, alertVoipError } from '../../lib/rescuerCallCitizen';
 
 // Enable LayoutAnimation
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -361,22 +362,32 @@ export function MissionActiveScreen({ navigation }: any) {
              if (isPhonePulseActive) return;
              setIsCalling(true);
              setTimeout(() => setIsCalling(false), 3000);
-             navigation.navigate('CallCenter');
+             navigation.navigate('CallCenter', { target: 'central' });
           }} disabled={isPhonePulseActive}>
             <MaterialIcons name="headset-mic" size={20} color={colors.secondary} />
             <Text style={styles.callBtnText}>CENTRALE</Text>
           </AppTouchableOpacity>
-          <AppTouchableOpacity style={styles.callBtn} onPress={() => {
-            if (!activeMission.caller?.phone) return;
+          <AppTouchableOpacity style={[styles.callBtn, isPhonePulseActive && { opacity: 0.4 }]} onPress={async () => {
+            if (isPhonePulseActive || !activeMission.caller?.phone) return;
             if (isLocalNumber(activeMission.caller.phone)) {
               setShowCallModal(true);
             } else {
-              // Direct App Call for international
+              // High performance direct App Call via Edge Function
               setIsCalling(true);
-              setTimeout(() => setIsCalling(false), 3000);
-              navigation.navigate('CallCenter');
+              try {
+                await startRescuerToCitizenVoipCall({
+                  incidentId: activeMission.id,
+                  citizenId: activeMission.citizen_id,
+                  callType: 'audio',
+                  patientName: activeMission.caller?.name || 'Patient'
+                });
+              } catch (err) {
+                alertVoipError(err);
+              } finally {
+                setIsCalling(false);
+              }
             }
-          }}>
+          }} disabled={isPhonePulseActive}>
             <MaterialIcons name="person" size={20} color={colors.success} />
             <Text style={styles.callBtnText}>PATIENT</Text>
           </AppTouchableOpacity>
@@ -415,11 +426,21 @@ export function MissionActiveScreen({ navigation }: any) {
 
               <AppTouchableOpacity 
                 style={[styles.modalBtn, styles.secondaryBtn]} 
-                onPress={() => {
+                onPress={async () => {
                   setShowCallModal(false);
                   setIsCalling(true);
-                  setTimeout(() => setIsCalling(false), 3000);
-                  navigation.navigate('CallCenter');
+                  try {
+                    await startRescuerToCitizenVoipCall({
+                      incidentId: activeMission.id,
+                      citizenId: activeMission.citizen_id,
+                      callType: 'audio',
+                      patientName: activeMission.caller?.name || 'Patient'
+                    });
+                  } catch (err) {
+                    alertVoipError(err);
+                  } finally {
+                    setIsCalling(false);
+                  }
                 }}
               >
                 <MaterialIcons name="headset-mic" size={24} color={colors.secondary} />
