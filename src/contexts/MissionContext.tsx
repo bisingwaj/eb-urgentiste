@@ -505,20 +505,23 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       if (status === 'arrived_hospital') updateData.arrived_at = new Date().toISOString();
       if (status === 'completed') updateData.completed_at = new Date().toISOString();
 
-      // 1. Update active dispatch
-      console.log(`[Mission] 🔄 Updating dispatch ${activeMission.id} → ${status}`);
-      const { error: dispatchError } = await supabase
-        .from('dispatches')
-        .update(updateData)
-        .eq('id', activeMission.id);
+      // Prepare promises for parallel execution
+      const promises = [];
 
-      if (dispatchError) {
-        console.error('[Mission] ❌ STEP 1 FAILED — dispatches UPDATE:', dispatchError.message, dispatchError.details);
-        throw dispatchError;
-      }
-      console.log('[Mission] ✅ Step 1 — dispatch updated');
-      
-      // 2. incidents.status — aligné PROMPT_CURSOR_URGENTISTE_WORKFLOW §8 + NOTE_LOVABLE (ex. mission_end → ended).
+      // 1. Update active dispatch
+      console.log(`[Mission] 🔄 Parallelizing update: dispatch ${activeMission.id} → ${status}`);
+      promises.push(
+        supabase
+          .from('dispatches')
+          .update(updateData)
+          .eq('id', activeMission.id)
+          .then(({ error }) => {
+            if (error) console.error('[Mission] ❌ Dispatch update failed:', error.message);
+            return { type: 'dispatch', error };
+          })
+      );
+
+      // 2. incidents.status
       const incidentStatusMap: Record<string, string> = {
         en_route: 'en_route',
         on_scene: 'arrived',
@@ -528,19 +531,21 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         completed: 'resolved',
       };
       const incidentStatus = incidentStatusMap[status] || status;
-      
-      const { error: incidentError } = await supabase
-        .from('incidents')
-        .update({
-          status: incidentStatus,
-          ...(incidentStatus === 'resolved' ? { resolved_at: new Date().toISOString() } : {}),
-        })
-        .eq('id', activeMission.incident_id);
+      promises.push(
+        supabase
+          .from('incidents')
+          .update({
+            status: incidentStatus,
+            ...(incidentStatus === 'resolved' ? { resolved_at: new Date().toISOString() } : {}),
+          })
+          .eq('id', activeMission.incident_id)
+          .then(({ error }) => {
+            if (error) console.error('[Mission] ⚠️ Incident update failed:', error.message);
+            return { type: 'incident', error };
+          })
+      );
 
-      if (incidentError) console.error('[Mission] ⚠️ Step 2 — incident update failed:', incidentError.message);
-      else console.log(`[Mission] ✅ Step 2 — incident → ${incidentStatus}`);
-
-      // 3. Sync active_rescuers.status → trigger → units.status (tableau workflow PROMPT_CURSOR_URGENTISTE)
+      // 3. Sync active_rescuers.status
       const rescuerStatusMap: Record<string, string> = {
         en_route: 'en_route',
         on_scene: 'on_scene',
@@ -551,16 +556,30 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       };
       const rescuerStatus = rescuerStatusMap[status] || 'active';
 
-      const userId = (await supabase.auth.getUser()).data.user?.id;
-      if (userId) {
-        const { error: rescuerError } = await supabase
-          .from('active_rescuers')
-          .update({ status: rescuerStatus, updated_at: new Date().toISOString() })
-          .eq('user_id', userId);
-        
-        if (rescuerError) console.error('[MissionProvider] Error syncing rescuer status:', rescuerError.message);
-        else console.log(`[Mission] ✅ Rescuer status → ${rescuerStatus}`);
+      promises.push(
+        (async () => {
+          const uData = await supabase.auth.getUser();
+          const userId = uData.data.user?.id;
+          if (userId) {
+            const { error } = await supabase
+              .from('active_rescuers')
+              .update({ status: rescuerStatus, updated_at: new Date().toISOString() })
+              .eq('user_id', userId);
+            if (error) console.error('[Mission] ⚠️ Rescuer status sync failed:', error.message);
+            return { type: 'rescuer', error };
+          }
+          return { type: 'rescuer', error: null };
+        })()
+      );
+
+      // Execute all updates in parallel
+      const results = await Promise.all(promises);
+      const criticalError = results.find(r => r.type === 'dispatch' && r.error);
+      if (criticalError?.error) {
+        throw criticalError.error;
       }
+
+      console.log('[Mission] ✅ All parallel updates triggered');
       // Update local state immediately
       if (status === 'completed') {
         // Mission terminée → vider immédiatement pour que le HomeTab affiche "Standby"
