@@ -3,7 +3,7 @@ import { Alert, Vibration, DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { uploadIncidentTerrainPhotoToStorage } from '../lib/incidentTerrainPhotos';
 import { useAuth } from './AuthContext';
-import { Mission, normalizeHospitalStatus } from '../hooks/useActiveMission';
+import { Mission, normalizeHospitalStatus } from '../types/mission';
 import { readMissionCache, writeMissionCache } from '../lib/localAppCache';
 import { APP_FOREGROUND_SYNC } from '../lib/syncEvents';
 

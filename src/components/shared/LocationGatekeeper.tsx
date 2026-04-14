@@ -80,8 +80,8 @@ export function LocationGatekeeper({ children }: { children: React.ReactNode }) 
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <View style={styles.centerBlock}>
           <View style={[styles.iconContainer, isGpsDisabled && { backgroundColor: 'rgba(251, 140, 0, 0.1)' }]}>
-            <MaterialCommunityIcons 
-              name={(isGpsDisabled ? "location-off" : "map-marker-off") as any} 
+            <MaterialIcons 
+              name={isGpsDisabled ? "location-off" : "location-disabled"} 
               size={80} 
               color={isGpsDisabled ? "#FB8C00" : colors.primary} 
             />

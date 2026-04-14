@@ -162,17 +162,18 @@ export function MissionActiveScreen({ navigation }: any) {
   const handleNextStatus = async () => {
     const nextStatuses: Record<string, string> = { dispatched: 'en_route', en_route: 'on_scene', on_scene: 'completed' };
     const next = nextStatuses[activeMission?.dispatch_status || ''];
-    if (!next) return;
-
     // No more manual confirmation needed for on-scene transition
     setIsUpdating(true);
-    setIsTransitioning(true);
     try {
+      if (next === 'on_scene') {
+        setIsTransitioning(true);
+      }
+      
       await updateDispatchStatus(next as any);
-      // Small stabilization delay for Mapbox sync
-      await new Promise(r => setTimeout(r, 100));
       
       if (next === 'on_scene') {
+        // Small stabilization delay for Mapbox sync
+        await new Promise(r => setTimeout(r, 120));
         navigation.replace('Signalement', { mission: activeMission });
       }
     } catch (err) {
