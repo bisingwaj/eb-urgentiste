@@ -1,0 +1,193 @@
+import React from 'react';
+import { View, Text, ScrollView, Animated, Platform } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { HeartPulse } from "lucide-react-native";
+import Mapbox from "@rnmapbox/maps";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { colors } from '../../../../theme/colors';
+import { styles } from '../styles';
+import { AppTouchableOpacity } from '../../../../components/ui/AppTouchableOpacity';
+import { MapboxMapView } from '../../../../components/map/MapboxMapView';
+import { MePuck } from '../../../../components/map/mapMarkers';
+import { formatIncidentType, formatDescriptionLines } from '../../../../utils/missionAddress';
+import { canOfferVictimContactCalls } from '../../../../lib/missionVictimCall';
+
+interface StepReceptionProps {
+   selectedMission: any;
+   urgentisteLoc: any;
+   urgentisteHeadingDeg: number;
+   routeGeoJSON: any;
+   routeInfoText: string;
+   receptionCameraBounds: any;
+   displayAddress: string;
+   pan: Animated.Value;
+   panResponder: any;
+   insets: any;
+   onBack: () => void;
+   onOpenFullscreenMap: () => void;
+   renderVictimContactStrip: () => React.ReactNode;
+}
+
+export const StepReception: React.FC<StepReceptionProps> = ({
+   selectedMission,
+   urgentisteLoc,
+   urgentisteHeadingDeg,
+   routeGeoJSON,
+   routeInfoText,
+   receptionCameraBounds,
+   displayAddress,
+   pan,
+   panResponder,
+   insets,
+   onBack,
+   onOpenFullscreenMap,
+   renderVictimContactStrip
+}) => {
+   return (
+      <View style={[styles.receptionView, { padding: 0 }]}>
+         <View style={styles.receptionMapWrapper}>
+            <AppTouchableOpacity
+               onPress={onBack}
+               style={[styles.floatingBackSignalement, { top: insets.top + 10 }]}
+               accessibilityRole="button"
+               accessibilityLabel="Retour"
+            >
+               <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+            </AppTouchableOpacity>
+            <MapboxMapView 
+               style={styles.receptionMap} 
+               styleURL={Mapbox.StyleURL.Dark} 
+               compassEnabled={true} 
+               scaleBarEnabled={true}
+               scaleBarPosition={{ top: 120, left: 16 }}
+            >
+               {receptionCameraBounds ? (
+                  <Mapbox.Camera
+                     bounds={receptionCameraBounds}
+                     animationMode="flyTo"
+                     animationDuration={1000}
+                  />
+               ) : (
+                  <Mapbox.Camera
+                     centerCoordinate={[selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447]}
+                     zoomLevel={13}
+                  />
+               )}
+
+               <Mapbox.PointAnnotation id="victim-reception" coordinate={[selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447]}>
+                 <View style={styles.victimMarker}>
+                    <HeartPulse size={16} color="#FFF" strokeWidth={2.5} />
+                 </View>
+               </Mapbox.PointAnnotation>
+
+               {urgentisteLoc && (
+                  <Mapbox.PointAnnotation id="my-unit-reception" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
+                     <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
+                  </Mapbox.PointAnnotation>
+               )}
+
+               {routeGeoJSON && (
+                  <Mapbox.ShapeSource id="route-reception" shape={routeGeoJSON}>
+                     <Mapbox.LineLayer id="route-reception-line" style={{ lineColor: '#4A90D9', lineWidth: 4, lineOpacity: 0.85 }} />
+                  </Mapbox.ShapeSource>
+               )}
+            </MapboxMapView>
+            <View style={styles.mapDistOverlay}>
+               <MaterialIcons name="navigation" size={14} color="#FFF" />
+               <Text style={styles.mapDistText}>{routeInfoText}</Text>
+            </View>
+            <AppTouchableOpacity
+               style={[styles.mapFullscreenEntryBtn, { top: insets.top + 10 }]}
+               onPress={onOpenFullscreenMap}
+               accessibilityRole="button"
+               accessibilityLabel="Carte plein écran"
+            >
+               <MaterialIcons name="fullscreen" color="#FFF" size={22} />
+            </AppTouchableOpacity>
+         </View>
+
+         <View style={styles.receptionBottomPanel}>
+            <ScrollView
+               style={styles.receptionScroll}
+               showsVerticalScrollIndicator={false}
+               keyboardShouldPersistTaps="handled"
+               contentContainerStyle={{
+                  padding: 24,
+                  paddingBottom: insets.bottom + 140,
+               }}
+            >
+               <View style={styles.detailBox}>
+                  <View style={styles.receptionHeaderStrip}>
+                     <MaterialIcons
+                        name={
+                           selectedMission.priority === "CRITIQUE"
+                              ? "priority-high"
+                              : "info"
+                        }
+                        color={
+                           selectedMission.priority === "CRITIQUE"
+                              ? colors.primary
+                              : colors.secondary
+                        }
+                        size={32}
+                     />
+                     <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text style={styles.detailMissionType} numberOfLines={2}>
+                           {formatIncidentType(selectedMission.type)}
+                        </Text>
+                        <Text style={styles.priorityStatusText}>
+                           {selectedMission.priority} • {selectedMission.time}{" "}
+                           d'attente
+                        </Text>
+                     </View>
+                  </View>
+                  <View style={styles.divider} />
+                  <Text style={styles.detailLabel}>Site d'affectation</Text>
+                   <Text style={styles.detailVal}>
+                     {displayAddress}
+                   </Text>
+                  <View style={styles.divider} />
+                  <Text style={styles.detailLabel}>Descriptif central</Text>
+                  {formatDescriptionLines(selectedMission.description).map((line, i) => (
+                     <Text key={i} style={styles.detailDesc}>{"\u2022  "}{line}</Text>
+                  ))}
+               </View>
+               {selectedMission &&
+                  canOfferVictimContactCalls(selectedMission.dispatch_status) && (
+                     <View style={styles.victimStripReceptionWrap}>
+                        {renderVictimContactStrip()}
+                     </View>
+                  )}
+            </ScrollView>
+
+            <View style={styles.stickySwipeWrapper}>
+               <View style={styles.swipeContainer}>
+                  <View style={styles.swipeBackground}>
+                     <Text style={styles.swipeText}>
+                        Glisser pour débuter l'intervention
+                     </Text>
+                     <MaterialIcons
+                        name="chevron-right"
+                        color="rgba(255,255,255,0.3)"
+                        size={24}
+                     />
+                  </View>
+                  <Animated.View
+                     style={[
+                        styles.swipeThumb,
+                        { transform: [{ translateX: pan }] },
+                     ]}
+                     {...panResponder.panHandlers}
+                  >
+                     <MaterialIcons
+                        name="keyboard-double-arrow-right"
+                        color="#000"
+                        size={28}
+                     />
+                  </Animated.View>
+               </View>
+            </View>
+         </View>
+      </View>
+   );
+};

@@ -99,6 +99,17 @@ export function MissionActiveScreen({ navigation }: any) {
     return () => sub?.remove();
   }, []);
 
+  // Safety check: if mission is already on_scene, redirect to Signalement
+  useEffect(() => {
+    if (activeMission?.dispatch_status === 'on_scene' || 
+        activeMission?.dispatch_status === 'en_route_hospital' || 
+        activeMission?.dispatch_status === 'arrived_hospital' ||
+        activeMission?.dispatch_status === 'completed') {
+      console.log('[MissionActive] Status is already', activeMission.dispatch_status, '-> Redirecting to Signalement');
+      navigation.replace('Signalement', { mission: activeMission });
+    }
+  }, [activeMission?.dispatch_status]);
+
   const missionCoords = useMemo(() => {
     if (activeMission?.location?.lat && activeMission?.location?.lng) {
       return [activeMission.location.lng, activeMission.location.lat] as [number, number];
@@ -172,8 +183,8 @@ export function MissionActiveScreen({ navigation }: any) {
         setIsTransitioning(true);
         // Step 2: Delay to allow Mapbox native engine to cleanup
         await new Promise(r => setTimeout(r, 150));
-        // Step 3: Navigate
-        navigation.replace('Signalement', { mission: activeMission });
+        // Step 3: Navigate - pass the updated status so it doesn't use stale context
+        navigation.replace('Signalement', { mission: { ...activeMission, dispatch_status: 'on_scene' } });
       }
     } catch (err) {
       Alert.alert('Erreur', 'Mise à jour échouée.');

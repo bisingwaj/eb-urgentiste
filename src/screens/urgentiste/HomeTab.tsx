@@ -603,7 +603,13 @@ export function HomeTab({ navigation }: any) {
                 style={styles.restoreBtn}
                 onPress={() => {
                   if (isMissionAccepted) {
-                    navigation.navigate('MissionActive', { mission: activeMission });
+                    const status = activeMission?.dispatch_status || 'dispatched';
+                    // If we are already on scene or beyond, go to Signalement
+                    if (status === 'on_scene' || status === 'en_route_hospital' || status === 'arrived_hospital') {
+                      navigation.navigate('Signalement', { mission: activeMission });
+                    } else {
+                      navigation.navigate('MissionActive', { mission: activeMission });
+                    }
                   } else {
                     setIsModalMinimized(false);
                   }
