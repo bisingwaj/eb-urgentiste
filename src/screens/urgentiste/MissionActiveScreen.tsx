@@ -165,15 +165,14 @@ export function MissionActiveScreen({ navigation }: any) {
     // No more manual confirmation needed for on-scene transition
     setIsUpdating(true);
     try {
-      if (next === 'on_scene') {
-        setIsTransitioning(true);
-      }
-      
       await updateDispatchStatus(next as any);
       
       if (next === 'on_scene') {
-        // Small stabilization delay for Mapbox sync
-        await new Promise(r => setTimeout(r, 120));
+        // Step 1: Force Mapbox to unmount by setting transitioning state
+        setIsTransitioning(true);
+        // Step 2: Delay to allow Mapbox native engine to cleanup
+        await new Promise(r => setTimeout(r, 150));
+        // Step 3: Navigate
         navigation.replace('Signalement', { mission: activeMission });
       }
     } catch (err) {
@@ -206,8 +205,9 @@ export function MissionActiveScreen({ navigation }: any) {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
       {/* MAP BOX PRO */}
-      <View style={StyleSheet.absoluteFill}>
-        <MapboxMapView 
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]}>
+        {!isTransitioning && (
+          <MapboxMapView 
           style={styles.map} 
           styleURL={Mapbox.StyleURL.Dark} 
           compassEnabled={false}
@@ -310,7 +310,8 @@ export function MissionActiveScreen({ navigation }: any) {
               <Mapbox.LineLayer id="route-layer" style={{ lineColor: colors.secondary, lineWidth: 6, lineOpacity: 0.9, lineCap: 'round' }} />
             </Mapbox.ShapeSource>
           )}
-        </MapboxMapView>
+          </MapboxMapView>
+        )}
       </View>
 
       {/* TOP CONTROLS */}
