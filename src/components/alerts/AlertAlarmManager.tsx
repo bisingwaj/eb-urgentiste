@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus, DeviceEventEmitter } from 'react-native';
-import { AlarmService } from '../../services/AlarmService';
+import { AlarmService, ALARM_STOP_EVENT } from '../../services/AlarmService';
 import { NotificationService } from '../../services/NotificationService';
 import { useMission } from '../../contexts/MissionContext';
 
@@ -35,7 +35,18 @@ export function AlertAlarmManager() {
       });
     });
 
-    return () => subscription.remove();
+    const stopSub = DeviceEventEmitter.addListener(ALARM_STOP_EVENT, () => {
+      if (AlarmService.isPlaying()) {
+        console.log('[AlertAlarmManager] 🛑 STOP_ALARM_EVENT received — stopping alarm');
+        AlarmService.stopAlarm();
+        NotificationService.dismissAll();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      stopSub.remove();
+    };
   }, []);
 
   // ── Stopper l'alarme quand l'app revient au foreground ──

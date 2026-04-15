@@ -18,11 +18,8 @@ import type { TransportModeCode } from "../../lib/transportMode";
 import { useAuth } from "../../contexts/AuthContext";
 import { useHospital } from "../../contexts/HospitalContext";
 import { CapacitySelector } from "./components/CapacitySelector";
-import { QuickDecisionTile } from "./components/QuickDecisionTile";
+import { IncomingCaseItem } from "./components/IncomingCaseItem";
 import {
-  countActiveAdmissions,
-  countCriticalOpen,
-  countPendingHospital,
   isCaseClosed,
 } from "../../lib/hospitalStats";
 
@@ -63,6 +60,7 @@ export interface EmergencyCase {
   urgentisteName: string;
   urgentistePhone: string;
   eta: string;
+  distance?: string;
   status: CaseStatus;
   address: string;
   timestamp: string;
@@ -454,7 +452,7 @@ export function HospitalDashboardTab({ navigation }: any) {
     [refresh, refreshProfile],
   );
 
-  const { displayName, displayIdLine, displayAddress, displayPhone } = useMemo(() => {
+  const { displayName } = useMemo(() => {
     const userLabel =
       profile?.first_name || profile?.last_name
         ? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim()
@@ -464,24 +462,8 @@ export function HospitalDashboardTab({ navigation }: any) {
       struct?.name?.trim() ||
       userLabel ||
       "Structure sanitaire";
-    const displayIdLineResolved =
-      profile?.agent_login_id != null &&
-      String(profile.agent_login_id).length > 0
-        ? `Identifiant : ${profile.agent_login_id}`
-        : profile?.matricule != null && String(profile.matricule).length > 0
-          ? `Matricule : ${profile.matricule}`
-          : profile?.id != null
-            ? `ID : ${profile.id.slice(0, 8)}…`
-            : null;
-    const displayAddressResolved =
-      struct?.address?.trim() || profile?.address?.trim() || "";
-    const displayPhoneResolved =
-      struct?.phone?.trim() || profile?.phone?.trim() || "";
     return {
       displayName: displayNameResolved,
-      displayIdLine: displayIdLineResolved,
-      displayAddress: displayAddressResolved,
-      displayPhone: displayPhoneResolved,
     };
   }, [profile]);
 
@@ -489,33 +471,29 @@ export function HospitalDashboardTab({ navigation }: any) {
     "all" | "en_attente" | "en_cours" | "termine"
   >("all");
 
-  const filteredCases = activeCases.filter((c) => {
-    // Dans la liste principale, on ne montre que ceux déjà acceptés ou en cours de gestion clinique
-    // Les 'pending' vont dans la zone de décision rapide en haut.
-    if (c.hospitalStatus === "pending") return false;
-    
-    if (filter === "all") return !isCaseClosed(c);
-    return c.status === filter;
-  });
-
-  const pendingCases = useMemo(() => {
-    return activeCases.filter(c => c.hospitalStatus === "pending");
-  }, [activeCases]);
-
-  /** Alertes triées par date de création du signalement */
-  const sortedFilteredCases = useMemo(() => {
-    const list = [...filteredCases];
-    list.sort((a, b) => {
+  const incomingCases = useMemo(() => {
+    return activeCases.filter((c) => {
+      // Uniquement ce qui est en approche : 'pending' (à décider) ou 'accepted' mais encore 'en_cours' (en route)
+      const isPending = c.hospitalStatus === "pending";
+      const isIncoming = c.hospitalStatus === "accepted" && c.status === "en_cours";
+      return (isPending || isIncoming) && !isCaseClosed(c);
+    }).sort((a, b) => {
       const ta = a.dispatchCreatedAt ? new Date(a.dispatchCreatedAt).getTime() : 0;
       const tb = b.dispatchCreatedAt ? new Date(b.dispatchCreatedAt).getTime() : 0;
       return tb - ta;
     });
-    return list;
-  }, [filteredCases]);
+  }, [activeCases]);
 
   const handleQuickAccept = async (caseId: string) => {
     try {
       await updateCaseStatus(caseId, { hospitalStatus: 'accepted' });
+      // On navigue immédiatement vers le suivi (Tracking)
+      const updatedCase = activeCases.find(c => c.id === caseId);
+      if (updatedCase) {
+        navigation.navigate("HospitalCaseDetail", { 
+          caseData: { ...updatedCase, hospitalStatus: 'accepted' } 
+        });
+      }
     } catch (err) {
       console.error("[Dashboard] Error accepting case:", err);
     }
@@ -529,19 +507,6 @@ export function HospitalDashboardTab({ navigation }: any) {
     }
   };
 
-  const criticalCount = useMemo(
-    () => countCriticalOpen(activeCases),
-    [activeCases],
-  );
-  const activeCount = useMemo(
-    () => countActiveAdmissions(activeCases),
-    [activeCases],
-  );
-
-  const pendingHospitalCount = useMemo(
-    () => countPendingHospital(activeCases),
-    [activeCases],
-  );
 
   return (
     <TabScreenSafeArea style={styles.safeArea}>
@@ -558,44 +523,9 @@ export function HospitalDashboardTab({ navigation }: any) {
               />
             ) : (
               <>
-                <Text style={styles.hospitalName} numberOfLines={2}>
+                <Text style={styles.hospitalName} numberOfLines={1}>
                   {displayName}
                 </Text>
-                {displayIdLine ? (
-                  <Text style={styles.headerIdLine}>{displayIdLine}</Text>
-                ) : null}
-                {displayAddress ? (
-                  <View style={styles.headerMetaRow}>
-                    <MaterialIcons
-                      name="location-on"
-                      size={15}
-                      color={colors.secondary}
-                    />
-                    <Text style={styles.headerMetaText} numberOfLines={2}>
-                      {displayAddress}
-                    </Text>
-                  </View>
-                ) : null}
-                {displayPhone ? (
-                  <View style={styles.headerMetaRow}>
-                    <MaterialIcons
-                      name="phone"
-                      size={15}
-                      color={colors.success}
-                    />
-                    <Text style={styles.headerMetaText} numberOfLines={1}>
-                      {displayPhone}
-                    </Text>
-                  </View>
-                ) : null}
-                {profile.zone?.trim() ? (
-                  <View style={styles.headerMetaRow}>
-                    <MaterialIcons name="map" size={15} color="#90CAF9" />
-                    <Text style={styles.headerMetaText} numberOfLines={1}>
-                      {profile.zone.trim()}
-                    </Text>
-                  </View>
-                ) : null}
               </>
             )}
           </View>
@@ -604,35 +534,10 @@ export function HospitalDashboardTab({ navigation }: any) {
             onPress={() => navigation.navigate("Notifications")}
             accessibilityLabel="Notifications"
           >
-            <MaterialCommunityIcons name="bell-badge-outline" color="#FFF" size={26} />
-            {pendingHospitalCount > 0 ? (
-              <View style={styles.notifBadge}>
-                <Text style={styles.notifBadgeText}>
-                  {pendingHospitalCount > 9 ? "9+" : pendingHospitalCount}
-                </Text>
-              </View>
-            ) : null}
+            <MaterialCommunityIcons name="broadcast" color={colors.secondary} size={26} />
           </AppTouchableOpacity>
         </View>
 
-        <View style={styles.summaryContainer}>
-          <View style={[styles.mainSummaryCard, { backgroundColor: "#FF5252" }]}>
-            <View style={styles.cardHeader}>
-              <MaterialCommunityIcons name="alert-decagram" color="#FFF" size={22} />
-              <Text style={styles.summaryLabel}>Urgences vitales</Text>
-            </View>
-            <Text style={styles.summaryNumber}>{criticalCount}</Text>
-            <View style={styles.cardGlow} />
-          </View>
-          <View style={[styles.mainSummaryCard, { backgroundColor: colors.secondary }]}>
-            <View style={styles.cardHeader}>
-              <MaterialCommunityIcons name="account-clock" color="#FFF" size={22} />
-              <Text style={styles.summaryLabel}>Admissions actives</Text>
-            </View>
-            <Text style={styles.summaryNumber}>{activeCount}</Text>
-            <View style={styles.cardGlow} />
-          </View>
-        </View>
 
         <CapacitySelector />
       </View>
@@ -673,85 +578,27 @@ export function HospitalDashboardTab({ navigation }: any) {
           </View>
         ) : null}
 
-        {/* --- SECTION 1: CENTRE DE DÉCISION (Incoming Requests) --- */}
-        {pendingCases.length > 0 && (
-          <View style={styles.decisionCenter}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>CENTRE DE DÉCISION ({pendingCases.length})</Text>
-              <MaterialCommunityIcons name="broadcast" size={18} color={colors.primary} />
-            </View>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              contentContainerStyle={styles.decisionScroll}
-              snapToInterval={width * 0.85 + 16}
-              decelerationRate="fast"
-            >
-              {pendingCases.map(c => (
-                <QuickDecisionTile 
-                  key={c.id} 
-                  caseItem={c} 
-                  onAccept={handleQuickAccept}
-                  onRefuse={handleQuickRefuse}
-                />
-              ))}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* --- SECTION 2: ALTES RÉCENTES (Ongoing management) --- */}
+        {/* --- LISTE DES URGENCES ENTRANTES --- */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Suivi & admissions</Text>
-          <View style={styles.filterOptions}>
-            <AppTouchableOpacity onPress={() => setFilter("all")}><Text style={[styles.filterLabel, filter === "all" && styles.filterLabelActive]}>Tous</Text></AppTouchableOpacity>
-            <AppTouchableOpacity onPress={() => setFilter("en_attente")}><Text style={[styles.filterLabel, filter === "en_attente" && styles.filterLabelActive]}>Prévus</Text></AppTouchableOpacity>
+          <Text style={styles.sectionTitle}>Urgences Entrantes</Text>
+          <View style={styles.liveBadge}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>EN DIRECT</Text>
           </View>
         </View>
 
         {isLoading && activeCases.length === 0 ? (
           <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
-        ) : sortedFilteredCases.length === 0 ? (
-          <View style={{ alignItems: "center", marginTop: 40, paddingHorizontal: 24 }}>
-            <MaterialIcons name="inbox" size={48} color="rgba(255,255,255,0.2)" />
-            <Text style={{ color: "rgba(255,255,255,0.4)", marginTop: 16, textAlign: "center" }}>
-              {listBlocker === "no_structure_link"
-                ? "Corrigez la liaison structure ci-dessus pour voir les alertes."
-                : listBlocker === "supabase_error"
-                  ? "Erreur de chargement."
-                  : "Aucune alerte assignée à votre structure pour l’instant. Vérifiez que la centrale a bien renseigné assigned_structure_id sur le dispatch."}
-            </Text>
-          </View>
         ) : (
-          sortedFilteredCases.map((caseItem) => {
-            const lCfg = getLevelConfig(caseItem.level);
-            const sCfg = getStatusConfig(caseItem.status);
-            const needsHospitalAnswer = caseItem.hospitalStatus === "pending";
-            return (
-              <AppTouchableOpacity key={caseItem.id} style={styles.alertCard} onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })} activeOpacity={0.9}>
-                <View style={styles.cardInfo}>
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.timePill}><MaterialCommunityIcons name="clock-outline" color="rgba(255,255,255,0.4)" size={14} /><Text style={styles.timeText}>{caseItem.timestamp}</Text></View>
-                    <View style={[styles.levelTag, { borderColor: lCfg?.color }]}><Text style={[styles.levelLabelText, { color: lCfg?.color }]}>{lCfg?.label}</Text></View>
-                  </View>
-                  {needsHospitalAnswer ? (
-                    <View style={styles.pendingHospitalBadge}>
-                      <MaterialIcons name="touch-app" size={14} color="#FFB74D" />
-                      <Text style={styles.pendingHospitalBadgeText}>Réponse requise — accepter ou refuser</Text>
-                    </View>
-                  ) : null}
-                  <Text style={styles.victimName}>{caseItem.victimName}</Text>
-                  <Text style={styles.urgencyType}>{caseItem.typeUrgence?.toUpperCase()}</Text>
-                  <View style={styles.locationInfo}><MaterialIcons name="location-on" color={colors.secondary} size={16} /><Text style={styles.addressText} numberOfLines={1}>{caseItem.address}</Text></View>
-                  <View style={styles.cardDivider} />
-                  <View style={styles.cardFooterRow}>
-                    {sCfg && <View style={[styles.statusBadge, { backgroundColor: sCfg.bg }]}><MaterialIcons name={sCfg.icon} color={sCfg.color} size={14} /><Text style={[styles.statusBadgeText, { color: sCfg.color }]}>{sCfg.label}</Text></View>}
-                    <View style={styles.etaContainer}><Text style={styles.etaLabel}>Arrivée : </Text><Text style={styles.etaValue}>{caseItem.eta}</Text></View>
-                  </View>
-                </View>
-                <View style={styles.arrowContainer}><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={24} /></View>
-              </AppTouchableOpacity>
-            );
-          })
+          incomingCases.map((caseItem) => (
+            <IncomingCaseItem 
+              key={caseItem.id} 
+              caseItem={caseItem} 
+              onAccept={handleQuickAccept}
+              onRefuse={handleQuickRefuse}
+              onPress={(id) => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
+            />
+          ))
         )}
       </ScrollView>
     </TabScreenSafeArea>
@@ -843,42 +690,9 @@ const styles = StyleSheet.create({
     color: "#FFB74D",
     fontWeight: "700",
   },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, marginVertical: 20 },
-  sectionTitle: { color: "#FFF", fontSize: 18, fontWeight: "600" },
-  filterOptions: { flexDirection: "row", gap: 16 },
-  filterLabel: { color: "rgba(255,255,255,0.3)", fontSize: 13, fontWeight: "800" },
-  filterLabelActive: { color: colors.secondary },
-  alertCard: { backgroundColor: "#1A1A1A", marginHorizontal: 20, borderRadius: 32, padding: 22, flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },
-  cardInfo: { flex: 1 },
-  cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  pendingHospitalBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    alignSelf: "flex-start",
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 183, 77, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(255, 183, 77, 0.35)",
-  },
-  pendingHospitalBadgeText: { color: "#FFB74D", fontSize: 12, fontWeight: "800", flex: 1 },
-  timePill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.05)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
-  timeText: { color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: "700" },
-  levelTag: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  levelLabelText: { fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
-  victimName: { color: "#FFF", fontSize: 20, fontWeight: "900", marginBottom: 4 },
-  urgencyType: { color: colors.secondary, fontSize: 12, fontWeight: "800", letterSpacing: 1, marginBottom: 10 },
-  locationInfo: { flexDirection: "row", alignItems: "center", gap: 8 },
-  addressText: { color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: "600" },
-  cardDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.05)", marginVertical: 18 },
-  cardFooterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14 },
-  statusBadgeText: { fontSize: 13, fontWeight: "800" },
-  etaContainer: { flexDirection: "row", alignItems: "center" },
-  etaLabel: { color: "rgba(255,255,255,0.3)", fontSize: 13, fontWeight: "800" },
-  etaValue: { color: "#FFF", fontSize: 16, fontWeight: "900" },
-  arrowContainer: { marginLeft: 16 },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, paddingVertical: 12 },
+  sectionTitle: { color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
+  liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255, 82, 82, 0.1)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FF5252" },
+  liveText: { color: "#FF5252", fontSize: 10, fontWeight: "900" },
 });

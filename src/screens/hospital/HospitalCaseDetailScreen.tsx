@@ -24,6 +24,8 @@ import { HospitalMarker, UnitMarker } from '../../components/map/mapMarkers';
 import { useResolveHeadingFromRemotePosition } from '../../hooks/useResolveHeadingFromLocation';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import { ALARM_STOP_EVENT } from '../../services/AlarmService';
+import { DeviceEventEmitter } from 'react-native';
 import { supabase } from '../../lib/supabase';
 import {
   getRoute,
@@ -79,6 +81,11 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const { updateCaseStatus, activeCases } = useHospital();
   const levelCfg = getLevelConfig(caseData.level);
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    // Dès qu'on ouvre le dossier, on stoppe l'alarme
+    DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+  }, []);
 
   /** Suivi ambulance : `en_route_hospital` (dispatch) ↔ `en_cours` (EmergencyCase.status) via HospitalContext */
   const isEnRoute =
