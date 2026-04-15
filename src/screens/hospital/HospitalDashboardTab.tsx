@@ -22,6 +22,8 @@ import { IncomingCaseItem } from "./components/IncomingCaseItem";
 import {
   isCaseClosed,
 } from "../../lib/hospitalStats";
+import { ALARM_STOP_EVENT } from "../../services/AlarmService";
+import { DeviceEventEmitter } from "react-native";
 
 const { width } = Dimensions.get("window");
 
@@ -436,6 +438,9 @@ export function HospitalDashboardTab({ navigation }: any) {
   useFocusEffect(
     useCallback(() => {
       void refreshProfile();
+      // Silencer l'alarme si on revient sur le dashboard 
+      // (interraction implicite avec la liste)
+      DeviceEventEmitter.emit(ALARM_STOP_EVENT);
     }, [refreshProfile]),
   );
 
@@ -589,7 +594,7 @@ export function HospitalDashboardTab({ navigation }: any) {
 
         {isLoading && activeCases.length === 0 ? (
           <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
-        ) : (
+        ) : incomingCases.length > 0 ? (
           incomingCases.map((caseItem) => (
             <IncomingCaseItem 
               key={caseItem.id} 
@@ -599,6 +604,22 @@ export function HospitalDashboardTab({ navigation }: any) {
               onPress={(id) => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
             />
           ))
+        ) : (
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <MaterialCommunityIcons name="check-all" size={32} color="rgba(255,255,255,0.2)" />
+            </View>
+            <Text style={styles.emptyTitle}>Aucune urgence entrante</Text>
+            <Text style={styles.emptySub}>Tous les dossiers ont été traités ou sont en route.</Text>
+            
+            <AppTouchableOpacity 
+              style={styles.admissionsBtn}
+              onPress={() => navigation.navigate("HospitalAdmissionsList")}
+            >
+              <Text style={styles.admissionsBtnText}>Voir les admissions actives</Text>
+              <MaterialIcons name="chevron-right" size={18} color={colors.secondary} />
+            </AppTouchableOpacity>
+          </View>
         )}
       </ScrollView>
     </TabScreenSafeArea>
@@ -607,8 +628,17 @@ export function HospitalDashboardTab({ navigation }: any) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.mainBackground },
-  topHeader: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24, borderBottomLeftRadius: 36, borderBottomRightRadius: 36, backgroundColor: "#0A0A0A" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
+  topHeader: { 
+    paddingHorizontal: 24, 
+    paddingTop: 16, 
+    paddingBottom: 16, 
+    borderBottomLeftRadius: 36, 
+    borderBottomRightRadius: 36, 
+    backgroundColor: "#0A0A0A",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(255,255,255,0.08)"
+  },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
   headerTextBlock: { flex: 1, paddingRight: 12 },
   greetingText: { color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: "800", letterSpacing: 0.5 },
   hospitalName: { color: "#FFF", fontSize: 24, fontWeight: "700", marginTop: 4 },
@@ -695,4 +725,47 @@ const styles = StyleSheet.create({
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255, 82, 82, 0.1)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FF5252" },
   liveText: { color: "#FF5252", fontSize: 10, fontWeight: "900" },
+  emptyContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    color: "#FFF",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  emptySub: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  admissionsBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(56, 182, 255, 0.1)",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(56, 182, 255, 0.2)",
+  },
+  admissionsBtnText: {
+    color: colors.secondary,
+    fontSize: 14,
+    fontWeight: "700",
+  },
 });

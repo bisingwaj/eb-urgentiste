@@ -75,13 +75,15 @@ export function AlertAlarmManager() {
     const currentId = activeMission?.id ?? null;
     const prevId = prevMissionRef.current;
 
+    // On ne stoppe l'alarme que si la mission est supprimée (currentId === null)
+    // ou si on a explicitement changé de mission.
+    // On ne stoppe plus l'alarme juste parce que le statut n'est plus 'dispatched',
+    // car le passage à 'en_route' peut être automatique ou rapide.
     if (
-      activeMission &&
-      currentId === prevId &&
-      activeMission.dispatch_status !== 'dispatched' &&
-      AlarmService.isPlaying()
+      (!activeMission && AlarmService.isPlaying()) ||
+      (currentId !== prevId && prevId !== null && AlarmService.isPlaying())
     ) {
-      console.log('[AlertAlarmManager] 🔇 Mission status changed — stopping alarm');
+      console.log('[AlertAlarmManager] 🔇 Mission cleared or changed — stopping alarm');
       AlarmService.stopAlarm();
       NotificationService.dismissAll();
     }
