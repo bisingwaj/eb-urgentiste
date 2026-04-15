@@ -142,6 +142,9 @@ export function HomeTab({ navigation }: any) {
   useEffect(() => {
     if (!activeMission || activeMission.dispatch_status === 'completed') {
       setIsModalMinimized(false);
+    } else if (activeMission.dispatch_status !== 'dispatched') {
+      // If mission is already accepted (en_route, on_scene, etc.), minimize the popup by default
+      setIsModalMinimized(true);
     }
   }, [activeMission?.id, activeMission?.dispatch_status]);
 

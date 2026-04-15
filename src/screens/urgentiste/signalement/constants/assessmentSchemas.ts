@@ -17,7 +17,7 @@ export const ASSESSMENT_SCHEMAS: Record<string, AssessmentSchema> = {
             ],
             advice: {
                if: { fieldId: "conscious", value: false },
-               text: "Patient inconscient. Vérifier la liberté des voies aériennes immédiatement.",
+               text: "Vérifier la liberté des voies aériennes immédiatement.",
             },
          },
          {
@@ -47,11 +47,11 @@ export const ASSESSMENT_SCHEMAS: Record<string, AssessmentSchema> = {
             advice: [
                {
                   if: { fieldId: "circulation", value: "weak" },
-                  text: "Pouls filant : Surveiller la tension artérielle. Préparer une voie veineuse.",
+                  text: "Surveiller la tension artérielle. Préparer une voie veineuse.",
                },
                {
                   if: { fieldId: "circulation", value: "none" },
-                  text: "Pouls absent : Arrêt circulatoire suspecté. Vérifier le pouls carotidien immédiatement.",
+                  text: "Vérifier le pouls carotidien immédiatement.",
                }
             ],
          },
