@@ -17,7 +17,7 @@ export const ASSESSMENT_SCHEMAS: Record<string, AssessmentSchema> = {
             ],
             advice: {
                if: { fieldId: "conscious", value: false },
-               text: "Alerte : Patient inconscient. Vérifier la liberté des voies aériennes immédiatement.",
+               text: "Patient inconscient. Vérifier la liberté des voies aériennes immédiatement.",
             },
          },
          {
@@ -31,7 +31,7 @@ export const ASSESSMENT_SCHEMAS: Record<string, AssessmentSchema> = {
             ],
             advice: {
                if: { fieldId: "breathing", value: false },
-               text: "URGENCE VITALE : Commencer les compressions thoraciques (RCR).",
+               text: "Commencer les compressions thoraciques (RCR) immédiatement.",
             },
          },
          {
@@ -44,15 +44,25 @@ export const ASSESSMENT_SCHEMAS: Record<string, AssessmentSchema> = {
                { label: "Filant / Faible", value: "weak", color: "#FF9800" },
                { label: "Absent", value: "none", color: colors.primary, critical: true },
             ],
+            advice: [
+               {
+                  if: { fieldId: "circulation", value: "weak" },
+                  text: "Pouls filant : Surveiller la tension artérielle. Préparer une voie veineuse.",
+               },
+               {
+                  if: { fieldId: "circulation", value: "none" },
+                  text: "Pouls absent : Arrêt circulatoire suspecté. Vérifier le pouls carotidien immédiatement.",
+               }
+            ],
          },
          {
             id: "severity",
             type: "choice",
             label: "État de gravité global",
             options: [
-               { label: "Urgences Vitales (Critique)", value: "Critique", color: colors.primary, icon: "warning" },
-               { label: "Urgence Relative", value: "Urgent", color: "#FF9800", icon: "error-outline" },
                { label: "Stable / Stationnaire", value: "Stable", color: colors.success, icon: "check-circle-outline" },
+               { label: "Urgence Relative", value: "Urgent", color: "#FF9800", icon: "error-outline" },
+               { label: "Urgences Vitales (Critique)", value: "Critique", color: colors.primary, icon: "warning" },
             ],
          },
       ],
@@ -73,7 +83,7 @@ export const ASSESSMENT_SCHEMAS: Record<string, AssessmentSchema> = {
             ],
             advice: {
                if: { fieldId: "hemorrhage", value: "pulsatile" },
-               text: "ALERTE : Poser un garrot ou faire une compression directe immédiatement.",
+               text: "Poser un garrot ou faire une compression directe immédiatement.",
             },
          },
          {
@@ -96,9 +106,9 @@ export const ASSESSMENT_SCHEMAS: Record<string, AssessmentSchema> = {
             type: "choice",
             label: "Gravité estimée",
             options: [
-               { label: "Pronostic vital engagé", value: "Critique", color: colors.primary, icon: "warning" },
-               { label: "Urgent (Soin rapide)", value: "Urgent", color: "#FF9800", icon: "error-outline" },
                { label: "Stable", value: "Stable", color: colors.success, icon: "check-circle-outline" },
+               { label: "Urgent (Soin rapide)", value: "Urgent", color: "#FF9800", icon: "error-outline" },
+               { label: "Pronostic vital engagé", value: "Critique", color: colors.primary, icon: "warning" },
             ],
          },
       ],
@@ -132,9 +142,9 @@ export const ASSESSMENT_SCHEMAS: Record<string, AssessmentSchema> = {
             type: "choice",
             label: "Classification de l'urgence",
             options: [
-               { label: "Urgence pédiatrique majeure", value: "Critique", color: colors.primary, icon: "warning" },
-               { label: "Urgent", value: "Urgent", color: "#FF9800", icon: "error-outline" },
                { label: "Stable", value: "Stable", color: colors.success, icon: "check-circle-outline" },
+               { label: "Urgent", value: "Urgent", color: "#FF9800", icon: "error-outline" },
+               { label: "Urgence pédiatrique majeure", value: "Critique", color: colors.primary, icon: "warning" },
             ],
          },
       ],

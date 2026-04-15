@@ -17,69 +17,49 @@ export const StepDecision: React.FC<StepDecisionProps> = ({
    return (
       <View style={styles.stepBase}>
          {renderStepInlineHeader()}
-         <Text style={styles.stepSectionHeading}>Plan d'évacuation</Text>
-         <View style={styles.decisionGrid}>
-            <AppTouchableOpacity
-               style={styles.decisionCardGrid}
-               onPress={() => onDecideTransport("Stable")}
-            >
-               <View
-                  style={[
-                     styles.decisionIconBox,
-                     { backgroundColor: colors.success + "10" },
-                  ]}
+         
+         <View style={{ flex: 1, justifyContent: 'center' }}>
+            <View style={styles.decisionGrid}>
+               <AppTouchableOpacity
+                  style={[styles.decisionCardGrid, { borderColor: colors.success + "30" }]}
+                  onPress={() => onDecideTransport("Stable")}
                >
-                  <MaterialCommunityIcons
-                     name="home-heart"
-                     size={28}
-                     color={colors.success}
-                  />
-               </View>
-               <Text style={styles.decisionLabel}>Traité sur place</Text>
-            </AppTouchableOpacity>
-            <AppTouchableOpacity
-               style={styles.decisionCardGrid}
-               onPress={() => onDecideTransport("Transport")}
-            >
-               <View
-                  style={[
-                     styles.decisionIconBox,
-                     { backgroundColor: colors.secondary + "10" },
-                  ]}
+                  <View
+                     style={[
+                        styles.decisionIconBox,
+                        { backgroundColor: colors.success + "15" },
+                     ]}
+                  >
+                     <MaterialCommunityIcons
+                        name="home-heart"
+                        size={32}
+                        color={colors.success}
+                     />
+                  </View>
+                  <Text style={[styles.decisionLabel, { color: '#FFF' }]}>Traité sur place</Text>
+                  <Text style={{ color: colors.success, fontSize: 11, fontWeight: '700', marginTop: 4 }}>CLÔTURE MISSION</Text>
+               </AppTouchableOpacity>
+
+               <AppTouchableOpacity
+                  style={[styles.decisionCardGrid, { borderColor: colors.secondary + "30" }]}
+                  onPress={() => onDecideTransport("Transport")}
                >
-                  <MaterialCommunityIcons
-                     name="ambulance"
-                     size={28}
-                     color={colors.secondary}
-                  />
-               </View>
-               <Text style={styles.decisionLabel}>Évacuation base</Text>
-            </AppTouchableOpacity>
-            <AppTouchableOpacity
-               style={[
-                  styles.decisionCardGrid,
-                  { borderColor: colors.primary + "40" },
-               ]}
-               onPress={() => onDecideTransport("Critique")}
-            >
-               <View
-                  style={[
-                     styles.decisionIconBox,
-                     { backgroundColor: colors.primary + "10" },
-                  ]}
-               >
-                  <MaterialCommunityIcons
-                     name="alarm-light-outline"
-                     size={28}
-                     color={colors.primary}
-                  />
-               </View>
-               <Text
-                  style={[styles.decisionLabel, { color: colors.primary }]}
-               >
-                  Urgence vitale
-               </Text>
-            </AppTouchableOpacity>
+                  <View
+                     style={[
+                        styles.decisionIconBox,
+                        { backgroundColor: colors.secondary + "15" },
+                     ]}
+                  >
+                     <MaterialCommunityIcons
+                        name="ambulance"
+                        size={32}
+                        color={colors.secondary}
+                     />
+                  </View>
+                  <Text style={[styles.decisionLabel, { color: '#FFF' }]}>Transport vers Hôpital</Text>
+                  <Text style={{ color: colors.secondary, fontSize: 11, fontWeight: '700', marginTop: 4 }}>ÉVACUATION MÉDICALE</Text>
+               </AppTouchableOpacity>
+            </View>
          </View>
       </View>
    );

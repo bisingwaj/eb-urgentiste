@@ -20,6 +20,7 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
    onConfirmAssessment
 }) => {
    const [currentStepIndex, setCurrentStepIndex] = useState(0);
+   const [isTransitioning, setIsTransitioning] = useState(false);
 
    const currentStep = schema.steps[currentStepIndex];
    const isLastStep = currentStepIndex === schema.steps.length - 1;
@@ -36,6 +37,7 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
          onConfirmAssessment();
       } else {
          setCurrentStepIndex(currentStepIndex + 1);
+         setIsTransitioning(false);
       }
    };
 
@@ -59,7 +61,7 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
                   <MaterialIcons
                      name={(options.find(o => o.value === currentValue)?.icon as any) || "help-outline"}
                      size={42}
-                     color={currentValue !== undefined ? (options.find(o => o.value === currentValue)?.color || colors.secondary) : colors.secondary}
+                     color={currentValue !== undefined ? (options.find(o => o.value === currentValue)?.color || colors.secondary) : "rgba(255,255,255,0.2)"}
                   />
                </View>
                <Text style={{ color: '#FFF', fontSize: 26, fontWeight: '900', textAlign: 'center', lineHeight: 34 }}>{step.label}</Text>
@@ -80,28 +82,30 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
                         style={{
                            height: 72,
                            borderRadius: 18,
-                           backgroundColor: isActive ? activeColor + '20' : 'rgba(255,255,255,0.05)',
+                           backgroundColor: isActive ? activeColor + '20' : 'rgba(255,255,255,0.03)',
                            borderWidth: 2,
-                           borderColor: isActive ? activeColor : 'transparent',
+                           borderColor: isActive ? activeColor : 'rgba(255,255,255,0.05)',
                            flexDirection: 'row',
                            alignItems: 'center',
                            justifyContent: 'center',
                            paddingHorizontal: 20
                         }}
                         onPress={() => {
+                           if (isTransitioning) return;
                            updateValue(step.id, opt.value);
+                           
                            // Auto-advance logic:
-                           // 1. Must be a success/positive value (usually YES)
-                           // 2. Must NOT have a blocking advice (if advice exists for this value, stay to show it)
-                           const hasAdviceForThisValue = step.advice?.if.value === opt.value;
+                           const advices = Array.isArray(step.advice) ? step.advice : (step.advice ? [step.advice] : []);
+                           const hasAdviceForThisValue = advices.some(a => a.if.value === opt.value);
                            if (opt.value === true && !hasAdviceForThisValue) {
-                              setTimeout(goNext, 300);
+                              setIsTransitioning(true);
+                              setTimeout(goNext, 400);
                            }
                         }}
                      >
                         <Text
                            style={{
-                              color: isActive ? activeColor : '#FFF',
+                              color: isActive ? activeColor : 'rgba(255,255,255,0.7)',
                               fontSize: 20,
                               fontWeight: '900'
                            }}
@@ -138,26 +142,39 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
                         style={{
                            paddingVertical: 20,
                            borderRadius: 16,
-                           backgroundColor: isActive ? activeColor + '15' : 'rgba(255,255,255,0.05)',
+                           backgroundColor: isActive ? activeColor + '15' : 'rgba(255,255,255,0.03)',
                            borderWidth: 2,
-                           borderColor: isActive ? activeColor : 'transparent',
+                           borderColor: isActive ? activeColor : 'rgba(255,255,255,0.05)',
                            flexDirection: 'row',
                            alignItems: 'center',
                            justifyContent: 'center',
                            gap: 12
                         }}
-                        onPress={() => updateValue(step.id, opt.value)}
+                        onPress={() => {
+                           if (isTransitioning) return;
+                           updateValue(step.id, opt.value);
+                           
+                           // Auto-advance for safe choices (like 'strong' pulse)
+                           const advices = Array.isArray(step.advice) ? step.advice : (step.advice ? [step.advice] : []);
+                           const hasAdviceForThisValue = advices.some(a => a.if.value === opt.value);
+                           const isSafeValue = opt.value === 'strong'; // Could add others if needed
+                           
+                           if (isSafeValue && !hasAdviceForThisValue) {
+                              setIsTransitioning(true);
+                              setTimeout(goNext, 400);
+                           }
+                        }}
                      >
                         {opt.icon && (
                            <MaterialIcons
                               name={opt.icon as any}
                               size={28}
-                              color={isActive ? activeColor : "rgba(255,255,255,0.3)"}
+                              color={isActive ? activeColor : "rgba(255,255,255,0.2)"}
                            />
                         )}
                         <Text
                            style={{
-                              color: isActive ? activeColor : '#FFF',
+                              color: isActive ? activeColor : 'rgba(255,255,255,0.7)',
                               fontSize: 16,
                               fontWeight: '800'
                            }}
@@ -194,16 +211,16 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
                            width: '18%',
                            aspectRatio: 1,
                            borderRadius: 14,
-                           backgroundColor: isActive ? colors.secondary : 'rgba(255,255,255,0.05)',
+                           backgroundColor: isActive ? colors.secondary : 'rgba(255,255,255,0.03)',
                            justifyContent: 'center',
                            alignItems: 'center',
                            borderWidth: 2,
-                           borderColor: isActive ? colors.secondary : 'transparent'
+                           borderColor: isActive ? colors.secondary : 'rgba(255,255,255,0.05)'
                         }}
                         onPress={() => updateValue(step.id, num)}
                      >
                         <Text style={{
-                           color: isActive ? '#FFF' : 'rgba(255,255,255,0.6)',
+                           color: isActive ? '#FFF' : 'rgba(255,255,255,0.4)',
                            fontWeight: '900',
                            fontSize: 20
                         }}>
@@ -219,15 +236,22 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
 
    const renderAdvice = (step: AssessmentStep) => {
       if (!step.advice) return null;
-      const triggerValue = assessment[step.advice.if.fieldId];
-      if (triggerValue !== step.advice.if.value) return null;
+      
+      const advices = Array.isArray(step.advice) ? step.advice : [step.advice];
+      const activeAdvices = advices.filter(a => assessment[a.if.fieldId] === a.if.value);
+      
+      if (activeAdvices.length === 0) return null;
 
       return (
-         <View style={{ ...styles.smartAlertBox, marginTop: 30 }}>
-            <MaterialIcons name="info" size={24} color="#FFF" />
-            <Text style={{ ...styles.smartAlertBoxText, fontSize: 15, lineHeight: 22 }}>
-               Conseil : {step.advice.text}
-            </Text>
+         <View style={{ gap: 10, marginTop: 30 }}>
+            {activeAdvices.map((advice, idx) => (
+               <View key={idx} style={styles.smartAlertBox}>
+                  <MaterialIcons name="info" size={24} color="#FFF" />
+                  <Text style={{ ...styles.smartAlertBoxText, fontSize: 15, lineHeight: 22 }}>
+                     {advice.text}
+                  </Text>
+               </View>
+            ))}
          </View>
       );
    };
@@ -257,8 +281,33 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
             </View>
          </View>
 
-         {/* Current Question */}
-         <View style={{ flex: 1 }}>
+         {/* Transition Overlay */}
+         {isTransitioning && (
+            <View style={{ 
+               position: 'absolute', 
+               top: 40, 
+               left: 0, 
+               right: 0, 
+               zIndex: 10, 
+               alignItems: 'center',
+            }}>
+               <View style={{ 
+                  backgroundColor: colors.secondary, 
+                  paddingHorizontal: 20, 
+                  paddingVertical: 10, 
+                  borderRadius: 20,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 10
+               }}>
+                  <MaterialIcons name="sync" size={18} color="#FFF" />
+                  <Text style={{ color: '#FFF', fontWeight: 'bold' }}>Passage à la suite...</Text>
+               </View>
+            </View>
+         )}
+
+         {/* Current Question Area */}
+         <View style={{ flex: 1, opacity: isTransitioning ? 0.3 : 1 }}>
             {currentStep.type === 'binary' && renderBinary(currentStep)}
             {currentStep.type === 'choice' && renderChoice(currentStep)}
             {currentStep.type === 'range' && renderRange(currentStep)}
@@ -295,9 +344,9 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 12,
-                  opacity: hasAnswer ? 1 : 0.5
+                  opacity: (hasAnswer && !isTransitioning) ? 1 : 0.5
                }}
-               disabled={!hasAnswer}
+               disabled={!hasAnswer || isTransitioning}
                onPress={goNext}
             >
                {isLastStep && <MaterialIcons name="done-all" size={24} color="#FFF" />}

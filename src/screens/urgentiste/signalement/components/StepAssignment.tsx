@@ -1,7 +1,7 @@
-import React from 'react';
-import { View, Text, ActivityIndicator, Linking } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ActivityIndicator, Linking, Modal, TouchableWithoutFeedback, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Hospital as HospitalIcon } from "lucide-react-native";
+import { Hospital as HospitalIcon, Phone, PhoneForwarded } from "lucide-react-native";
 import Mapbox from "@rnmapbox/maps";
 import { colors } from '../../../../theme/colors';
 import { styles } from '../styles';
@@ -39,78 +39,76 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
    onOpenFullscreenMap,
    renderStepInlineHeader
 }) => {
-   if (pendingStructureInfo?.refused) {
-      return (
-         <View style={styles.stepBase}>
-            <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</View>
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 28 }}>
-               <MaterialIcons name="cancel" size={48} color="#FF3B30" />
-               <Text style={[styles.standbyText, { marginTop: 16, textAlign: "center" }]}>
-                  {pendingStructureInfo.name}
-               </Text>
-               <Text style={[styles.standbySub, { marginTop: 12, textAlign: "center" }]}>
-                  Cet établissement a refusé la prise en charge. En attente de réassignation par la centrale.
-               </Text>
-               {pendingStructureInfo.refusalNotes ? (
-                  <Text style={[styles.standbySub, { marginTop: 16, textAlign: "center", color: "rgba(255,255,255,0.85)" }]}>
-                     Motif : {pendingStructureInfo.refusalNotes}
-                  </Text>
-               ) : null}
-               <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 24 }} />
+   const [callModalVisible, setCallModalVisible] = useState(false);
+
+   const currentHospital = targetHospital || pendingStructureInfo;
+   const isRefused = pendingStructureInfo?.refused;
+   const isPending = !!pendingStructureInfo && !targetHospital;
+   const isAssigned = !!targetHospital;
+
+   const handleCall = (mode: 'pstn' | 'voip') => {
+      setCallModalVisible(false);
+      if (mode === 'pstn' && currentHospital?.phone) {
+         Linking.openURL(`tel:${currentHospital.phone}`);
+      } else {
+         // App call placeholder/logic
+         console.log("App call to hospital not yet implemented");
+      }
+   };
+
+   // Render Logic
+   let content;
+
+   if (isRefused) {
+      content = (
+         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 40, paddingBottom: 100 }}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,59,48,0.1)', justifyContent: 'center', alignItems: 'center' }}>
+               <MaterialIcons name="error-outline" size={40} color="#FF3B30" />
             </View>
+            <Text style={[styles.standbyText, { marginTop: 24, fontSize: 22 }]}>Désolé pour ce contretemps</Text>
+            <Text style={[styles.standbySub, { marginTop: 12, textAlign: 'center' }]}>
+               L'établissement <Text style={{ color: '#FFF', fontWeight: '800' }}>{pendingStructureInfo.name}</Text> ne peut pas recevoir le patient pour le moment.
+            </Text>
+            <Text style={[styles.standbySub, { marginTop: 24, textAlign: 'center', color: 'rgba(255,255,255,0.6)' }]}>
+               Nous cherchons immédiatement une alternative plus adaptée...
+            </Text>
+            <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 32 }} />
          </View>
       );
-   }
-
-   if (!targetHospital && !pendingStructureInfo) {
-      return (
-         <View style={styles.stepBase}>
-            <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</View>
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-               <ActivityIndicator size="large" color={colors.secondary} />
-               <Text style={[styles.standbyText, { marginTop: 20 }]}>
-                  Attente du régulateur...
-               </Text>
-               <Text style={styles.standbySub}>
-                  La centrale recherche l'établissement le plus adapté.
-               </Text>
+   } else if (!currentHospital) {
+      content = (
+         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 40, paddingBottom: 100 }}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(0,122,255,0.1)', justifyContent: 'center', alignItems: 'center' }}>
+               <HospitalIcon size={40} color={colors.secondary} />
             </View>
+            <Text style={[styles.standbyText, { marginTop: 24, fontSize: 22 }]}>Recherche en cours...</Text>
+            <Text style={[styles.standbySub, { marginTop: 12, textAlign: 'center' }]}>
+               Nous recherchons l'établissement le plus adapté pour la prise en charge de votre patient.
+            </Text>
+            <Text style={[styles.standbySub, { marginTop: 24, textAlign: 'center', color: 'rgba(255,255,255,0.6)' }]}>
+                Cela ne prendra que quelques instants. Merci de votre patience.
+            </Text>
+            <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 32 }} />
          </View>
       );
-   }
-
-   if (pendingStructureInfo && !targetHospital) {
-      return (
-         <View style={styles.stepBase}>
-            <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</View>
-            <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 28 }}>
-               <MaterialIcons name="local-hospital" size={48} color={colors.secondary} />
-               <Text style={[styles.standbyText, { marginTop: 16, textAlign: "center" }]}>
-                  {pendingStructureInfo.name}
-               </Text>
-               <Text style={[styles.standbySub, { marginTop: 12, textAlign: "center" }]}>
-                  En attente de réponse de l'établissement — les coordonnées GPS seront affichées après acceptation.
-               </Text>
-               
-               {pendingStructureInfo.phone ? (
-                  <AppTouchableOpacity
-                     style={[styles.structureCallBtn, { marginTop: 24, paddingHorizontal: 20, paddingVertical: 12 }]}
-                     onPress={() => Linking.openURL(`tel:${pendingStructureInfo.phone}`)}
-                  >
-                     <MaterialIcons name="phone" size={20} color="#30D158" />
-                     <Text style={[styles.structureCallText, { fontSize: 15 }]}>Accélérer (Appeler le {pendingStructureInfo.phone})</Text>
-                  </AppTouchableOpacity>
-               ) : null}
-
-               <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 20 }} />
+   } else if (isPending) {
+      content = (
+         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 40, paddingBottom: 100 }}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(0,122,255,0.1)', justifyContent: 'center', alignItems: 'center' }}>
+               <MaterialIcons name="send" size={32} color={colors.secondary} />
             </View>
+            <Text style={[styles.standbyText, { marginTop: 24, fontSize: 22 }]}>Demande envoyée</Text>
+            <Text style={[styles.standbySub, { marginTop: 12, textAlign: 'center' }]}>
+               Nous avons contacté <Text style={{ color: '#FFF', fontWeight: '800' }}>{currentHospital.name}</Text>.
+            </Text>
+            <Text style={[styles.standbySub, { marginTop: 24, textAlign: 'center', color: 'rgba(255,255,255,0.6)' }]}>
+               Nous attendons leur confirmation pour vous transmettre les coordonnées GPS.
+            </Text>
+            <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 32 }} />
          </View>
       );
-   }
-
-   return (
-      <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
-         <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</View>
+   } else {
+      content = (
          <View style={{ flex: 1 }}>
             <View style={{ flex: 1, borderRadius: 0, overflow: "hidden" }}>
                <MapboxMapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
@@ -127,7 +125,7 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                                  Math.min(targetHospital.coords.latitude, urgentisteLoc.coords.latitude),
                               ],
                               paddingTop: 80,
-                              paddingBottom: 200,
+                              paddingBottom: 280,
                               paddingLeft: 60,
                               paddingRight: 60,
                            }
@@ -164,8 +162,6 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                <AppTouchableOpacity
                   style={styles.mapFullscreenEntryBtnAssignment}
                   onPress={onOpenFullscreenMap}
-                  accessibilityRole="button"
-                  accessibilityLabel="Carte plein écran"
                >
                   <MaterialIcons name="fullscreen" color="#FFF" size={22} />
                </AppTouchableOpacity>
@@ -174,15 +170,13 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                   style={styles.assignmentEnRouteFab}
                   onPress={onDepartVersStructure}
                   disabled={departingEnRoute}
-                  accessibilityRole="button"
-                  accessibilityLabel="Nous sommes en route vers la structure"
                >
                   {departingEnRoute ? (
                      <ActivityIndicator color="#FFF" size="small" />
                   ) : (
                      <>
                         <MaterialIcons name="directions-run" color="#FFF" size={22} />
-                        <Text style={styles.assignmentEnRouteFabText}>En route</Text>
+                        <Text style={styles.assignmentEnRouteFabText}>Lancer le Transport</Text>
                      </>
                   )}
                </AppTouchableOpacity>
@@ -196,8 +190,6 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                         targetHospital.name,
                      )
                   }
-                  accessibilityRole="button"
-                  accessibilityLabel="Ouvrir la navigation"
                >
                   <MaterialIcons name="navigation" color="#FFF" size={22} />
                </AppTouchableOpacity>
@@ -212,40 +204,81 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                )}
             </View>
 
-            <View style={styles.assignmentBottomPanel}>
+            <View style={[styles.assignmentBottomPanel, { paddingBottom: 110 }]}>
                <View style={styles.assignmentStructureCard}>
+                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 12, textTransform: 'uppercase' }}>Établissement de Destination</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                     <View style={styles.structureIconBox}>
+                     <View style={[styles.structureIconBox, { backgroundColor: 'rgba(48,209,88,0.1)' }]}>
                         <MaterialIcons
                            name={targetHospital.specialty === 'pharmacie' ? 'local-pharmacy' : targetHospital.specialty === 'maternite' ? 'pregnant-woman' : 'local-hospital'}
                            size={24}
-                           color={colors.secondary}
+                           color="#30D158"
                         />
                      </View>
                      <View style={{ flex: 1 }}>
                         <Text style={styles.structureName}>{targetHospital.name}</Text>
-                        {targetHospital.address && (
-                           <Text style={styles.structureAddress}>{targetHospital.address}</Text>
-                        )}
-                        <Text style={styles.structureCoords}>
-                           {targetHospital.coords.latitude.toFixed(5)}, {targetHospital.coords.longitude.toFixed(5)}
-                        </Text>
+                        <Text style={styles.structureAddress}>{targetHospital.address || "Adresse en cours de chargement..."}</Text>
                      </View>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                     {targetHospital.phone && (
-                        <AppTouchableOpacity
-                           style={styles.structureCallBtn}
-                           onPress={() => Linking.openURL(`tel:${targetHospital.phone}`)}
-                        >
-                           <MaterialIcons name="phone" size={16} color="#30D158" />
-                           <Text style={styles.structureCallText}>Appeler</Text>
-                        </AppTouchableOpacity>
-                     )}
+                  <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
+                     <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 18 }}>
+                        Cet établissement a confirmé pouvoir assurer la prise en charge immédiate de votre patient.
+                     </Text>
                   </View>
                </View>
             </View>
          </View>
+      );
+   }
+
+   return (
+      <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
+         <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</ View>
+         
+         {content}
+
+         {currentHospital?.phone && (
+            <View style={styles.bottomActionFixed}>
+               <AppTouchableOpacity 
+                  style={styles.bottomCallBtn}
+                  onPress={() => setCallModalVisible(true)}
+               >
+                  <MaterialIcons name="phone" size={24} color="#FFF" />
+                  <View>
+                     <Text style={styles.bottomCallText}>Appeler l'hôpital</Text>
+                     <Text style={styles.bottomCallSub}>{currentHospital.phone}</Text>
+                  </View>
+               </AppTouchableOpacity>
+            </View>
+         )}
+
+         <Modal visible={callModalVisible} transparent animationType="slide">
+            <TouchableWithoutFeedback onPress={() => setCallModalVisible(false)}>
+               <View style={styles.choiceModalOverlay}>
+                  <TouchableWithoutFeedback>
+                     <View style={styles.choiceModalContent}>
+                        <Text style={styles.choiceModalHeader}>Contacter l'établissement</Text>
+                        
+                        <AppTouchableOpacity style={styles.choiceBtn} onPress={() => handleCall('pstn')}>
+                           <Phone color="#30D158" size={24} />
+                           <Text style={styles.choiceBtnText}>Appel Classique</Text>
+                           <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.2)" />
+                        </AppTouchableOpacity>
+
+                        <AppTouchableOpacity style={styles.choiceBtn} onPress={() => handleCall('voip')}>
+                           <PhoneForwarded color={colors.secondary} size={24} />
+                           <Text style={styles.choiceBtnText}>Appel Audio (In-App)</Text>
+                           <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.2)" />
+                        </AppTouchableOpacity>
+
+                        <AppTouchableOpacity style={styles.choiceCancelBtn} onPress={() => setCallModalVisible(false)}>
+                           <Text style={styles.choiceCancelText}>Annuler</Text>
+                        </AppTouchableOpacity>
+                     </View>
+                  </TouchableWithoutFeedback>
+               </View>
+            </TouchableWithoutFeedback>
+         </Modal>
       </View>
    );
 };

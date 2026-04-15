@@ -46,30 +46,45 @@ export default function SignalementScreen(props: any) {
    const [toolsMenuVisible, setToolsMenuVisible] = useState(false);
    const [timelineModalVisible, setTimelineModalVisible] = useState(false);
 
-   const renderStepInlineHeader = () => (
-      <View style={styles.stepInlineHeader}>
-         <AppTouchableOpacity
-            onPress={() => props.navigation.goBack()}
-            style={styles.stepInlineBack}
-         >
-            <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-         </AppTouchableOpacity>
-         <View style={styles.stepInlineTextCol}>
-            <Text style={styles.stepInlineTitle}>{formatIncidentType(selectedMission?.type)}</Text>
-            <Text style={styles.stepInlineSub}>
-               {selectedMission?.victim_name || (selectedMission?.caller?.first_name ? `${selectedMission.caller.first_name} ${selectedMission.caller.last_name || ""}` : displayAddress)}
-            </Text>
-         </View>
-         {step !== "standby" && step !== "closure" && (
+   const renderStepInlineHeader = () => {
+      const getStepTitle = () => {
+         switch (step) {
+            case 'assessment': return "Évaluation";
+            case 'aid': return "Premiers Soins";
+            case 'decision': return "Orientation";
+            case 'assignment': return "Destination";
+            case 'transport_mode': return "Mode Transport";
+            case 'transport': return "Évacuation";
+            case 'arrival': return "En Route";
+            default: return formatIncidentType(selectedMission?.type);
+         }
+      };
+
+      return (
+         <View style={styles.stepInlineHeader}>
+            <AppTouchableOpacity
+               onPress={() => props.navigation.goBack()}
+               style={styles.stepInlineBack}
+            >
+               <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+            </AppTouchableOpacity>
+            <View style={styles.stepInlineTextCol}>
+               <Text style={styles.stepInlineTitle}>{getStepTitle()}</Text>
+               <Text style={styles.stepInlineSub}>
+                  {selectedMission?.victim_name || "Patient inconnu"}
+               </Text>
+            </View>
+            {step !== "standby" && step !== "closure" && (
             <AppTouchableOpacity
                onPress={() => setToolsMenuVisible(true)}
                style={[styles.stepInlineBack, { backgroundColor: 'transparent', borderColor: 'transparent' }]}
             >
                <MaterialIcons name="more-vert" color="#FFF" size={28} />
             </AppTouchableOpacity>
-         )}
-      </View>
-   );
+            )}
+         </View>
+      );
+   };
 
    const renderVictimContactStrip = () => (
       <VictimContactStrip

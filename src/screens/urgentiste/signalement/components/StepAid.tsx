@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, ScrollView } from 'react-native';
+import { View, Text } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../../../theme/colors';
 import { styles } from '../styles';
 import { AppTouchableOpacity } from '../../../../components/ui/AppTouchableOpacity';
+import { FIRST_AID_ACTIONS } from '../../../../types/firstAid';
 
 interface StepAidProps {
    careChecklist: string[];
@@ -11,41 +12,32 @@ interface StepAidProps {
    onConfirmAid: () => void;
    renderStepInlineHeader: () => React.ReactNode;
 }
-
 export const StepAid: React.FC<StepAidProps> = ({
    careChecklist,
    onToggleCare,
    onConfirmAid,
    renderStepInlineHeader
 }) => {
-   const CARES = [
-      { id: "Hémorragie", label: "Contrôler hémorragie", icon: "opacity" },
-      { id: "Oxygène", label: "Soutien Oxygène", icon: "air" },
-      { id: "Immobilisation", label: "Immobilisation", icon: "accessibility" },
-      { id: "RCR", label: "RCR / Défib", icon: "bolt" },
-      { id: "Perfusion", label: "IV Access", icon: "colorize" },
-      { id: "Monitor", label: "Monitoring ECG", icon: "favorite" },
-   ];
+   const CARES = FIRST_AID_ACTIONS;
 
    return (
       <View style={styles.stepBase}>
          {renderStepInlineHeader()}
-         <Text style={styles.stepSectionHeading}>Premiers soins</Text>
-         <ScrollView
-            style={{ flex: 1 }}
-            showsVerticalScrollIndicator={false}
-         >
+         
+         <View style={{ flex: 1, justifyContent: 'center', paddingVertical: 10 }}>
             <View style={styles.aidGrid}>
                {CARES.map((care) => {
                   const isActive = careChecklist.includes(care.id);
+                  const activeColor = care.color || colors.secondary;
+                  
                   return (
                      <AppTouchableOpacity
                         key={care.id}
                         style={[
                            styles.aidCardGrid,
                            isActive && {
-                              borderColor: colors.secondary,
-                              backgroundColor: colors.secondary + "15",
+                              borderColor: activeColor,
+                              backgroundColor: activeColor + "15",
                            },
                         ]}
                         onPress={() => onToggleCare(care.id)}
@@ -53,29 +45,30 @@ export const StepAid: React.FC<StepAidProps> = ({
                         <View
                            style={[
                               styles.aidIconWrapper,
-                              isActive && { backgroundColor: colors.secondary },
+                              isActive && { backgroundColor: activeColor },
                            ]}
                         >
                            <MaterialIcons
                               name={care.icon as any}
-                              size={22}
-                              color={isActive ? "#000" : "rgba(255,255,255,0.4)"}
+                              size={28}
+                              color={isActive ? "#FFF" : "rgba(255,255,255,0.25)"}
                            />
                         </View>
                         <Text
                            style={[
                               styles.aidLabelGrid,
-                              isActive && { color: "#FFF" },
+                              isActive && { color: "#FFF", fontWeight: '900' },
                            ]}
                         >
                            {care.label}
                         </Text>
+                        
                         {isActive && (
-                           <View style={styles.aidCheckBadge}>
+                           <View style={{ ...styles.aidCheckBadge, backgroundColor: activeColor, borderColor: '#000' }}>
                               <MaterialIcons
                                  name="check"
                                  size={12}
-                                 color="#000"
+                                 color="#FFF"
                               />
                            </View>
                         )}
@@ -83,12 +76,14 @@ export const StepAid: React.FC<StepAidProps> = ({
                   );
                })}
             </View>
-         </ScrollView>
+         </View>
+
          <AppTouchableOpacity
             style={styles.bigActionBtn}
             onPress={onConfirmAid}
          >
             <Text style={styles.bigActionText}>Valider les soins</Text>
+            <MaterialIcons name="arrow-forward" size={20} color="#FFF" />
          </AppTouchableOpacity>
       </View>
    );

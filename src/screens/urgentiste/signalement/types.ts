@@ -69,7 +69,10 @@ export interface AssessmentStep {
    advice?: {
       if: { fieldId: string; value: any };
       text: string;
-   };
+   } | Array<{
+      if: { fieldId: string; value: any };
+      text: string;
+   }>;
 }
 
 export interface AssessmentSchema {

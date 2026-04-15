@@ -1,4 +1,4 @@
-import type { Mission } from "../hooks/useActiveMission";
+import type { Mission } from "../types/mission";
 
 /**
  * Adresse lisible : rue si présente, sinon commune · ville · province, puis géocodage / fallback.
@@ -32,7 +32,7 @@ export function formatMissionAddress(
  * en libellé lisible (ex. `Urgence médicale`).
  */
 export function formatIncidentType(raw: string | null | undefined): string {
-  if (!raw?.trim()) return "Urgence médicale";
+  if (!raw?.trim() || raw.toLowerCase() === 'urgence_medicale') return "Urgence Médicale";
   return raw.trim().replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 }
 
