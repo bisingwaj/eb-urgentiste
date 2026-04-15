@@ -76,4 +76,6 @@ export interface Mission {
   hospital_status?: HospitalStatus | null;
   hospital_notes?: string | null;
   hospital_data?: Record<string, unknown> | null;
+  /** Bilan médical structuré (JSONB). À terme, synchronisé avec le backend. */
+  medical_assessment?: Record<string, any> | null;
 }

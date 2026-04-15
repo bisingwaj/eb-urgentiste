@@ -597,18 +597,40 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     if (!activeMission) return;
 
     try {
-      // Pour l'instant, on sauvegarde l'évaluation dans la description de l'incident
+      // SAUVEGARDE DU BILAN MÉDICAL
       if (details.assessment) {
-        const assessmentText = ` [ÉVALUATION] Conscience: ${details.assessment.conscious ? 'Oui' : 'Non'}, Respiration: ${details.assessment.breathing ? 'Oui' : 'Non'}, Gravité: ${details.assessment.severity}`;
+        // 1. Version texte pour compatibilité héritée (Incidents.description)
+        const assessmentFields = Object.entries(details.assessment)
+          .filter(([key]) => key !== 'assessment_completed_at')
+          .map(([key, val]) => `${key}: ${val === true ? 'Oui' : val === false ? 'Non' : val}`);
         
-        const { error } = await supabase
+        const assessmentText = ` [ÉVALUATION] ${assessmentFields.join(', ')}`;
+        
+        // Exécution en parallèle pour performance
+        const p1 = supabase
           .from('incidents')
           .update({ 
             description: (activeMission.description || '') + assessmentText 
           })
           .eq('id', activeMission.incident_id);
 
-        if (error) throw error;
+        // 2. Version structurée pour le futur (Dispatches.medical_assessment)
+        const p2 = supabase
+          .from('dispatches')
+          .update({ 
+            medical_assessment: {
+              ...details.assessment,
+              assessment_completed_at: new Date().toISOString()
+            } 
+          })
+          .eq('id', activeMission.id);
+
+        const [r1, r2] = await Promise.all([p1, p2]);
+        if (r1.error) console.error('[MissionContext] Legacy description update error:', r1.error.message);
+        if (r2.error) {
+          console.warn('[MissionContext] Medical assessment JSONB update error (column might not exist yet):', r2.error.message);
+          // On ne bloque pas si la colonne n'est pas encore là
+        }
       }
       
       setActiveMission(prev => prev ? { ...prev, ...details } : null);

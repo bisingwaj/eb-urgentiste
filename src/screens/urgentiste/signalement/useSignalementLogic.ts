@@ -9,7 +9,8 @@ import { useMission } from "../../../contexts/MissionContext";
 import { useMapPuckHeading } from "../../../hooks/useMapPuckHeading";
 import { alertVoipError, startRescuerToCitizenVoipCall } from "../../../lib/rescuerCallCitizen";
 import { formatMissionAddress, formatIncidentType } from "../../../utils/missionAddress";
-import { MissionStep, TimelineEvent, AlertData, STEP_ORDER } from "./types";
+import { MissionStep, TimelineEvent, AlertData, STEP_ORDER, AssessmentSchema } from "./types";
+import { getAssessmentSchema } from "./constants/assessmentSchemas";
 import type { Hospital } from "../../../contexts/MissionContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -43,8 +44,28 @@ export function useSignalementLogic(navigation: any, route: any) {
    const [stateRestored, setStateRestored] = useState(false);
    const [selectedMission, setSelectedMission] = useState<any>(initialMission);
    
-   // Core Mission States (moved up to avoid 'used before declaration')
-   const [assessment, setAssessment] = useState<any>({ conscious: null, breathing: null, severity: null });
+   // --- DYNAMIC QUESTIONNAIRE LOGIC ---
+   const [assessmentSchema, setAssessmentSchema] = useState<AssessmentSchema>(() => 
+      getAssessmentSchema(activeMission?.type || initialMission?.type)
+   );
+
+   // Placeholder for future API fetch
+   const fetchAssessmentSchemas = async () => {
+      // logic to fetch from backend and setAssessmentSchema
+      console.log("[Questionnaire] Placeholder for API fetch");
+   };
+
+   useEffect(() => {
+      if (activeMission?.type || initialMission?.type) {
+         setAssessmentSchema(getAssessmentSchema(activeMission?.type || initialMission?.type));
+      }
+   }, [activeMission?.type, initialMission?.type]);
+
+   // Core Mission States
+   const [assessment, setAssessment] = useState<any>(() => {
+      // Try to pre-fill from mission data if available
+      return activeMission?.medical_assessment || { conscious: null, breathing: null, severity: null };
+   });
    const [careChecklist, setCareChecklist] = useState<string[]>([]);
    const [decision, setDecision] = useState<string | null>(null);
    const [targetHospital, setTargetHospital] = useState<any>(null);
@@ -547,6 +568,7 @@ export function useSignalementLogic(navigation: any, route: any) {
       pickAndUploadTerrainPhoto, runVictimVoip, runVictimPstn,
       pan, panResponder,
       transitionTo,
+      assessmentSchema,
       formatTime: (s: number) => {
          const h = Math.floor(s / 3600);
          const m = Math.floor((s % 3600) / 60);

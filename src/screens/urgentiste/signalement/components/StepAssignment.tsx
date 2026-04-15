@@ -91,6 +91,17 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                <Text style={[styles.standbySub, { marginTop: 12, textAlign: "center" }]}>
                   En attente de réponse de l'établissement — les coordonnées GPS seront affichées après acceptation.
                </Text>
+               
+               {pendingStructureInfo.phone ? (
+                  <AppTouchableOpacity
+                     style={[styles.structureCallBtn, { marginTop: 24, paddingHorizontal: 20, paddingVertical: 12 }]}
+                     onPress={() => Linking.openURL(`tel:${pendingStructureInfo.phone}`)}
+                  >
+                     <MaterialIcons name="phone" size={20} color="#30D158" />
+                     <Text style={[styles.structureCallText, { fontSize: 15 }]}>Accélérer (Appeler le {pendingStructureInfo.phone})</Text>
+                  </AppTouchableOpacity>
+               ) : null}
+
                <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 20 }} />
             </View>
          </View>

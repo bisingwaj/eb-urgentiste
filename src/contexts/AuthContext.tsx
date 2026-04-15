@@ -78,13 +78,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('users_directory')
         .select('id, auth_user_id, role, first_name, last_name, email, phone, photo_url, status, available, grade, matricule, specialization, zone, address, assigned_unit_id, must_change_password, agent_login_id')
         .eq('auth_user_id', authUserId)
-        .not('agent_login_id', 'is', null)  // Préférer l'entrée avec agent_login_id
+        .not('agent_login_id', 'is', null)
         .limit(1)
         .maybeSingle();
 
-      if (error) {
-        console.error('[Auth] Erreur chargement profil:', error.message);
-        // Fallback: essayer sans le filtre agent_login_id
+      // Fallback si pas de résultat ou erreur (ex: hôpitaux sans agent_login_id)
+      if (error || !data) {
+        if (error) console.warn('[Auth] Erreur ou profil non trouvé avec agent_login_id, tentative fallback:', error.message);
+        
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('users_directory')
           .select('id, auth_user_id, role, first_name, last_name, email, phone, photo_url, status, available, grade, matricule, specialization, zone, address, assigned_unit_id, must_change_password, agent_login_id')
@@ -92,8 +93,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .limit(1)
           .maybeSingle();
 
-        if (fallbackError) {
-          console.error('[Auth] Erreur fallback profil:', fallbackError.message);
+        if (fallbackError || !fallbackData) {
+          if (fallbackError) console.error('[Auth] Erreur fallback profil:', fallbackError.message);
           return null;
         }
 

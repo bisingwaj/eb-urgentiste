@@ -49,3 +49,31 @@ export const STEP_LABELS: Record<MissionStep, string> = {
 };
 
 export const STEP_ORDER: MissionStep[] = ["standby", "reception", "arrival", "assessment", "aid", "decision", "assignment", "transport_mode", "transport", "closure"];
+
+/** TYPES POUR LE SYSTÈME DE QUESTIONNAIRE DYNAMIQUE (BILAN MÉDICAL) */
+
+export interface AssessmentOption {
+   label: string;
+   value: any;
+   color?: string;
+   icon?: string;
+   critical?: boolean;
+}
+
+export interface AssessmentStep {
+   id: string;
+   type: "binary" | "choice" | "range" | "info";
+   label: string;
+   description?: string;
+   options?: AssessmentOption[];
+   advice?: {
+      if: { fieldId: string; value: any };
+      text: string;
+   };
+}
+
+export interface AssessmentSchema {
+   incident_type: string;
+   version: string;
+   steps: AssessmentStep[];
+}
