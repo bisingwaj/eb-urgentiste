@@ -109,13 +109,22 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     setCaseData((prev) => ({ ...prev, ...updated }));
   }, [activeCases, caseData.id]);
 
-  const [showRefusalModal, setShowRefusalModal] = useState(false);
+  const [showRefusalModal, setShowRefusalModal] = useState(route.params?.autoOpenRefuse === true);
   const [selectedReason, setSelectedReason] = useState("");
   const [otherReason, setOtherReason] = useState("");
   const [accepting, setAccepting] = useState(false);
   const [refusing, setRefusing] = useState(false);
   const acceptingRef = useRef(false);
   const refusingRef = useRef(false);
+
+  // Auto-open effect for robustness (if state needs more than just initial value)
+  useEffect(() => {
+    if (route.params?.autoOpenRefuse) {
+      setShowRefusalModal(true);
+      // On nettoie les params pour éviter que ça se ré-ouvre bizarrement au reload local
+      navigation.setParams({ autoOpenRefuse: undefined });
+    }
+  }, [route.params?.autoOpenRefuse]);
 
   // Swipe Animation
   const pan = useRef(new Animated.Value(0)).current;

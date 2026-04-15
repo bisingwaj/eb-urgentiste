@@ -60,13 +60,19 @@ export type HospitalListBlocker =
   | 'no_structure_link'
   | 'supabase_error';
 
+export type HospitalCapacityStatus = 'fluid' | 'saturated' | 'diversion';
+
 interface HospitalContextType {
   activeCases: EmergencyCase[];
   isLoading: boolean;
+  /** État de saturation déclaré par l’hôpital */
+  hospitalCapacity: HospitalCapacityStatus;
+  isUpdatingCapacity: boolean;
   /** Raison métier / config si aucun dispatch n’est chargé (diagnostic) */
   listBlocker: HospitalListBlocker;
   lastFetchError: string | null;
   refresh: () => Promise<void>;
+  updateHospitalCapacity: (status: HospitalCapacityStatus) => Promise<void>;
   updateCaseStatus: (
     caseId: string,
     transition: {
@@ -104,6 +110,8 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   const { profile, session } = useAuth();
   const [activeCases, setActiveCases] = useState<EmergencyCase[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hospitalCapacity, setHospitalCapacity] = useState<HospitalCapacityStatus>('fluid');
+  const [isUpdatingCapacity, setIsUpdatingCapacity] = useState(false);
   const [listBlocker, setListBlocker] = useState<HospitalListBlocker>(null);
   const [lastFetchError, setLastFetchError] = useState<string | null>(null);
 
@@ -171,6 +179,38 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       await fetchCasesRef.current?.({ silent: true });
     },
     [profile?.health_structure_id, session?.user?.id]
+  );
+
+  const updateHospitalCapacity = useCallback(
+    async (status: HospitalCapacityStatus) => {
+      const structureId = profile?.health_structure_id;
+      if (!structureId) return;
+
+      setIsUpdatingCapacity(true);
+      try {
+        // En local d'abord pour réactivité
+        setHospitalCapacity(status);
+
+        // Sync Supabase
+        const { error } = await supabase
+          .from('health_structures')
+          .update({ capacity_status: status })
+          .eq('id', structureId);
+
+        if (error) {
+          if (error.code === '42703') {
+            console.warn('[HospitalContext] capacity_status column missing in health_structures table. Keeping local state.');
+          } else {
+            throw error;
+          }
+        }
+      } catch (err) {
+        console.error('[HospitalContext] updateHospitalCapacity error:', err);
+      } finally {
+        setIsUpdatingCapacity(false);
+      }
+    },
+    [profile?.health_structure_id]
   );
 
   const fetchCases = useCallback(async (options?: { silent?: boolean }) => {
@@ -452,9 +492,12 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       value={{
         activeCases,
         isLoading,
+        hospitalCapacity,
+        isUpdatingCapacity,
         listBlocker,
         lastFetchError,
         refresh: fetchCases,
+        updateHospitalCapacity,
         updateCaseStatus,
         sendHospitalReport,
       }}
