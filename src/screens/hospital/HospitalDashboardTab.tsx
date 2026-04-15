@@ -17,6 +17,8 @@ import { colors } from "../../theme/colors";
 import type { TransportModeCode } from "../../lib/transportMode";
 import { useAuth } from "../../contexts/AuthContext";
 import { useHospital } from "../../contexts/HospitalContext";
+import { CapacitySelector } from "./components/CapacitySelector";
+import { QuickDecisionTile } from "./components/QuickDecisionTile";
 import {
   countActiveAdmissions,
   countCriticalOpen,
@@ -430,7 +432,7 @@ export const getStatusConfig = (status: CaseStatus) => {
 
 export function HospitalDashboardTab({ navigation }: any) {
   const { profile, refreshProfile } = useAuth();
-  const { activeCases, isLoading, listBlocker, lastFetchError, refresh } = useHospital();
+  const { activeCases, isLoading, listBlocker, lastFetchError, refresh, updateCaseStatus } = useHospital();
   const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
@@ -488,21 +490,44 @@ export function HospitalDashboardTab({ navigation }: any) {
   >("all");
 
   const filteredCases = activeCases.filter((c) => {
+    // Dans la liste principale, on ne montre que ceux déjà acceptés ou en cours de gestion clinique
+    // Les 'pending' vont dans la zone de décision rapide en haut.
+    if (c.hospitalStatus === "pending") return false;
+    
     if (filter === "all") return !isCaseClosed(c);
     return c.status === filter;
   });
 
-  /** Alertes `hospital_status === 'pending'` en tête (workflow Lovable hôpital). */
+  const pendingCases = useMemo(() => {
+    return activeCases.filter(c => c.hospitalStatus === "pending");
+  }, [activeCases]);
+
+  /** Alertes triées par date de création du signalement */
   const sortedFilteredCases = useMemo(() => {
     const list = [...filteredCases];
     list.sort((a, b) => {
-      const ap = a.hospitalStatus === "pending" ? 0 : 1;
-      const bp = b.hospitalStatus === "pending" ? 0 : 1;
-      if (ap !== bp) return ap - bp;
-      return 0;
+      const ta = a.dispatchCreatedAt ? new Date(a.dispatchCreatedAt).getTime() : 0;
+      const tb = b.dispatchCreatedAt ? new Date(b.dispatchCreatedAt).getTime() : 0;
+      return tb - ta;
     });
     return list;
   }, [filteredCases]);
+
+  const handleQuickAccept = async (caseId: string) => {
+    try {
+      await updateCaseStatus(caseId, { hospitalStatus: 'accepted' });
+    } catch (err) {
+      console.error("[Dashboard] Error accepting case:", err);
+    }
+  };
+
+  const handleQuickRefuse = (caseId: string) => {
+    // On redirige vers le détail pour choisir la raison du refus (workflow sécurisé)
+    const caseItem = activeCases.find(c => c.id === caseId);
+    if (caseItem) {
+      navigation.navigate("HospitalCaseDetail", { caseData: caseItem, autoOpenRefuse: true });
+    }
+  };
 
   const criticalCount = useMemo(
     () => countCriticalOpen(activeCases),
@@ -608,6 +633,8 @@ export function HospitalDashboardTab({ navigation }: any) {
             <View style={styles.cardGlow} />
           </View>
         </View>
+
+        <CapacitySelector />
       </View>
 
       <ScrollView
@@ -645,11 +672,39 @@ export function HospitalDashboardTab({ navigation }: any) {
             </Text>
           </View>
         ) : null}
+
+        {/* --- SECTION 1: CENTRE DE DÉCISION (Incoming Requests) --- */}
+        {pendingCases.length > 0 && (
+          <View style={styles.decisionCenter}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>CENTRE DE DÉCISION ({pendingCases.length})</Text>
+              <MaterialCommunityIcons name="broadcast" size={18} color={colors.primary} />
+            </View>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false} 
+              contentContainerStyle={styles.decisionScroll}
+              snapToInterval={width * 0.85 + 16}
+              decelerationRate="fast"
+            >
+              {pendingCases.map(c => (
+                <QuickDecisionTile 
+                  key={c.id} 
+                  caseItem={c} 
+                  onAccept={handleQuickAccept}
+                  onRefuse={handleQuickRefuse}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* --- SECTION 2: ALTES RÉCENTES (Ongoing management) --- */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Alertes récentes</Text>
+          <Text style={styles.sectionTitle}>Suivi & admissions</Text>
           <View style={styles.filterOptions}>
             <AppTouchableOpacity onPress={() => setFilter("all")}><Text style={[styles.filterLabel, filter === "all" && styles.filterLabelActive]}>Tous</Text></AppTouchableOpacity>
-            <AppTouchableOpacity onPress={() => setFilter("en_attente")}><Text style={[styles.filterLabel, filter === "en_attente" && styles.filterLabelActive]}>Signalés</Text></AppTouchableOpacity>
+            <AppTouchableOpacity onPress={() => setFilter("en_attente")}><Text style={[styles.filterLabel, filter === "en_attente" && styles.filterLabelActive]}>Prévus</Text></AppTouchableOpacity>
           </View>
         </View>
 
@@ -730,7 +785,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 18,
   },
-  notifBtn: { width: 50, height: 50, borderRadius: 18, backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  notifBtn: { width: 50, height: 50, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.05)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   notifBadge: {
     position: "absolute",
     top: 6,
@@ -740,19 +795,29 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: "#FF5252",
     borderWidth: 2,
-    borderColor: "#1A1A1A",
+    borderColor: "#0A0A0A",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 3,
   },
   notifBadgeText: { color: "#FFF", fontSize: 11, fontWeight: "900" },
-  summaryContainer: { flexDirection: "row", gap: 12 },
+  summaryContainer: { flexDirection: "row", gap: 12, marginBottom: 4 },
   mainSummaryCard: { flex: 1, height: 110, borderRadius: 28, padding: 20, overflow: "hidden", justifyContent: "center" },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
   summaryLabel: { color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
   summaryNumber: { color: "#FFF", fontSize: 36, fontWeight: "900" },
   cardGlow: { position: "absolute", right: -20, bottom: -20, width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.15)" },
   scrollView: { flex: 1 },
+  decisionCenter: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  decisionScroll: {
+    paddingLeft: 20,
+    paddingRight: 10,
+    paddingBottom: 20,
+    paddingTop: 5,
+  },
   configBanner: {
     marginHorizontal: 20,
     marginTop: 12,
