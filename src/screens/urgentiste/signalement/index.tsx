@@ -22,6 +22,7 @@ import { MePuck } from '../../../components/map/mapMarkers';
 import Mapbox from "@rnmapbox/maps";
 import { HeartPulse, Hospital as HospitalIcon } from "lucide-react-native";
 import { MaterialIcons } from '@expo/vector-icons';
+import { formatIncidentType } from '../../../utils/missionAddress';
 import { AppTouchableOpacity } from '../../../components/ui/AppTouchableOpacity';
 
 export default function SignalementScreen(props: any) {
@@ -54,8 +55,10 @@ export default function SignalementScreen(props: any) {
             <MaterialIcons name="arrow-back" color="#FFF" size={24} />
          </AppTouchableOpacity>
          <View style={styles.stepInlineTextCol}>
-            <Text style={styles.stepInlineTitle}>{selectedMission?.type || "Mission"}</Text>
-            <Text style={styles.stepInlineSub}>{displayAddress}</Text>
+            <Text style={styles.stepInlineTitle}>{formatIncidentType(selectedMission?.type)}</Text>
+            <Text style={styles.stepInlineSub}>
+               {selectedMission?.victim_name || (selectedMission?.caller?.first_name ? `${selectedMission.caller.first_name} ${selectedMission.caller.last_name || ""}` : displayAddress)}
+            </Text>
          </View>
          {step !== "standby" && step !== "closure" && (
             <AppTouchableOpacity
