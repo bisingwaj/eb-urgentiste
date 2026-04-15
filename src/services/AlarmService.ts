@@ -1,13 +1,15 @@
 import { Audio } from 'expo-av';
-import { Vibration, Platform } from 'react-native';
+import { Vibration, Platform, DeviceEventEmitter } from 'react-native';
 
 /**
  * AlarmService — Singleton qui gère la sonnerie d'alarme urgente.
  *
  * • Joue un son de sirène en boucle (même en arrière-plan, même écran verrouillé)
  * • Fait vibrer le téléphone en continu
- * • S'arrête quand l'app revient au premier plan (foreground)
+ * • S'arrête quand l'app revient au premier plan (foreground) ou via STOP_ALARM
  */
+
+export const ALARM_STOP_EVENT = 'STOP_ALARM_EVENT';
 class AlarmServiceClass {
   private sound: Audio.Sound | null = null;
   private isAlarmPlaying = false;
@@ -24,6 +26,9 @@ class AlarmServiceClass {
         playsInSilentModeIOS: true,
         shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,
+        // Correction interruption : ne pas mélanger (DoNotMix) pour garder la priorité
+        interruptionModeIOS: (Audio as any).InterruptionModeIOS?.DoNotMix || 1,
+        interruptionModeAndroid: (Audio as any).InterruptionModeAndroid?.DoNotMix || 1,
       });
     } catch (err) {
       console.warn('[AlarmService] Failed to configure audio mode:', err);
@@ -109,8 +114,8 @@ class AlarmServiceClass {
    * Vibration en boucle avec un pattern "urgence".
    */
   private startContinuousVibration(): void {
-    // Pattern : vibrer 800ms, pause 400ms, vibrer 800ms, pause 400ms...
-    const pattern = [0, 800, 400, 800, 400, 800, 400, 800];
+    // Pattern rythmique type sirène / urgence : vibrer 500ms, pause 200ms, vibrer 500ms, pause 200ms...
+    const pattern = [0, 500, 200, 500, 200, 500, 800];
 
     if (Platform.OS === 'android') {
       // Sur Android, le paramètre `true` = repeat

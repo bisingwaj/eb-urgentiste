@@ -150,6 +150,7 @@ export function mapDispatchRowToEmergencyCase(
     unitVehiclePlate: typeof u.vehicle_plate === 'string' ? u.vehicle_plate : undefined,
     unitAgentName: typeof u.agent_name === 'string' && u.agent_name.trim() ? u.agent_name.trim() : undefined,
     eta: '5 min',
+    distance: '1.2 KM',
     status: resolveCaseStatusFromRow(d, hData),
     address: inc.location_address || '',
     timestamp: new Date(inc.created_at || d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),

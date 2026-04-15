@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { Platform, DeviceEventEmitter } from 'react-native';
 import {
   INCOMING_CALL_ACTION_ACCEPT,
   INCOMING_CALL_ACTION_DECLINE,
@@ -12,6 +12,7 @@ import {
   displayIncomingCallWithNotifee,
   ensureNotifeeIncomingChannel,
 } from './notifeeIncomingCall';
+import { ALARM_STOP_EVENT } from '../services/AlarmService';
 
 /**
  * NotificationService — Gère les notifications locales du système (barre de notification).
@@ -28,7 +29,9 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: true,
+    // On désactive le son NATIF de la notification pour laisser AlarmService (expo-av) 
+    // gérer la sirène en boucle sans interruption par le système.
+    shouldPlaySound: false, 
     shouldSetBadge: true,
     priority: Notifications.AndroidNotificationPriority.MAX,
   }),
@@ -47,7 +50,7 @@ class NotificationServiceClass {
       lightColor: '#FF0000',
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       bypassDnd: true,
-      sound: 'alarm_alert.wav',
+      sound: null, // Silencing system notification pings
       enableVibrate: true,
       enableLights: true,
     });
@@ -59,7 +62,7 @@ class NotificationServiceClass {
       lightColor: '#1564bf',
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       bypassDnd: true,
-      sound: 'alarm_alert.wav',
+      sound: null, // Silencing system notification pings
       enableVibrate: true,
       enableLights: true,
     });

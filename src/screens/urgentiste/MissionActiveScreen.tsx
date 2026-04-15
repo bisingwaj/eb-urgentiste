@@ -4,6 +4,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import { ALARM_STOP_EVENT } from '../../services/AlarmService';
+import { DeviceEventEmitter } from 'react-native';
 import { useActiveMission } from '../../hooks/useActiveMission';
 import * as Location from 'expo-location';
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from '../../lib/mapbox';
@@ -47,6 +49,11 @@ function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export function MissionActiveScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    // Dès qu'on arrive sur le suivi de mission, on stoppe l'alarme
+    DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+  }, []);
   const { activeMission, updateDispatchStatus } = useActiveMission();
   const { minimized: activeCall } = useCallSession();
   
