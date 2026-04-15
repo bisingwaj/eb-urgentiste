@@ -14,6 +14,8 @@ class AlarmServiceClass {
   private sound: Audio.Sound | null = null;
   private isAlarmPlaying = false;
   private vibrationInterval: ReturnType<typeof setInterval> | null = null;
+  private autoStopTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly AUTO_STOP_MS = 10 * 60 * 1000; // 10 minutes
 
   /**
    * Configure le mode audio pour jouer en arrière-plan et ignorer le mode silencieux.
@@ -72,6 +74,13 @@ class AlarmServiceClass {
       // 3. Démarrer la vibration continue
       this.startContinuousVibration();
 
+      // 4. Sécurité : arrêt automatique après 10 minutes pour la batterie
+      if (this.autoStopTimeout) clearTimeout(this.autoStopTimeout);
+      this.autoStopTimeout = setTimeout(() => {
+        console.log('[AlarmService] 🕒 Hard limit reached (10m) — auto-stopping');
+        this.stopAlarm();
+      }, this.AUTO_STOP_MS);
+
       console.log('[AlarmService] ✅ Alarm started successfully');
     } catch (err) {
       console.error('[AlarmService] ❌ Failed to start alarm:', err);
@@ -89,6 +98,11 @@ class AlarmServiceClass {
 
     console.log('[AlarmService] 🔇 Stopping alarm...');
     this.isAlarmPlaying = false;
+
+    if (this.autoStopTimeout) {
+      clearTimeout(this.autoStopTimeout);
+      this.autoStopTimeout = null;
+    }
 
     // Arrêter la vibration
     this.stopContinuousVibration();

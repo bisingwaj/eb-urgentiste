@@ -95,7 +95,7 @@ class NotificationServiceClass {
       if (Platform.OS === 'android') {
         await ensureNotifeeIncomingChannel();
       }
-      await this.ensureIncomingCallCategories();
+      await this.ensureNotificationCategories();
     } catch (e) {
       console.warn('[NotificationService] ensurePushInfrastructure:', e);
     }
@@ -112,7 +112,7 @@ class NotificationServiceClass {
       await this.setupAndroidChannels();
       console.log('[NotificationService] ✅ Canaux Android créés');
 
-      await this.ensureIncomingCallCategories();
+      await this.ensureNotificationCategories();
 
       // Demander les permissions
       await this.requestPermissions();
@@ -235,9 +235,10 @@ class NotificationServiceClass {
     await Notifications.setBadgeCountAsync(0);
   }
 
-  /** Catégories iOS (actions Accepter / Refuser). */
-  async ensureIncomingCallCategories(): Promise<void> {
+  /** Catégories iOS (urgences, missions, appels). */
+  async ensureNotificationCategories(): Promise<void> {
     try {
+      // 1. Appels Entrants
       await Notifications.setNotificationCategoryAsync(INCOMING_CALL_CATEGORY_ID, [
         {
           identifier: INCOMING_CALL_ACTION_DECLINE,
@@ -253,8 +254,26 @@ class NotificationServiceClass {
           options: { opensAppToForeground: true },
         },
       ]);
+
+      // 2. Mission Urgente (Urgentiste)
+      await Notifications.setNotificationCategoryAsync('mission_alert', [
+        {
+          identifier: 'VIEW_MISSION',
+          buttonTitle: 'Voir la mission',
+          options: { opensAppToForeground: true },
+        },
+      ]);
+
+      // 3. Alerte Hôpital
+      await Notifications.setNotificationCategoryAsync('hospital_alert', [
+        {
+          identifier: 'VIEW_ALERT',
+          buttonTitle: 'Ouvrir le dossier',
+          options: { opensAppToForeground: true },
+        },
+      ]);
     } catch (e) {
-      console.warn('[NotificationService] ensureIncomingCallCategories:', e);
+      console.warn('[NotificationService] ensureNotificationCategories:', e);
     }
   }
 
