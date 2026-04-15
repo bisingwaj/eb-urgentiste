@@ -294,9 +294,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!loaded) {
         return {
           ok: false,
-          error: 'Profil introuvable. Vérifiez vos droits ou contactez l’administrateur.',
+          error: "utilisateur n'existe pas",
         };
       }
+
+      // 1. Vérification stricte des rôles autorisés (uniquement hôpital et secouriste)
+      if (loaded.role !== 'hopital' && loaded.role !== 'secouriste') {
+        return {
+          ok: false,
+          error: "utilisateur n'existe pas",
+        };
+      }
+
+      // 2. Vérification de la correspondance avec le portail choisi
       if (portal === 'hopital') {
         if (loaded.role !== 'hopital') {
           return {
@@ -305,10 +315,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
       } else {
-        if (loaded.role === 'hopital') {
+        // Pour le portail urgentiste, on n'autorise QUE le rôle 'secouriste'
+        if (loaded.role !== 'secouriste') {
           return {
             ok: false,
-            error: 'Ce compte est réservé au portail hôpital. Choisissez « Hôpital » sur l’écran d’accueil.',
+            error: 'Ce compte est réservé au portail urgentiste. Choisissez « Urgentiste » sur l’écran d’accueil.',
           };
         }
       }
