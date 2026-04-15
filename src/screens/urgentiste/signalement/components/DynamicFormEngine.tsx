@@ -58,13 +58,13 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
                <View style={{ width: 80, height: 80, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
                   <MaterialIcons
                      name={(options.find(o => o.value === currentValue)?.icon as any) || "help-outline"}
-                     size={40}
+                     size={42}
                      color={currentValue !== undefined ? (options.find(o => o.value === currentValue)?.color || colors.secondary) : colors.secondary}
                   />
                </View>
-               <Text style={{ color: '#FFF', fontSize: 24, fontWeight: '900', textAlign: 'center' }}>{step.label}</Text>
+               <Text style={{ color: '#FFF', fontSize: 26, fontWeight: '900', textAlign: 'center', lineHeight: 34 }}>{step.label}</Text>
                {step.description && (
-                  <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 16, marginTop: 10, textAlign: 'center' }}>
+                  <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 16, marginTop: 12, textAlign: 'center' }}>
                      {step.description}
                   </Text>
                )}
@@ -78,8 +78,8 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
                      <AppTouchableOpacity
                         key={String(opt.value)}
                         style={{
-                           height: 64,
-                           borderRadius: 16,
+                           height: 72,
+                           borderRadius: 18,
                            backgroundColor: isActive ? activeColor + '20' : 'rgba(255,255,255,0.05)',
                            borderWidth: 2,
                            borderColor: isActive ? activeColor : 'transparent',
@@ -88,13 +88,22 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
                            justifyContent: 'center',
                            paddingHorizontal: 20
                         }}
-                        onPress={() => updateValue(step.id, opt.value)}
+                        onPress={() => {
+                           updateValue(step.id, opt.value);
+                           // Auto-advance logic:
+                           // 1. Must be a success/positive value (usually YES)
+                           // 2. Must NOT have a blocking advice (if advice exists for this value, stay to show it)
+                           const hasAdviceForThisValue = step.advice?.if.value === opt.value;
+                           if (opt.value === true && !hasAdviceForThisValue) {
+                              setTimeout(goNext, 300);
+                           }
+                        }}
                      >
                         <Text
                            style={{
                               color: isActive ? activeColor : '#FFF',
-                              fontSize: 18,
-                              fontWeight: '800'
+                              fontSize: 20,
+                              fontWeight: '900'
                            }}
                         >
                            {opt.label}
