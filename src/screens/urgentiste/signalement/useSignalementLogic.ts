@@ -387,6 +387,7 @@ export function useSignalementLogic(navigation: any, route: any) {
 
    const handleConfirmAssessment = async () => {
       try {
+         // Persist structured assessment to DB
          await updateMissionDetails({ assessment });
          transitionTo("aid");
          addTimelineEvent("Évaluation terminée", "analytics", assessment.severity || "Stable");
@@ -401,9 +402,15 @@ export function useSignalementLogic(navigation: any, route: any) {
       });
    };
 
-   const handleConfirmAid = () => {
-      transitionTo("decision");
-      addTimelineEvent("Soins prodigués", "favorite");
+   const handleConfirmAid = async () => {
+      try {
+         // Sync careChecklist to DB so hospital can see "Premiers Soins"
+         await updateMissionDetails({ 
+            assessment: { ...assessment, careChecklist } 
+         });
+         transitionTo("decision");
+         addTimelineEvent("Soins prodigués", "favorite");
+      } catch (err) { }
    };
 
    const handleDecideTransport = async (choice: string) => {

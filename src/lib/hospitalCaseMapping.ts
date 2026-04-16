@@ -80,6 +80,15 @@ function parseLovableDischargeType(v: unknown): LovableDischargeType | undefined
   return v;
 }
 
+function capitalizeName(name: string): string {
+  if (!name) return 'Inconnu';
+  return name
+    .toLowerCase()
+    .split(' ')
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(' ');
+}
+
 /**
  * Mappe une ligne `dispatches` (+ embeds) vers `EmergencyCase`.
  * `unitPhoneByUnitId` : téléphone secouriste depuis `users_directory.assigned_unit_id`.
@@ -92,6 +101,7 @@ export function mapDispatchRowToEmergencyCase(
 ): EmergencyCase {
   const inc = d.incidents || {};
   const hData = d.hospital_data || {};
+  const medicalAssessmentRaw = d.medical_assessment || {};
 
   const patientProfileRaw = inc.citizen_id ? profileMap[inc.citizen_id] : undefined;
   const patientProfile = patientProfileRaw
@@ -136,7 +146,7 @@ export function mapDispatchRowToEmergencyCase(
     completedAt: typeof d.completed_at === 'string' ? d.completed_at : undefined,
     dispatchCreatedAt: typeof d.created_at === 'string' ? d.created_at : undefined,
     incidentId: typeof inc.id === 'string' ? inc.id : undefined,
-    victimName: inc.caller_name || 'Inconnu',
+    victimName: capitalizeName(inc.caller_name || 'Inconnu'),
     age: resolvedAge,
     sex: hData.sex === 'M' || hData.sex === 'F' ? hData.sex : 'Inconnu',
     description: inc.description || '',
@@ -154,7 +164,7 @@ export function mapDispatchRowToEmergencyCase(
     status: resolveCaseStatusFromRow(d, hData),
     address: inc.location_address || '',
     timestamp: new Date(inc.created_at || d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    typeUrgence: inc.type || 'Inconnu',
+    typeUrgence: (inc.type || 'Inconnu').replace(/_/g, ' ').toUpperCase(),
     unitId: d.unit_id,
     assignedStructureLat: toNullableNumber(d.assigned_structure_lat) ?? undefined,
     assignedStructureLng: toNullableNumber(d.assigned_structure_lng) ?? undefined,
@@ -180,6 +190,13 @@ export function mapDispatchRowToEmergencyCase(
           }))
         : undefined,
     gravityScore,
+
+    medicalAssessment: hData.medicalAssessment || medicalAssessmentRaw,
+    careChecklist: Array.isArray(hData.medicalAssessment?.careChecklist) 
+      ? hData.medicalAssessment.careChecklist 
+      : Array.isArray(medicalAssessmentRaw.careChecklist) 
+        ? medicalAssessmentRaw.careChecklist 
+        : undefined,
 
     arrivalTime: hData.arrivalTime,
     arrivalMode: hData.arrivalMode,
