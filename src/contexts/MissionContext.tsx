@@ -3,7 +3,7 @@ import { Alert, Vibration, DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { uploadIncidentTerrainPhotoToStorage } from '../lib/incidentTerrainPhotos';
 import { useAuth } from './AuthContext';
-import { Mission, normalizeHospitalStatus } from '../hooks/useActiveMission';
+import { Mission, normalizeHospitalStatus } from '../types/mission';
 import { readMissionCache, writeMissionCache } from '../lib/localAppCache';
 import { APP_FOREGROUND_SYNC } from '../lib/syncEvents';
 
@@ -362,14 +362,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           console.log('[Mission] 🚨 NOUVELLE MISSION REÇUE !', payload.new?.id);
           // Déclencher l'alarme sonore continue (gérée par AlertAlarmManager)
           DeviceEventEmitter.emit('NEW_MISSION_ALERT');
-          fetchActiveMission({ silent: true }).then(() => {
-            Alert.alert(
-              '🚨 NOUVELLE MISSION',
-              'La centrale vous a assigné une intervention urgente.',
-              [{ text: 'VOIR LA MISSION', style: 'default' }],
-              { cancelable: false }
-            );
-          });
+          void fetchActiveMission({ silent: true });
         }
       )
       .on(
@@ -512,20 +505,23 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       if (status === 'arrived_hospital') updateData.arrived_at = new Date().toISOString();
       if (status === 'completed') updateData.completed_at = new Date().toISOString();
 
-      // 1. Update active dispatch
-      console.log(`[Mission] 🔄 Updating dispatch ${activeMission.id} → ${status}`);
-      const { error: dispatchError } = await supabase
-        .from('dispatches')
-        .update(updateData)
-        .eq('id', activeMission.id);
+      // Prepare promises for parallel execution
+      const promises = [];
 
-      if (dispatchError) {
-        console.error('[Mission] ❌ STEP 1 FAILED — dispatches UPDATE:', dispatchError.message, dispatchError.details);
-        throw dispatchError;
-      }
-      console.log('[Mission] ✅ Step 1 — dispatch updated');
-      
-      // 2. incidents.status — aligné PROMPT_CURSOR_URGENTISTE_WORKFLOW §8 + NOTE_LOVABLE (ex. mission_end → ended).
+      // 1. Update active dispatch
+      console.log(`[Mission] 🔄 Parallelizing update: dispatch ${activeMission.id} → ${status}`);
+      promises.push(
+        supabase
+          .from('dispatches')
+          .update(updateData)
+          .eq('id', activeMission.id)
+          .then(({ error }) => {
+            if (error) console.error('[Mission] ❌ Dispatch update failed:', error.message);
+            return { type: 'dispatch', error };
+          })
+      );
+
+      // 2. incidents.status
       const incidentStatusMap: Record<string, string> = {
         en_route: 'en_route',
         on_scene: 'arrived',
@@ -535,19 +531,21 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         completed: 'resolved',
       };
       const incidentStatus = incidentStatusMap[status] || status;
-      
-      const { error: incidentError } = await supabase
-        .from('incidents')
-        .update({
-          status: incidentStatus,
-          ...(incidentStatus === 'resolved' ? { resolved_at: new Date().toISOString() } : {}),
-        })
-        .eq('id', activeMission.incident_id);
+      promises.push(
+        supabase
+          .from('incidents')
+          .update({
+            status: incidentStatus,
+            ...(incidentStatus === 'resolved' ? { resolved_at: new Date().toISOString() } : {}),
+          })
+          .eq('id', activeMission.incident_id)
+          .then(({ error }) => {
+            if (error) console.error('[Mission] ⚠️ Incident update failed:', error.message);
+            return { type: 'incident', error };
+          })
+      );
 
-      if (incidentError) console.error('[Mission] ⚠️ Step 2 — incident update failed:', incidentError.message);
-      else console.log(`[Mission] ✅ Step 2 — incident → ${incidentStatus}`);
-
-      // 3. Sync active_rescuers.status → trigger → units.status (tableau workflow PROMPT_CURSOR_URGENTISTE)
+      // 3. Sync active_rescuers.status
       const rescuerStatusMap: Record<string, string> = {
         en_route: 'en_route',
         on_scene: 'on_scene',
@@ -558,16 +556,30 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       };
       const rescuerStatus = rescuerStatusMap[status] || 'active';
 
-      const userId = (await supabase.auth.getUser()).data.user?.id;
-      if (userId) {
-        const { error: rescuerError } = await supabase
-          .from('active_rescuers')
-          .update({ status: rescuerStatus, updated_at: new Date().toISOString() })
-          .eq('user_id', userId);
-        
-        if (rescuerError) console.error('[MissionProvider] Error syncing rescuer status:', rescuerError.message);
-        else console.log(`[Mission] ✅ Rescuer status → ${rescuerStatus}`);
+      promises.push(
+        (async () => {
+          const uData = await supabase.auth.getUser();
+          const userId = uData.data.user?.id;
+          if (userId) {
+            const { error } = await supabase
+              .from('active_rescuers')
+              .update({ status: rescuerStatus, updated_at: new Date().toISOString() })
+              .eq('user_id', userId);
+            if (error) console.error('[Mission] ⚠️ Rescuer status sync failed:', error.message);
+            return { type: 'rescuer', error };
+          }
+          return { type: 'rescuer', error: null };
+        })()
+      );
+
+      // Execute all updates in parallel
+      const results = await Promise.all(promises);
+      const criticalError = results.find(r => r.type === 'dispatch' && r.error);
+      if (criticalError?.error) {
+        throw criticalError.error;
       }
+
+      console.log('[Mission] ✅ All parallel updates triggered');
       // Update local state immediately
       if (status === 'completed') {
         // Mission terminée → vider immédiatement pour que le HomeTab affiche "Standby"
@@ -585,18 +597,40 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     if (!activeMission) return;
 
     try {
-      // Pour l'instant, on sauvegarde l'évaluation dans la description de l'incident
+      // SAUVEGARDE DU BILAN MÉDICAL
       if (details.assessment) {
-        const assessmentText = ` [ÉVALUATION] Conscience: ${details.assessment.conscious ? 'Oui' : 'Non'}, Respiration: ${details.assessment.breathing ? 'Oui' : 'Non'}, Gravité: ${details.assessment.severity}`;
+        // 1. Version texte pour compatibilité héritée (Incidents.description)
+        const assessmentFields = Object.entries(details.assessment)
+          .filter(([key]) => key !== 'assessment_completed_at')
+          .map(([key, val]) => `${key}: ${val === true ? 'Oui' : val === false ? 'Non' : val}`);
         
-        const { error } = await supabase
+        const assessmentText = ` [ÉVALUATION] ${assessmentFields.join(', ')}`;
+        
+        // Exécution en parallèle pour performance
+        const p1 = supabase
           .from('incidents')
           .update({ 
             description: (activeMission.description || '') + assessmentText 
           })
           .eq('id', activeMission.incident_id);
 
-        if (error) throw error;
+        // 2. Version structurée pour le futur (Dispatches.medical_assessment)
+        const p2 = supabase
+          .from('dispatches')
+          .update({ 
+            medical_assessment: {
+              ...details.assessment,
+              assessment_completed_at: new Date().toISOString()
+            } 
+          })
+          .eq('id', activeMission.id);
+
+        const [r1, r2] = await Promise.all([p1, p2]);
+        if (r1.error) console.error('[MissionContext] Legacy description update error:', r1.error.message);
+        if (r2.error) {
+          console.warn('[MissionContext] Medical assessment JSONB update error (column might not exist yet):', r2.error.message);
+          // On ne bloque pas si la colonne n'est pas encore là
+        }
       }
       
       setActiveMission(prev => prev ? { ...prev, ...details } : null);

@@ -12,10 +12,13 @@ import {
 } from "react-native";
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { useAuth } from "../../contexts/AuthContext";
+import { useActiveMission } from "../../hooks/useActiveMission";
 import { useAppLock } from "../../contexts/AppLockContext";
 import { useNotifications } from "../../hooks/useNotifications";
+import { useConnectivity } from "../../hooks/useConnectivity";
+import { useDialog } from "../../contexts/GlobalDialogContext";
 import { colors } from "../../theme/colors";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../../lib/supabase";
 
 function Card({ children }: { children: React.ReactNode }) {
@@ -44,7 +47,10 @@ function InfoRow({ icon, label, value, iconTint, valueLines = 1 }: any) {
 
 export function ProfileTab({ navigation }: any) {
   const { profile, signOut, refreshProfile } = useAuth();
+  const { activeMission } = useActiveMission();
   const { unreadCount } = useNotifications();
+  const { isConnected } = useConnectivity();
+  const { showDialog } = useDialog();
   const [avatarLoadError, setAvatarLoadError] = useState(false);
   const [isDutyActive, setIsDutyActive] = useState(profile?.available ?? false);
 
@@ -54,6 +60,18 @@ export function ProfileTab({ navigation }: any) {
 
   const handleToggleDuty = useCallback(
     async (val: boolean) => {
+      if (!isConnected) {
+        showDialog({
+          title: "Connexion requise",
+          message: "Veuillez activer votre connexion internet pour modifier votre statut de service.",
+          icon: "cloud-off-outline",
+          iconType: "community",
+          isError: true,
+          confirmText: "ENTENDU"
+        });
+        return;
+      }
+
       setIsDutyActive(val);
       if (!profile?.id) return;
       const { error } = await supabase
@@ -63,12 +81,18 @@ export function ProfileTab({ navigation }: any) {
 
       if (error) {
         console.error("[ProfileTab] duty status:", error.message);
+        showDialog({
+          title: "Erreur",
+          message: "Impossible de modifier le statut. Vérifiez votre connexion.",
+          icon: "wifi-off",
+          isError: true
+        });
         setIsDutyActive(!val);
       } else {
         refreshProfile();
       }
     },
-    [profile?.id, refreshProfile],
+    [profile?.id, refreshProfile, isConnected],
   );
 
   useEffect(() => {
@@ -83,21 +107,22 @@ export function ProfileTab({ navigation }: any) {
   } = useAppLock();
 
   const handleLogout = () => {
-    Alert.alert("Déconnexion", "Voulez-vous vraiment vous déconnecter ?", [
-      { text: "Annuler", style: "cancel" },
-      {
-        text: "Déconnexion",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await signOut();
-            console.log("[Profile] Déconnexion réussie");
-          } catch (e) {
-            console.error(e);
-          }
-        },
-      },
-    ]);
+    showDialog({
+      title: "Déconnexion",
+      message: "Voulez-vous vraiment vous déconnecter de la plateforme Étoile Bleue ?",
+      icon: "logout",
+      confirmText: "DÉCONNEXION",
+      cancelText: "ANNULER",
+      isError: true,
+      onConfirm: async () => {
+        try {
+          await signOut();
+          console.log("[Profile] Déconnexion réussie");
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
   };
 
   const photoUri = profile?.photo_url?.trim();
@@ -159,31 +184,40 @@ export function ProfileTab({ navigation }: any) {
                 {roleLabel}
               </Text>
 
-              <View
-                style={[
-                  styles.servicePill,
-                  isDutyActive ? styles.servicePillOn : styles.servicePillOff,
-                ]}
-              >
+              {!isConnected && (
+                <View style={[styles.servicePill, styles.offlinePill]}>
+                  <MaterialCommunityIcons name="cloud-off-outline" size={14} color="#FFF" />
+                  <Text style={styles.offlinePillText}>HORS LIGNE</Text>
+                </View>
+              )}
+
+              {isConnected && (
                 <View
                   style={[
-                    styles.servicePillDot,
-                    {
-                      backgroundColor: isDutyActive
-                        ? colors.success
-                        : "rgba(255,255,255,0.35)",
-                    },
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.servicePillText,
-                    isDutyActive && styles.servicePillTextOn,
+                    styles.servicePill,
+                    isDutyActive ? styles.servicePillOn : styles.servicePillOff,
                   ]}
                 >
-                  {isDutyActive ? "Disponible pour missions" : "Hors service"}
-                </Text>
-              </View>
+                  <View
+                    style={[
+                      styles.servicePillDot,
+                      {
+                        backgroundColor: isDutyActive
+                          ? colors.success
+                          : "rgba(255,255,255,0.35)",
+                      },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.servicePillText,
+                      isDutyActive && styles.servicePillTextOn,
+                    ]}
+                  >
+                    {isDutyActive ? "Disponible pour missions" : "Hors service"}
+                  </Text>
+                </View>
+              )}
 
               <View style={styles.matriculeChip}>
                 <MaterialIcons
@@ -237,20 +271,28 @@ export function ProfileTab({ navigation }: any) {
           <SectionLabel>Sécurité & Service</SectionLabel>
           <Card>
             <View style={styles.switchRow}>
-              <View style={[styles.infoIconWrap, { backgroundColor: `${colors.success}18` }]}>
-                <MaterialIcons name="radio-button-checked" color={colors.success} size={18} />
+              <View style={[styles.infoIconWrap, { backgroundColor: !!activeMission ? 'rgba(255,255,255,0.05)' : `${colors.success}18` }]}>
+                <MaterialIcons 
+                  name="radio-button-checked" 
+                  color={!!activeMission ? "rgba(255,255,255,0.3)" : colors.success} 
+                  size={18} 
+                />
               </View>
               <View style={styles.switchBody}>
                 <Text style={styles.switchTitle}>Disponibilité</Text>
-                <Text style={styles.switchSub}>
-                  {isDutyActive ? "En service" : "Hors service"}
+                <Text style={[styles.switchSub, !!activeMission && { color: 'rgba(255, 82, 82, 0.65)', fontWeight: '600' }]}>
+                  {!!activeMission ? "Verrouillé pendant la mission" : (isDutyActive ? "En service" : "Hors service")}
                 </Text>
               </View>
               <Switch
                 value={isDutyActive}
+                disabled={!!activeMission}
                 onValueChange={(v) => void handleToggleDuty(v)}
-                trackColor={{ false: "#2C2C2C", true: `${colors.success}88` }}
-                thumbColor={isDutyActive ? colors.success : "#9E9E9E"}
+                trackColor={{ 
+                  false: "#2C2C2C", 
+                  true: !!activeMission ? "rgba(255,255,255,0.1)" : `${colors.success}88` 
+                }}
+                thumbColor={!!activeMission ? "#4A4A4A" : (isDutyActive ? colors.success : "#9E9E9E")}
               />
             </View>
             <View style={styles.rowSep} />
@@ -532,5 +574,15 @@ const styles = StyleSheet.create({
     color: colors.primary,
     fontSize: 16,
     fontWeight: "800",
+  },
+  offlinePill: {
+    backgroundColor: "#FB8C00",
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  offlinePillText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#FFF",
+    letterSpacing: 1,
   },
 });

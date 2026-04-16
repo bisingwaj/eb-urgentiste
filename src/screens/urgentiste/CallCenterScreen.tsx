@@ -602,7 +602,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     if (callState === 'calling') {
       return 'Appel en cours…';
     }
-    return 'Appel en cours…';
+    return routeParams.target === 'patient' ? `Appel ${routeParams.patientName || ''}` : 'Appel en cours…';
   };
 
   const st = headerStatus();
@@ -637,7 +637,9 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     if (remoteUid == null) {
       return (
         <View style={styles.remotePlaceholder}>
-          <Text style={styles.placeholderText}>En attente de la centrale…</Text>
+          <Text style={styles.placeholderText}>
+            {routeParams.target === 'patient' ? 'En attente du patient…' : 'En attente de la centrale…'}
+          </Text>
         </View>
       );
     }
@@ -711,7 +713,9 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
         </AppTouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerBrand}>Centrale</Text>
+          <Text style={styles.headerBrand}>
+            {routeParams.target === 'patient' ? (routeParams.patientName || 'Patient') : 'Centrale'}
+          </Text>
           <View style={styles.headerStatus}>
             <View style={[styles.statusDot, { backgroundColor: st.dot }]} />
             <Text style={styles.headerStatusText}>{st.text}</Text>

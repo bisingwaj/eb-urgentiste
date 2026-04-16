@@ -9,8 +9,9 @@ export async function startRescuerToCitizenVoipCall(params: {
   incidentId: string;
   citizenId: string;
   callType: 'audio' | 'video';
+  patientName?: string;
 }): Promise<void> {
-  const { incidentId, citizenId, callType } = params;
+  const { incidentId, citizenId, callType, patientName } = params;
 
   const { data, error } = await supabase.functions.invoke('rescuer-call-citizen', {
     body: {
@@ -65,6 +66,8 @@ export async function startRescuerToCitizenVoipCall(params: {
     prefetchedToken: token,
     prefetchedAppId: typeof appId === 'string' && appId.length > 0 ? appId : undefined,
     ...(uid != null && !Number.isNaN(uid) ? { prefetchedRtcUid: uid } : {}),
+    target: 'patient',
+    patientName,
   });
 }
 

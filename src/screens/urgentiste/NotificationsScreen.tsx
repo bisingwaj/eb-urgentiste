@@ -36,7 +36,7 @@ export function NotificationsScreen({ navigation }: any) {
         onPress={() => {
           markAsRead(item.id);
           if (item.type === 'dispatch' && item.reference_id) {
-            navigation.navigate('Signalement');
+            navigation.navigate('MissionActive');
           }
         }}
       >
