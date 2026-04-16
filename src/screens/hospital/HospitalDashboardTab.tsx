@@ -138,6 +138,10 @@ export interface EmergencyCase {
     painScore?: string;
     weight?: string;
   };
+  /** Bilan structuré de l'urgentiste (conscient, respiration, etc.) */
+  medicalAssessment?: Record<string, any>;
+  /** Liste des soins prodigués par l'urgentiste (careChecklist) */
+  careChecklist?: string[];
   /** Symptômes — chaîne ou liste (JSON `hospital_data`) */
   symptoms?: string | string[];
   provisionalDiagnosis?: string;
