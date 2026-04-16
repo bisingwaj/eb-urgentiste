@@ -29,7 +29,6 @@ import { ForegroundSync } from './src/components/sync/ForegroundSync';
 
 // Shared entry screens
 import { LoginPage } from './src/screens/LoginPage';
-import { RoleSelectionScreen } from './src/screens/RoleSelectionScreen';
 // Navigators
 import { HospitalTabs } from './src/navigation/HospitalTabs';
 import { MainTabs } from './src/navigation/MainTabs';
@@ -146,7 +145,6 @@ function RootNavigator() {
       {!isAuthenticated ? (
         // ── Non authentifié ── Écrans de login
         <>
-          <Stack.Screen name="RoleSelection" component={RoleSelectionScreen} />
           <Stack.Screen name="Login" component={LoginPage} />
         </>
       ) : (

@@ -1,13 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Platform, UIManager } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { TAB_BAR_FLOAT_GAP } from './tabBarLayout';
 import { AppTouchableOpacity } from '../components/ui/AppTouchableOpacity';
+import { useNotifications } from '../hooks/useNotifications';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const { unreadCount } = useNotifications();
 
   const bottomOffset = insets.bottom + TAB_BAR_FLOAT_GAP;
 
@@ -47,9 +53,9 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             });
           };
 
-          const activeColor = colors.secondary;
-          const inactiveColor = 'rgba(255, 255, 255, 0.52)';
-          const activeBg = 'rgba(255, 255, 255, 0.96)';
+          const activeColor = '#FFFFFF';
+          const inactiveColor = 'rgba(255, 255, 255, 0.4)';
+          const activeBg = 'rgba(255, 255, 255, 0.12)';
 
           return (
             <AppTouchableOpacity
@@ -72,6 +78,11 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                   color: isFocused ? activeColor : inactiveColor,
                   size: 24
                 })}
+                {route.name === 'Profil' && unreadCount > 0 && (
+                  <View style={styles.badgeContainer}>
+                    <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                  </View>
+                )}
               </View>
 
               {isFocused && (
@@ -99,12 +110,13 @@ const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
     height: 64,
-    backgroundColor: colors.secondary,
+    backgroundColor: 'rgba(15, 15, 15, 0.95)',
     borderRadius: 32,
     alignItems: 'center',
     paddingHorizontal: 8,
     justifyContent: 'space-between',
-    borderWidth: 0,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.08)',
   },
   tabItem: {
     height: 48,
@@ -127,5 +139,22 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 14,
     fontWeight: '700',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#FF5252',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 9,
+    fontWeight: '900',
   },
 });
