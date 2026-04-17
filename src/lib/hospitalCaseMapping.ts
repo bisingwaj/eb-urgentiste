@@ -49,11 +49,11 @@ export function resolveCaseStatusFromRow(d: { status?: string }, hData: { status
   const ds = d.status;
   if (ds === 'completed') {
     if (isCaseStatus(hData.status)) return hData.status;
-    return 'termine';
+    return 'handedOver';
   }
   if (ds === 'arrived_hospital') {
     if (isCaseStatus(hData.status)) return hData.status;
-    return 'admis';
+    return 'arrived';
   }
   if (ds === 'dispatched' || ds === 'en_route' || ds === 'on_scene') return 'en_attente';
   if (ds === 'en_route_hospital') return 'en_cours';

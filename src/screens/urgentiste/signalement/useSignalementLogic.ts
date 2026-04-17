@@ -467,21 +467,22 @@ export function useSignalementLogic(navigation: any, route: any) {
 
    const [departingEnRoute, setDepartingEnRoute] = useState(false);
    useEffect(() => {
-      // CRITICAL: If we are finishing the mission, block all auto-navigation triggers
       if (isFinishing) return;
 
-      // Auto-trigger departure when hospital accepts if we are on assignment screen
       const status = activeMission?.dispatch_status;
-      const alreadyDeparted = status === 'en_route_hospital' || status === 'arrived_hospital' || status === 'completed' || status === 'mission_end';
+      const isAtHospitalStage = status === 'en_route_hospital' || status === 'arrived_hospital';
 
-      // If hospital accepted, we ALWAYS move to navigation state, no intermediate flash
-      if (activeMission?.hospital_status === 'accepted' && !alreadyDeparted) {
-         if (!departingEnRoute) {
-            console.log("[Signalement] Hospital Approved -> Skipping to Navigation");
-            handleDepartVersStructure();
-         }
+      // Auto-trigger departure when hospital accepts (which now automatically updates status)
+      // OR if someone manually updated it. We avoid the intermediate "Depart" click.
+      if (isAtHospitalStage && step === 'assignment') {
+         console.log("[Signalement] Remote Status Updated to En Route Hospital -> Auto-Navigating to Map");
+         // Use a small delay to ensure the user sees the confirmation if they were watching
+         const timer = setTimeout(() => {
+            navigation.navigate('MissionActive', { mission: activeMission || selectedMission });
+         }, 500);
+         return () => clearTimeout(timer);
       }
-   }, [activeMission?.hospital_status, activeMission?.dispatch_status, step, departingEnRoute, isFinishing]);
+   }, [activeMission?.dispatch_status, step, isFinishing]);
 
    const handleDepartVersStructure = async () => {
       if (departingEnRoute || !targetHospital?.coords) return;
