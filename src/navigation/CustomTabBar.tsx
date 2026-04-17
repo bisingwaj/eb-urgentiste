@@ -30,7 +30,9 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                 ? options.title
                 : route.name;
 
-          if (route.name === 'ProfilHopital') label = 'Profil';
+          if (route.name === 'ProfilHopital') label = 'Plus';
+          if (route.name === 'Urgences') label = 'Accueil';
+          if (route.name === 'Administration') label = 'Plus';
 
           const isFocused = state.index === index;
 
@@ -78,7 +80,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                   color: isFocused ? activeColor : inactiveColor,
                   size: 24
                 })}
-                {route.name === 'Profil' && unreadCount > 0 && (
+                {(route.name === 'Administration' || route.name === 'Paramètres') && unreadCount > 0 && (
                   <View style={styles.badgeContainer}>
                     <Text style={styles.badgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
                   </View>

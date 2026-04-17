@@ -24,6 +24,7 @@ import { DashboardSegmentedControl, HospitalTab } from "./components/DashboardSe
 import { ActiveCaseItem } from "./components/ActiveCaseItem";
 import { IncomingCaseItem } from "./components/IncomingCaseItem";
 import { formatRelativeTime } from "../../utils/timeFormat";
+import { HospitalHeader } from "./components/HospitalHeader";
 
 const { width } = Dimensions.get("window");
 
@@ -567,34 +568,11 @@ export function HospitalDashboardTab({ navigation }: any) {
 
 
   return (
-    <TabScreenSafeArea style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
+      <HospitalHeader />
 
       <View style={styles.topHeader}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.greetingText}>Centre hospitalier</Text>
-            {!profile ? (
-              <ActivityIndicator
-                color={colors.secondary}
-                style={{ marginTop: 14, alignSelf: "flex-start" }}
-              />
-            ) : (
-              <>
-                <Text style={styles.hospitalName} numberOfLines={1}>
-                  {displayName}
-                </Text>
-              </>
-            )}
-          </View>
-          <AppTouchableOpacity
-            style={styles.notifBtn}
-            onPress={() => navigation.navigate("Notifications")}
-            accessibilityLabel="Notifications"
-          >
-            <MaterialCommunityIcons name="broadcast" color={colors.secondary} size={26} />
-          </AppTouchableOpacity>
-        </View>
 
         <CapacitySelector />
 
@@ -610,7 +588,7 @@ export function HospitalDashboardTab({ navigation }: any) {
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -649,10 +627,6 @@ export function HospitalDashboardTab({ navigation }: any) {
             <>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Demandes Entrantes</Text>
-                <View style={styles.liveBadge}>
-                  <View style={styles.liveDot} />
-                  <Text style={styles.liveText}>EN DIRECT</Text>
-                </View>
               </View>
               {requestCases.length > 0 ? (
                 requestCases.map((caseItem) => (
@@ -714,7 +688,7 @@ export function HospitalDashboardTab({ navigation }: any) {
           )}
         </View>
       </ScrollView>
-    </TabScreenSafeArea>
+    </View>
   );
 }
 

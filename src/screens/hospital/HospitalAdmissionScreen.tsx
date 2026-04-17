@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ import {
   transportModeAccentColor,
   type TransportModeCode,
 } from '../../lib/transportMode';
+import { HospitalHeader } from './components/HospitalHeader';
 
 const ARRIVAL_STATES = [
   { key: 'stable', label: 'Stable', icon: 'check-circle-outline' as const, color: '#69F0AE' },
@@ -53,6 +55,47 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
   const [submitting, setSubmitting] = useState(false);
 
   const totalSteps = 3;
+
+  // Persistance locale
+  React.useEffect(() => {
+    const loadDraft = async () => {
+      try {
+        const saved = await AsyncStorage.getItem(`admission_draft_${caseData.id}`);
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.arrivalMode) setArrivalMode(data.arrivalMode);
+          if (data.arrivalState) setArrivalState(data.arrivalState);
+          if (data.admissionService) setAdmissionService(data.admissionService);
+        }
+      } catch (e) {
+        console.warn('Draft load failed', e);
+      }
+    };
+    loadDraft();
+  }, [caseData.id]);
+
+  React.useEffect(() => {
+    const saveDraft = async () => {
+      try {
+        await AsyncStorage.setItem(`admission_draft_${caseData.id}`, JSON.stringify({
+          arrivalMode,
+          arrivalState,
+          admissionService
+        }));
+      } catch (e) {
+        console.warn('Draft save failed', e);
+      }
+    };
+    saveDraft();
+  }, [caseData.id, arrivalMode, arrivalState, admissionService]);
+
+  const clearDraft = async () => {
+    try {
+      await AsyncStorage.removeItem(`admission_draft_${caseData.id}`);
+    } catch (e) {
+      console.warn('Draft clear failed', e);
+    }
+  };
 
   const handleNext = () => {
     if (submitting) return;
@@ -96,6 +139,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
                   admissionService,
                 }
               });
+              await clearDraft();
 
               navigation.navigate('HospitalTriage', {
                 caseData: {
@@ -241,24 +285,10 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
+      <HospitalHeader showBack={true} title="Admission Directe" />
 
-      {/* Premium Header */}
-      <View style={styles.header}>
-        <AppTouchableOpacity onPress={handlePrev} style={styles.backBtn}>
-          <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </AppTouchableOpacity>
-        <View style={styles.headerInfo}>
-          <Text style={styles.headerSub}>PROCESSUS D'ADMISSION</Text>
-          <View style={styles.progressRow}>
-            {[1, 2, 3].map((s) => (
-              <View key={s} style={[styles.progressDot, s <= step && styles.progressDotActive, s < step && { backgroundColor: colors.success }]} />
-            ))}
-          </View>
-        </View>
-        <View style={{ width: 44 }} />
-      </View>
 
       <ScrollView contentContainerStyle={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {/* Patient Context Card */}
@@ -324,7 +354,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
           <Text style={styles.secondaryFooterLinkText}>Voir le suivi / carte</Text>
         </AppTouchableOpacity>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
