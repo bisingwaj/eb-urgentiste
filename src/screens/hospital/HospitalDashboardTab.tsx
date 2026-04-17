@@ -529,7 +529,7 @@ export function HospitalDashboardTab({ navigation }: any) {
     return activeCases
       .filter(c => 
         c.hospitalStatus === 'accepted' && 
-        (c.dispatchStatus === 'en_route_hospital' || c.dispatchStatus === 'arrived_hospital' || c.dispatchStatus === 'completed') &&
+        (c.dispatchStatus === 'en_route_hospital' || c.dispatchStatus === 'arrived_hospital' || c.dispatchStatus === 'completed' || c.dispatchStatus === 'mission_end') &&
         !['admis', 'triage', 'prise_en_charge', 'monitoring', 'termine'].includes(c.hospitalDetailStatus || '')
       )
       .sort((a, b) => {

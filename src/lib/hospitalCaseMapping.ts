@@ -47,7 +47,8 @@ function isCaseStatus(s: unknown): s is CaseStatus {
 
 export function resolveCaseStatusFromRow(d: { status?: string }, hData: { status?: unknown }): CaseStatus {
   const ds = d.status;
-  if (ds === 'completed') {
+  // mission_end = urgentist released the unit, patient handed to hospital
+  if (ds === 'completed' || ds === 'mission_end') {
     if (isCaseStatus(hData.status)) return hData.status;
     return 'handedOver';
   }
