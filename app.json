@@ -45,7 +45,21 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-build-properties",
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Nécessaire pour les appels vidéo d'urgence.",
+          "microphonePermission": "Nécessaire pour communiquer avec les victimes."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "ndkVersion": "26.1.10909125"
+          }
+        }
+      ],
       [
         "expo-image-picker",
         {
