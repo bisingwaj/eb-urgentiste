@@ -18,12 +18,12 @@ import type { TransportModeCode } from "../../lib/transportMode";
 import { useAuth } from "../../contexts/AuthContext";
 import { useHospital } from "../../contexts/HospitalContext";
 import { CapacitySelector } from "./components/CapacitySelector";
-import { IncomingCaseItem } from "./components/IncomingCaseItem";
-import {
-  isCaseClosed,
-} from "../../lib/hospitalStats";
 import { ALARM_STOP_EVENT } from "../../services/AlarmService";
 import { DeviceEventEmitter } from "react-native";
+import { DashboardSegmentedControl, HospitalTab } from "./components/DashboardSegmentedControl";
+import { ActiveCaseItem } from "./components/ActiveCaseItem";
+import { IncomingCaseItem } from "./components/IncomingCaseItem";
+import { formatRelativeTime } from "../../utils/timeFormat";
 
 const { width } = Dimensions.get("window");
 
@@ -36,6 +36,10 @@ export type CaseStatus =
   | "prise_en_charge"
   | "monitoring"
   | "termine";
+
+/** Terminé ou Sorti du périmètre actif */
+const isCaseClosed = (c: EmergencyCase) => 
+  c.status === 'termine'; // Only consider closed if hospital status is 'termine'
 
 /** Valeurs `hospital_data.monitoringStatus` (spec Lovable) */
 export type MonitoringPatientStatus = "amelioration" | "stable" | "degradation";
@@ -97,6 +101,8 @@ export interface EmergencyCase {
   hospitalStatus?: HospitalStatus;
   hospitalNotes?: string;
   hospitalRespondedAt?: string;
+  /** Le statut clinique interne déclaré par l'hôpital (ex: 'admis', 'triage', 'termine') */
+  hospitalDetailStatus?: string;
 
   // Patient Profile Extended details
   patientProfile?: {
@@ -434,6 +440,22 @@ export const getStatusConfig = (status: CaseStatus) => {
   }
 };
 
+function EmptyState({ title, sub }: { title: string, sub: string }) {
+  return (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIconCircle}>
+        <MaterialCommunityIcons name="check-all" size={32} color="rgba(255,255,255,0.2)" />
+      </View>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptySub}>{sub}</Text>
+    </View>
+  );
+}
+
+const formatCaseTime = (dateString?: string) => {
+  return formatRelativeTime(dateString);
+};
+
 export function HospitalDashboardTab({ navigation }: any) {
   const { profile, refreshProfile } = useAuth();
   const { activeCases, isLoading, listBlocker, lastFetchError, refresh, updateCaseStatus } = useHospital();
@@ -476,22 +498,49 @@ export function HospitalDashboardTab({ navigation }: any) {
     };
   }, [profile]);
 
-  const [filter, setFilter] = useState<
-    "all" | "en_attente" | "en_cours" | "termine"
-  >("all");
+  const [activeTab, setActiveTab] = useState<HospitalTab>("requests");
 
-  const incomingCases = useMemo(() => {
-    return activeCases.filter((c) => {
-      // Uniquement ce qui est en approche : 'pending' (à décider) ou 'accepted' mais encore 'en_cours' (en route)
-      const isPending = c.hospitalStatus === "pending";
-      const isIncoming = c.hospitalStatus === "accepted" && c.status === "en_cours";
-      return (isPending || isIncoming) && !isCaseClosed(c);
-    }).sort((a, b) => {
-      const ta = a.dispatchCreatedAt ? new Date(a.dispatchCreatedAt).getTime() : 0;
-      const tb = b.dispatchCreatedAt ? new Date(b.dispatchCreatedAt).getTime() : 0;
-      return tb - ta;
-    });
+  // 1. DEMANDES (Pending Triage)
+  const requestCases = useMemo(() => {
+    return activeCases
+      .filter(c => c.hospitalStatus === 'pending' && !isCaseClosed(c))
+      .sort((a, b) => new Date(b.dispatchCreatedAt || 0).getTime() - new Date(a.dispatchCreatedAt || 0).getTime());
   }, [activeCases]);
+
+  // 2. EN ROUTE & ARRIVÉS (Incoming but not admitted)
+  const enRouteCases = useMemo(() => {
+    return activeCases
+      .filter(c => 
+        c.hospitalStatus === 'accepted' && 
+        (c.dispatchStatus === 'en_route_hospital' || c.dispatchStatus === 'arrived_hospital' || c.dispatchStatus === 'completed') &&
+        !['admis', 'triage', 'prise_en_charge', 'monitoring', 'termine'].includes(c.hospitalDetailStatus || '')
+      )
+      .sort((a, b) => {
+         const timeA = new Date(a.hospitalRespondedAt || a.dispatchCreatedAt || 0).getTime();
+         const timeB = new Date(b.hospitalRespondedAt || b.dispatchCreatedAt || 0).getTime();
+         return timeB - timeA;
+      });
+  }, [activeCases]);
+
+  // 3. ADMISSIONS (Officially at the clinic)
+  const admissionCases = useMemo(() => {
+    return activeCases
+      .filter(c => 
+        c.hospitalStatus === 'accepted' && 
+        ['admis', 'triage', 'prise_en_charge', 'monitoring'].includes(c.hospitalDetailStatus || '')
+      )
+      .sort((a, b) => {
+        const timeA = new Date(a.triageRecordedAt || a.arrivalTime || a.hospitalRespondedAt || a.dispatchCreatedAt || 0).getTime();
+        const timeB = new Date(b.triageRecordedAt || b.arrivalTime || b.hospitalRespondedAt || b.dispatchCreatedAt || 0).getTime();
+        return timeB - timeA;
+      });
+  }, [activeCases]);
+
+  const tabCounts: Record<HospitalTab, number> = useMemo(() => ({
+    requests: requestCases.length,
+    en_route: enRouteCases.length,
+    admissions: admissionCases.length,
+  }), [requestCases.length, enRouteCases.length, admissionCases.length]);
 
   const handleQuickAccept = async (caseId: string) => {
     try {
@@ -547,8 +596,15 @@ export function HospitalDashboardTab({ navigation }: any) {
           </AppTouchableOpacity>
         </View>
 
-
         <CapacitySelector />
+
+        <View style={styles.headerSeparator} />
+
+        <DashboardSegmentedControl 
+          activeTab={activeTab} 
+          onTabChange={setActiveTab} 
+          counts={tabCounts} 
+        />
       </View>
 
       <ScrollView
@@ -587,44 +643,76 @@ export function HospitalDashboardTab({ navigation }: any) {
           </View>
         ) : null}
 
-        {/* --- LISTE DES URGENCES ENTRANTES --- */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Urgences Entrantes</Text>
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <Text style={styles.liveText}>EN DIRECT</Text>
-          </View>
-        </View>
+        {/* --- DYNAMIC LIST BASED ON TAB --- */}
+        <View style={styles.tabContentContainer}>
+          {activeTab === 'requests' && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Demandes Entrantes</Text>
+                <View style={styles.liveBadge}>
+                  <View style={styles.liveDot} />
+                  <Text style={styles.liveText}>EN DIRECT</Text>
+                </View>
+              </View>
+              {requestCases.length > 0 ? (
+                requestCases.map((caseItem) => (
+                  <IncomingCaseItem 
+                    key={caseItem.id} 
+                    caseItem={caseItem} 
+                    onAccept={handleQuickAccept}
+                    onRefuse={handleQuickRefuse}
+                    onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
+                    displayTime={formatCaseTime(caseItem.dispatchCreatedAt)}
+                  />
+                ))
+              ) : (
+                <EmptyState title="Aucune demande en attente" sub="Toutes les alertes ont été traitées." />
+              )}
+            </>
+          )}
 
-        {isLoading && activeCases.length === 0 ? (
-          <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
-        ) : incomingCases.length > 0 ? (
-          incomingCases.map((caseItem) => (
-            <IncomingCaseItem 
-              key={caseItem.id} 
-              caseItem={caseItem} 
-              onAccept={handleQuickAccept}
-              onRefuse={handleQuickRefuse}
-              onPress={(id) => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
-            />
-          ))
-        ) : (
-          <View style={styles.emptyContainer}>
-            <View style={styles.emptyIconCircle}>
-              <MaterialCommunityIcons name="check-all" size={32} color="rgba(255,255,255,0.2)" />
-            </View>
-            <Text style={styles.emptyTitle}>Aucune urgence entrante</Text>
-            <Text style={styles.emptySub}>Tous les dossiers ont été traités ou sont en route.</Text>
-            
-            <AppTouchableOpacity 
-              style={styles.admissionsBtn}
-              onPress={() => navigation.navigate("HospitalAdmissionsList")}
-            >
-              <Text style={styles.admissionsBtnText}>Voir les admissions actives</Text>
-              <MaterialIcons name="chevron-right" size={18} color={colors.secondary} />
-            </AppTouchableOpacity>
-          </View>
-        )}
+          {activeTab === 'en_route' && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Urgences en approche</Text>
+              </View>
+              {enRouteCases.length > 0 ? (
+                enRouteCases.map((caseItem) => (
+                  <ActiveCaseItem 
+                    key={caseItem.id} 
+                    caseItem={caseItem} 
+                    mode="en_route"
+                    onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
+                    displayTime={formatCaseTime(caseItem.hospitalRespondedAt || caseItem.dispatchCreatedAt)}
+                  />
+                ))
+              ) : (
+                <EmptyState title="Aucune urgence en route" sub="Aucun patient n'est actuellement en approche." />
+              )}
+            </>
+          )}
+
+          {activeTab === 'admissions' && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Patients Admis / Triage</Text>
+              </View>
+              {admissionCases.length > 0 ? (
+                admissionCases.map((caseItem) => (
+                  <ActiveCaseItem 
+                    key={caseItem.id} 
+                    caseItem={caseItem} 
+                    mode="admissions"
+                    onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
+                    displayTime={formatCaseTime(caseItem.triageRecordedAt || caseItem.arrivalTime || caseItem.hospitalRespondedAt)}
+                  />
+                ))
+              ) : (
+                <EmptyState title="Aucune admission active" sub="Aucun patient n'est actuellement hospitalisé." />
+              )}
+            </>
+          )}
+        </View>
       </ScrollView>
     </TabScreenSafeArea>
   );
@@ -635,12 +723,10 @@ const styles = StyleSheet.create({
   topHeader: { 
     paddingHorizontal: 24, 
     paddingTop: 16, 
-    paddingBottom: 16, 
+    paddingBottom: 12, 
     borderBottomLeftRadius: 36, 
     borderBottomRightRadius: 36, 
     backgroundColor: "#0A0A0A",
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.08)"
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
   headerTextBlock: { flex: 1, paddingRight: 12 },
@@ -724,11 +810,17 @@ const styles = StyleSheet.create({
     color: "#FFB74D",
     fontWeight: "700",
   },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, paddingVertical: 12 },
-  sectionTitle: { color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, paddingTop: 16, marginBottom: 12 },
+  sectionTitle: { color: "rgba(255,255,255,0.3)", fontSize: 11, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
+  tabContentContainer: { marginTop: 8 },
   liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255, 82, 82, 0.1)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
   liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FF5252" },
   liveText: { color: "#FF5252", fontSize: 10, fontWeight: "900" },
+  headerSeparator: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    marginVertical: 12,
+  },
   emptyContainer: {
     padding: 40,
     alignItems: "center",

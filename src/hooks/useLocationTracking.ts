@@ -3,7 +3,7 @@ import * as Location from 'expo-location';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { useMission } from '../contexts/MissionContext';
-import type { Mission } from './useActiveMission';
+import type { Mission } from '../types/mission';
 
 /**
  * Statut `active_rescuers.status` pour le ping GPS — aligné sur le dispatch actif (workflow Lovable §7–8).

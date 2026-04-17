@@ -80,7 +80,6 @@ export function CapacitySelector() {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 20,
     paddingHorizontal: 4,
   },
   header: {

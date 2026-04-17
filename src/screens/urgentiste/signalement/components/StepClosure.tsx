@@ -14,6 +14,15 @@ export const StepClosure: React.FC<StepClosureProps> = ({
    onReturnToDashboard,
    renderStepInlineHeader
 }) => {
+   const [isFinishing, setIsFinishing] = React.useState(false);
+
+   const handleFinish = async () => {
+      setIsFinishing(true);
+      await onReturnToDashboard();
+      // Navigation happens inside onReturnToDashboard, but reset if it fails
+      setIsFinishing(false);
+   };
+
    return (
       <View style={styles.stepBase}>
          {renderStepInlineHeader()}
@@ -32,7 +41,8 @@ export const StepClosure: React.FC<StepClosureProps> = ({
             </Text>
             <AppTouchableOpacity
                style={styles.largeReturnBtn}
-               onPress={onReturnToDashboard}
+               onPress={handleFinish}
+               loading={isFinishing}
             >
                <Text style={styles.largeReturnBtnText}>
                   Retour au tableau

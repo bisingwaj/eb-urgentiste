@@ -35,6 +35,7 @@ import {
 } from '../../lib/mapbox';
 import type { EmergencyCase, UrgencyLevel } from './HospitalDashboardTab';
 import { POST_AMBULANCE_TRACKING_STATUSES } from '../../lib/hospitalNavigation';
+import { formatDetailedDateTime } from '../../utils/timeFormat';
 
 const { width } = Dimensions.get('window');
 
@@ -187,6 +188,18 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     navigation.navigate('HospitalAdmission', { caseData });
   };
 
+  const handleAdmitPatient = useCallback(async () => {
+    setAccepting(true);
+    try {
+      await updateCaseStatus(caseData.id, { status: 'admis' });
+      Alert.alert("Admission confirmée", "Le patient est désormais enregistré dans vos admissions.");
+    } catch (err) {
+      Alert.alert('Erreur', 'Impossible d\'admettre le patient actuellement.');
+    } finally {
+      setAccepting(false);
+    }
+  }, [caseData.id, updateCaseStatus]);
+
   const [ambulanceLat, setAmbulanceLat] = useState<number | null>(null);
   const [ambulanceLng, setAmbulanceLng] = useState<number | null>(null);
   const [ambulanceSpeed, setAmbulanceSpeed] = useState<number | null>(null);
@@ -320,6 +333,28 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                   <Text style={styles.profilePhone}>{caseData.callerPhone}</Text>
                 </View>
               )}
+
+              {/* CHRONOLOGY LABELS */}
+              <View style={styles.chronologyContainer}>
+                {caseData.dispatchCreatedAt && (
+                  <View style={styles.chronologyItem}>
+                    <Text style={styles.chronologyLabel}>Demande:</Text>
+                    <Text style={styles.chronologyValue}>{formatDetailedDateTime(caseData.dispatchCreatedAt)}</Text>
+                  </View>
+                )}
+                {caseData.hospitalRespondedAt && (
+                   <View style={styles.chronologyItem}>
+                    <Text style={styles.chronologyLabel}>Accepté:</Text>
+                    <Text style={styles.chronologyValue}>{formatDetailedDateTime(caseData.hospitalRespondedAt)}</Text>
+                  </View>
+                )}
+                {caseData.triageRecordedAt && (
+                   <View style={styles.chronologyItem}>
+                    <Text style={styles.chronologyLabel}>Admis:</Text>
+                    <Text style={styles.chronologyValue}>{formatDetailedDateTime(caseData.triageRecordedAt)}</Text>
+                  </View>
+                )}
+              </View>
             </View>
           </View>
 
@@ -536,14 +571,25 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
               </View>
             </AppTouchableOpacity>
           </View>
-        ) : hasHospitalAccepted ? (
+        ) : hasHospitalAccepted && !['admis', 'triage', 'prise_en_charge', 'monitoring'].includes(caseData.hospitalDetailStatus || '') ? (
           <View style={styles.postAcceptRow}>
             <AppTouchableOpacity
               style={styles.mainCtaBtn}
+              onPress={handleAdmitPatient}
+              loading={accepting}
+            >
+              <Text style={styles.mainCtaBtnText}>VALIDER L'ADMISSION</Text>
+              <MaterialIcons name="check-circle" size={22} color="#000" />
+            </AppTouchableOpacity>
+          </View>
+        ) : hasHospitalAccepted ? (
+          <View style={styles.postAcceptRow}>
+            <AppTouchableOpacity
+              style={[styles.mainCtaBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.secondary }]}
               onPress={handleGoToAdmission}
             >
-              <Text style={styles.mainCtaBtnText}>PROCÉDER À L'ADMISSION</Text>
-              <MaterialIcons name="chevron-right" size={24} color="#FFF" />
+              <Text style={[styles.mainCtaBtnText, { color: colors.secondary }]}>PROCÉDER AU BILAN CLINIQUE</Text>
+              <MaterialIcons name="chevron-right" size={24} color={colors.secondary} />
             </AppTouchableOpacity>
           </View>
         ) : null}
@@ -681,6 +727,11 @@ const styles = StyleSheet.create({
   metaDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 8 },
   profileContactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   profilePhone: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' },
+  
+  chronologyContainer: { marginTop: 12, gap: 4 },
+  chronologyItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  chronologyLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '800' },
+  chronologyValue: { color: colors.secondary, fontSize: 11, fontWeight: '700' },
 
   historyBlock: { marginTop: 20 },
   historyDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: 16 },
