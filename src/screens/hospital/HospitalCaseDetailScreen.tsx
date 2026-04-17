@@ -564,7 +564,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           </View>
         ) : hasHospitalAccepted && !['admis', 'triage', 'prise_en_charge', 'monitoring'].includes(caseData.hospitalDetailStatus || '') ? (
           <View style={styles.postAcceptRow}>
-            {caseData.dispatchStatus === 'arrived_hospital' || caseData.dispatchStatus === 'completed' ? (
+            {caseData.dispatchStatus === 'arrived_hospital' || caseData.dispatchStatus === 'completed' || caseData.dispatchStatus === 'mission_end' ? (
               <AppTouchableOpacity
                 style={styles.mainCtaBtn}
                 onPress={handleAdmitPatient}
