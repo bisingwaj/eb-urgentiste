@@ -166,34 +166,6 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                   <MaterialIcons name="fullscreen" color="#FFF" size={22} />
                </AppTouchableOpacity>
 
-               <AppTouchableOpacity
-                  style={styles.assignmentEnRouteFab}
-                  onPress={onDepartVersStructure}
-                  disabled={departingEnRoute}
-               >
-                  {departingEnRoute ? (
-                     <ActivityIndicator color="#FFF" size="small" />
-                  ) : (
-                     <>
-                        <MaterialIcons name="directions-run" color="#FFF" size={22} />
-                        <Text style={styles.assignmentEnRouteFabText}>Lancer le Transport</Text>
-                     </>
-                  )}
-               </AppTouchableOpacity>
-
-               <AppTouchableOpacity
-                  style={styles.assignmentNavFab}
-                  onPress={() =>
-                     openExternalDirections(
-                        targetHospital.coords.latitude,
-                        targetHospital.coords.longitude,
-                        targetHospital.name,
-                     )
-                  }
-               >
-                  <MaterialIcons name="navigation" color="#FFF" size={22} />
-               </AppTouchableOpacity>
-
                {hospitalRouteDistance != null && hospitalRouteDuration != null && (
                   <View style={styles.mapDistOverlay}>
                      <MaterialIcons name="navigation" size={14} color="#FFF" />
@@ -237,20 +209,31 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
          
          {content}
 
-         {currentHospital?.phone && (
             <View style={styles.bottomActionFixed}>
-               <AppTouchableOpacity 
-                  style={styles.bottomCallBtn}
-                  onPress={() => setCallModalVisible(true)}
-               >
-                  <MaterialIcons name="phone" size={24} color="#FFF" />
-                  <View>
-                     <Text style={styles.bottomCallText}>Appeler l'hôpital</Text>
-                     <Text style={styles.bottomCallSub}>{currentHospital.phone}</Text>
-                  </View>
-               </AppTouchableOpacity>
+               <View style={styles.bottomActionFixedRow}>
+                  {currentHospital?.phone && (
+                     <AppTouchableOpacity 
+                        style={styles.bottomCallBtn}
+                        onPress={() => setCallModalVisible(true)}
+                     >
+                        <MaterialIcons name="phone" size={24} color="#FFF" />
+                        <View>
+                           <Text style={styles.bottomCallText}>Appeler</Text>
+                           <Text style={styles.bottomCallSub}>{currentHospital.phone}</Text>
+                        </View>
+                     </AppTouchableOpacity>
+                  )}
+
+                  <AppTouchableOpacity
+                     style={styles.bottomActionBtnPrimary}
+                     onPress={onDepartVersStructure}
+                     loading={departingEnRoute}
+                  >
+                     <MaterialIcons name="local-shipping" color="#000" size={22} />
+                     <Text style={styles.bottomActionBtnPrimaryText}>LANCER LE TRANSPORT</Text>
+                  </AppTouchableOpacity>
+               </View>
             </View>
-         )}
 
          <Modal visible={callModalVisible} transparent animationType="slide">
             <TouchableWithoutFeedback onPress={() => setCallModalVisible(false)}>

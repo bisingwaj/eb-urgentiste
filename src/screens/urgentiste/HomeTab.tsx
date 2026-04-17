@@ -360,9 +360,19 @@ export function HomeTab({ navigation }: any) {
     navigation.navigate('CallCenter');
   };
 
-  const hasActiveAlert = !!activeMission && activeMission.dispatch_status !== 'completed';
+  const hasActiveAlert = !!activeMission && 
+    activeMission.dispatch_status !== 'completed' && 
+    activeMission.dispatch_status !== 'mission_end';
 
   const isMissionAccepted = hasActiveAlert && activeMission?.dispatch_status !== 'dispatched';
+
+  if (hasActiveAlert) {
+    console.log("[Dashboard] Active Alert State:", {
+      missionId: activeMission?.id,
+      dispatchStatus: activeMission?.dispatch_status,
+      incidentStatus: (activeMission as any)?.incidents?.status || (activeMission as any)?.status
+    });
+  }
 
   return (
     <TabScreenSafeArea style={styles.container}>
@@ -607,8 +617,9 @@ export function HomeTab({ navigation }: any) {
                 onPress={() => {
                   if (isMissionAccepted) {
                     const status = activeMission?.dispatch_status || 'dispatched';
-                    // If we are already on scene or beyond, go to Signalement
-                    if (status === 'on_scene' || status === 'en_route_hospital' || status === 'arrived_hospital') {
+                    // If we are already on scene or arrived hospital, go to Signalement
+                    // If we are currently en route to patient OR en route to hospital, go to Map (MissionActive)
+                    if (status === 'on_scene' || status === 'arrived_hospital') {
                       navigation.navigate('Signalement', { mission: activeMission });
                     } else {
                       navigation.navigate('MissionActive', { mission: activeMission });

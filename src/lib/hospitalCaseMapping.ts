@@ -235,5 +235,6 @@ export function mapDispatchRowToEmergencyCase(
     closureTime: hData.closureTime,
     reportSent: hData.reportSent === true,
     reportSentAt: typeof hData.reportSentAt === 'string' ? hData.reportSentAt : undefined,
+    hospitalDetailStatus: typeof hData.status === 'string' ? hData.status : undefined,
   };
 }

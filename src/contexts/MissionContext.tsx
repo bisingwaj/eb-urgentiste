@@ -189,11 +189,23 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         )
         .eq('unit_id', unitId)
         .in('status', ['dispatched', 'en_route', 'on_scene', 'en_route_hospital', 'arrived_hospital', 'mission_end'])
+        .neq('incidents.status', 'resolved')
+        .neq('incidents.status', 'archived')
+        .neq('incidents.status', 'ended')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (dispatchError) throw dispatchError;
+
+      if (data) {
+        const d = data as any;
+        console.log(`[MissionContext] 🔍 Mission Detected:`, {
+          dispatch_id: d.id,
+          dispatch_status: d.status,
+          incident_status: d.incidents?.status,
+        });
+      }
 
       /** Le client TS ne déduit pas toujours `incidents!inner` + `*` — typage explicite. */
       const dispatch = data as {
@@ -396,6 +408,36 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     };
   }, [profile?.assigned_unit_id, fetchActiveMission, mergeDispatchUpdateIntoState, scheduleSilentRefetch]);
 
+  /** Surveillance Réactive : Clôture de l'incident parent (Backend Safety) */
+  useEffect(() => {
+    if (!activeMission?.incident_id) return;
+
+    const channelId = `incident-sync-${activeMission.incident_id}`;
+    const channel = supabase
+      .channel(channelId)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'incidents',
+          filter: `id=eq.${activeMission.incident_id}`,
+        },
+        (payload) => {
+          const newStatus = payload.new?.status;
+          if (['resolved', 'ended', 'archived', 'declasse'].includes(newStatus)) {
+            console.log(`[MissionContext] 🛑 Closure detected on incident level (${newStatus}) -> Clearing state.`);
+            setActiveMission(null);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeMission?.incident_id]);
+
   /** Guide §3 : même ligne dispatch — filtre par id (évite les ratés si plusieurs flux) */
   useEffect(() => {
     if (!activeMission?.id) return;
@@ -522,28 +564,40 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       );
 
       // 2. incidents.status
-      const incidentStatusMap: Record<string, string> = {
-        en_route: 'en_route',
-        on_scene: 'arrived',
-        en_route_hospital: 'en_route_hospital',
-        arrived_hospital: 'arrived_hospital',
-        mission_end: 'ended',
-        completed: 'resolved',
-      };
-      const incidentStatus = incidentStatusMap[status] || status;
-      promises.push(
-        supabase
-          .from('incidents')
-          .update({
-            status: incidentStatus,
-            ...(incidentStatus === 'resolved' ? { resolved_at: new Date().toISOString() } : {}),
-          })
-          .eq('id', activeMission.incident_id)
-          .then(({ error }) => {
-            if (error) console.error('[Mission] ⚠️ Incident update failed:', error.message);
-            return { type: 'incident', error };
-          })
-      );
+      // CRITICAL: Per architecture docs, DO NOT touch incident status on 'completed'.
+      // The incident must remain in its current state (likely arrived_hospital) for the hospital to process.
+      if (status !== 'completed') {
+        const incidentStatusMap: Record<string, string> = {
+          en_route: 'en_route',
+          on_scene: 'arrived',
+          en_route_hospital: 'en_route_hospital',
+          arrived_hospital: 'arrived_hospital',
+          mission_end: 'arrived_hospital', // DO NOT use ended/resolved here
+          mission_finished: 'resolved', 
+        };
+        const incidentStatus = incidentStatusMap[status];
+
+        if (incidentStatus) {
+          console.log(`[MissionContext] 🛠 Updating incident ${activeMission.incident_id} to status: ${incidentStatus}`);
+          promises.push(
+            supabase
+              .from('incidents')
+              .update({
+                status: incidentStatus,
+                ...(incidentStatus === 'resolved' ? { resolved_at: new Date().toISOString() } : {}),
+              })
+              .eq('id', activeMission.incident_id)
+              .then(({ error }) => {
+                if (error) console.error('[Mission] ⚠️ Incident update failed:', error.message);
+                return { type: 'incident', error };
+              })
+          );
+        } else {
+          console.log(`[MissionContext] ℹ️ Skipping incident update for status: ${status} (No valid mapping)`);
+        }
+      } else {
+        console.log(`[MissionContext] 🛡 Architecture Guard: Skipping incident update on 'completed' status.`);
+      }
 
       // 3. Sync active_rescuers.status
       const rescuerStatusMap: Record<string, string> = {
@@ -572,6 +626,30 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         })()
       );
 
+      // 4. Update units table status for dashboard visibility
+      const unitStatusMap: Record<string, string> = {
+        en_route: 'en_route',
+        on_scene: 'on_scene',
+        en_route_hospital: 'en_route',
+        arrived_hospital: 'on_scene',
+        mission_end: 'available',
+        completed: 'available',
+      };
+      const nextUnitStatus = unitStatusMap[status];
+      if (nextUnitStatus && profile?.assigned_unit_id) {
+        console.log(`[MissionContext] 🚑 Updating unit ${profile.assigned_unit_id} status to: ${nextUnitStatus}`);
+        promises.push(
+          supabase
+            .from('units')
+            .update({ status: nextUnitStatus })
+            .eq('id', profile.assigned_unit_id)
+            .then(({ error }) => {
+              if (error) console.error('[Mission] ⚠️ Unit status sync failed:', error.message);
+              return { type: 'unit', error };
+            })
+        );
+      }
+
       // Execute all updates in parallel
       const results = await Promise.all(promises);
       const criticalError = results.find(r => r.type === 'dispatch' && r.error);
@@ -581,7 +659,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
       console.log('[Mission] ✅ All parallel updates triggered');
       // Update local state immediately
-      if (status === 'completed') {
+      if (status === 'completed' || status === 'mission_end') {
         // Mission terminée → vider immédiatement pour que le HomeTab affiche "Standby"
         setActiveMission(null);
       } else {

@@ -13,6 +13,7 @@ interface IncomingCaseItemProps {
   onAccept: (id: string) => void;
   onRefuse: (id: string) => void;
   onPress: (id: string) => void;
+  displayTime?: string;
 }
 
 export const IncomingCaseItem: React.FC<IncomingCaseItemProps> = ({
@@ -20,6 +21,7 @@ export const IncomingCaseItem: React.FC<IncomingCaseItemProps> = ({
   onAccept,
   onRefuse,
   onPress,
+  displayTime,
 }) => {
   const lCfg = getLevelConfig(caseItem.level);
 
@@ -57,6 +59,12 @@ export const IncomingCaseItem: React.FC<IncomingCaseItemProps> = ({
           <Text style={styles.victimName} numberOfLines={1}>
             {caseItem.victimName}
           </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+            <MaterialIcons name="schedule" size={10} color="rgba(255,255,255,0.3)" />
+            <Text style={{ color: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: '500', marginLeft: 4 }}>
+              {displayTime || caseItem.timestamp}
+            </Text>
+          </View>
         </View>
 
         <View style={styles.tacticalSection}>
