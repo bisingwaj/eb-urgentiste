@@ -71,6 +71,8 @@ interface HospitalContextType {
   /** Raison métier / config si aucun dispatch n’est chargé (diagnostic) */
   listBlocker: HospitalListBlocker;
   lastFetchError: string | null;
+  /** Nombre d'alertes en attente (hospitalStatus === 'pending') */
+  pendingAlertCount: number;
   refresh: () => Promise<void>;
   updateHospitalCapacity: (status: HospitalCapacityStatus) => Promise<void>;
   updateCaseStatus: (
@@ -114,6 +116,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   const [isUpdatingCapacity, setIsUpdatingCapacity] = useState(false);
   const [listBlocker, setListBlocker] = useState<HospitalListBlocker>(null);
   const [lastFetchError, setLastFetchError] = useState<string | null>(null);
+  const [pendingAlertCount, setPendingAlertCount] = useState(0);
 
   const activeCasesRef = useRef(activeCases);
   useEffect(() => {
@@ -323,6 +326,10 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       const mappedCases = data.map((d) =>
         mapDispatchRowToEmergencyCase(d, profileMap, responsesMap, unitPhoneByUnitId),
       );
+      
+      const pendingCount = mappedCases.filter(c => c.hospitalStatus === 'pending').length;
+      setPendingAlertCount(pendingCount);
+
       setActiveCases(mappedCases);
       void writeHospitalCasesCache(structureId, mappedCases);
     } catch (err: any) {
@@ -496,6 +503,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         isUpdatingCapacity,
         listBlocker,
         lastFetchError,
+        pendingAlertCount,
         refresh: fetchCases,
         updateHospitalCapacity,
         updateCaseStatus,

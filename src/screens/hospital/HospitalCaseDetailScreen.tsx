@@ -27,6 +27,7 @@ import { colors } from '../../theme/colors';
 import { ALARM_STOP_EVENT } from '../../services/AlarmService';
 import { supabase } from '../../lib/supabase';
 import { useHospital } from '../../contexts/HospitalContext';
+import { HospitalHeader } from './components/HospitalHeader';
 import {
   getRoute,
   buildRouteFeature,
@@ -295,18 +296,8 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      {/* HEADER */}
-      <View style={styles.detailHeader}>
-        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBackBtn}>
-          <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </AppTouchableOpacity>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerSubType}>{caseData.typeUrgence}</Text>
-          <Text style={styles.headerMainTitle}>Dossier Admission</Text>
-        </View>
-        <View style={{ width: 40 }} />
-      </View>
+    <View style={{ flex: 1, backgroundColor: colors.mainBackground }}>
+      <HospitalHeader showBack={true} title="Détails Admission" />
 
       <ScrollView style={styles.mainScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
 
@@ -646,7 +637,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           </KeyboardAvoidingView>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
