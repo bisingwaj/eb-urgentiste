@@ -564,14 +564,26 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           </View>
         ) : hasHospitalAccepted && !['admis', 'triage', 'prise_en_charge', 'monitoring'].includes(caseData.hospitalDetailStatus || '') ? (
           <View style={styles.postAcceptRow}>
-            <AppTouchableOpacity
-              style={styles.mainCtaBtn}
-              onPress={handleAdmitPatient}
-              loading={accepting}
-            >
-              <Text style={styles.mainCtaBtnText}>VALIDER L'ADMISSION</Text>
-              <MaterialIcons name="check-circle" size={22} color="#000" />
-            </AppTouchableOpacity>
+            {caseData.dispatchStatus === 'arrived_hospital' || caseData.dispatchStatus === 'completed' ? (
+              <AppTouchableOpacity
+                style={styles.mainCtaBtn}
+                onPress={handleAdmitPatient}
+                loading={accepting}
+              >
+                <Text style={styles.mainCtaBtnText}>VALIDER L'ADMISSION</Text>
+                <MaterialIcons name="check-circle" size={22} color="#000" />
+              </AppTouchableOpacity>
+            ) : (
+              <View style={styles.blockingContainer}>
+                 <View style={styles.blockingMessage}>
+                    <MaterialCommunityIcons name="clock-alert-outline" size={18} color="#FFB74D" />
+                    <Text style={styles.blockingText}>L'unité n'a pas encore validé son arrivée (Arrivé à l'hôpital)</Text>
+                 </View>
+                 <View style={[styles.mainCtaBtn, { opacity: 0.3, backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                    <Text style={[styles.mainCtaBtnText, { color: 'rgba(255,255,255,0.4)' }]}>EN ATTENTE D'ARRIVÉE</Text>
+                 </View>
+              </View>
+            )}
           </View>
         ) : hasHospitalAccepted ? (
           <View style={styles.postAcceptRow}>
@@ -809,6 +821,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12
   },
   mainCtaBtnText: { color: '#000', fontSize: 14, fontWeight: '900' },
+  
+  blockingContainer: { gap: 12 },
+  blockingMessage: { 
+    flexDirection: 'row', alignItems: 'center', gap: 10, 
+    backgroundColor: 'rgba(255, 183, 77, 0.1)', 
+    padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 183, 77, 0.2)' 
+  },
+  blockingText: { flex: 1, color: '#FFB74D', fontSize: 12, fontWeight: '700', lineHeight: 16 },
 
   // MODAL STYLES
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', padding: 24 },

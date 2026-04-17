@@ -108,132 +108,28 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
          </View>
       );
    } else {
+      // This state is technically unreachable because useSignalementLogic auto-navigates
+      // once status becomes 'en_route_hospital'. We show a simple loader just in case
+      // there is a split second of latency before navigation triggers.
       content = (
-         <View style={{ flex: 1 }}>
-            <View style={{ flex: 1, borderRadius: 0, overflow: "hidden" }}>
-               <MapboxMapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
-                  {urgentisteLoc ? (
-                     <Mapbox.Camera
-                        bounds={
-                           hospitalRouteCameraBounds ?? {
-                              ne: [
-                                 Math.max(targetHospital.coords.longitude, urgentisteLoc.coords.longitude),
-                                 Math.max(targetHospital.coords.latitude, urgentisteLoc.coords.latitude),
-                              ],
-                              sw: [
-                                 Math.min(targetHospital.coords.longitude, urgentisteLoc.coords.longitude),
-                                 Math.min(targetHospital.coords.latitude, urgentisteLoc.coords.latitude),
-                              ],
-                              paddingTop: 80,
-                              paddingBottom: 280,
-                              paddingLeft: 60,
-                              paddingRight: 60,
-                           }
-                        }
-                        animationMode="flyTo"
-                        animationDuration={1000}
-                     />
-                  ) : (
-                     <Mapbox.Camera
-                        centerCoordinate={[targetHospital.coords.longitude, targetHospital.coords.latitude]}
-                        zoomLevel={13}
-                     />
-                  )}
-
-                  <Mapbox.PointAnnotation id="hospital-assign" coordinate={[targetHospital.coords.longitude, targetHospital.coords.latitude]}>
-                     <View style={styles.hospitalMarker}>
-                        <HospitalIcon size={16} color="#FFF" strokeWidth={2.5} />
-                     </View>
-                  </Mapbox.PointAnnotation>
-
-                  {urgentisteLoc && (
-                     <Mapbox.PointAnnotation id="my-unit-assign" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
-                        <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
-                     </Mapbox.PointAnnotation>
-                  )}
-
-                  {hospitalRouteGeoJSON && (
-                     <Mapbox.ShapeSource id="route-hospital-assign" shape={hospitalRouteGeoJSON}>
-                        <Mapbox.LineLayer id="route-hospital-assign-line" style={{ lineColor: '#34C759', lineWidth: 4, lineOpacity: 0.85 }} />
-                     </Mapbox.ShapeSource>
-                  )}
-               </MapboxMapView>
-
-               <AppTouchableOpacity
-                  style={styles.mapFullscreenEntryBtnAssignment}
-                  onPress={onOpenFullscreenMap}
-               >
-                  <MaterialIcons name="fullscreen" color="#FFF" size={22} />
-               </AppTouchableOpacity>
-
-               {hospitalRouteDistance != null && hospitalRouteDuration != null && (
-                  <View style={styles.mapDistOverlay}>
-                     <MaterialIcons name="navigation" size={14} color="#FFF" />
-                     <Text style={styles.mapDistText}>
-                        {hospitalRouteDistance < 1000 ? `${Math.round(hospitalRouteDistance)} m` : `${(hospitalRouteDistance / 1000).toFixed(1)} km`} • {Math.ceil(hospitalRouteDuration / 60)} min
-                     </Text>
-                  </View>
-               )}
-            </View>
-
-            <View style={[styles.assignmentBottomPanel, { paddingBottom: 110 }]}>
-               <View style={styles.assignmentStructureCard}>
-                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 12, textTransform: 'uppercase' }}>Établissement de Destination</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                     <View style={[styles.structureIconBox, { backgroundColor: 'rgba(48,209,88,0.1)' }]}>
-                        <MaterialIcons
-                           name={targetHospital.specialty === 'pharmacie' ? 'local-pharmacy' : targetHospital.specialty === 'maternite' ? 'pregnant-woman' : 'local-hospital'}
-                           size={24}
-                           color="#30D158"
-                        />
-                     </View>
-                     <View style={{ flex: 1 }}>
-                        <Text style={styles.structureName}>{targetHospital.name}</Text>
-                        <Text style={styles.structureAddress}>{targetHospital.address || "Adresse en cours de chargement..."}</Text>
-                     </View>
-                  </View>
-                  <View style={{ marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }}>
-                     <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 18 }}>
-                        Cet établissement a confirmé pouvoir assurer la prise en charge immédiate de votre patient.
-                     </Text>
-                  </View>
-               </View>
-            </View>
+         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingBottom: 100 }}>
+            <ActivityIndicator size="small" color={colors.secondary} />
+            <Text style={[styles.standbySub, { marginTop: 16, color: 'rgba(255,255,255,0.4)' }]}>Préparation de l'itinéraire...</Text>
          </View>
       );
    }
 
+   // The bottom button is no longer needed in the assignment step
+   // because the transition to en_route_hospital is now automatic.
+   const renderBottomAction = () => null;
+
    return (
       <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
-         <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</ View>
+         <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</View>
          
          {content}
 
-            <View style={styles.bottomActionFixed}>
-               <View style={styles.bottomActionFixedRow}>
-                  {currentHospital?.phone && (
-                     <AppTouchableOpacity 
-                        style={styles.bottomCallBtn}
-                        onPress={() => setCallModalVisible(true)}
-                     >
-                        <MaterialIcons name="phone" size={24} color="#FFF" />
-                        <View>
-                           <Text style={styles.bottomCallText}>Appeler</Text>
-                           <Text style={styles.bottomCallSub}>{currentHospital.phone}</Text>
-                        </View>
-                     </AppTouchableOpacity>
-                  )}
-
-                  <AppTouchableOpacity
-                     style={styles.bottomActionBtnPrimary}
-                     onPress={onDepartVersStructure}
-                     loading={departingEnRoute}
-                  >
-                     <MaterialIcons name="local-shipping" color="#000" size={22} />
-                     <Text style={styles.bottomActionBtnPrimaryText}>LANCER LE TRANSPORT</Text>
-                  </AppTouchableOpacity>
-               </View>
-            </View>
+         {renderBottomAction()}
 
          <Modal visible={callModalVisible} transparent animationType="slide">
             <TouchableWithoutFeedback onPress={() => setCallModalVisible(false)}>

@@ -32,6 +32,8 @@ export type UrgencyLevel = "critique" | "urgent" | "stable";
 export type CaseStatus =
   | "en_attente"
   | "en_cours"
+  | "arrived"
+  | "handedOver"
   | "admis"
   | "triage"
   | "prise_en_charge"
@@ -40,7 +42,7 @@ export type CaseStatus =
 
 /** Terminé ou Sorti du périmètre actif */
 const isCaseClosed = (c: EmergencyCase) => 
-  c.status === 'termine'; // Only consider closed if hospital status is 'termine'
+  ['termine', 'handedOver'].includes(c.status); 
 
 /** Valeurs `hospital_data.monitoringStatus` (spec Lovable) */
 export type MonitoringPatientStatus = "amelioration" | "stable" | "degradation";
@@ -403,6 +405,20 @@ export const getStatusConfig = (status: CaseStatus) => {
         label: "En route",
         icon: "local-shipping" as const,
       };
+    case "arrived":
+      return {
+        color: "#E040FB",
+        bg: "rgba(224, 64, 251, 0.15)",
+        label: "Arrivé",
+        icon: "place" as const,
+      };
+    case "handedOver":
+      return {
+        color: colors.textMuted,
+        bg: "rgba(255, 255, 255, 0.05)",
+        label: "Remis",
+        icon: "transfer-within-a-station" as const,
+      };
     case "admis":
       return {
         color: "#00E676",
@@ -435,7 +451,7 @@ export const getStatusConfig = (status: CaseStatus) => {
       return {
         color: colors.textMuted,
         bg: "rgba(255, 255, 255, 0.05)",
-        label: "Terminé",
+        label: "Sorti",
         icon: "archive" as const,
       };
   }
@@ -546,13 +562,7 @@ export function HospitalDashboardTab({ navigation }: any) {
   const handleQuickAccept = async (caseId: string) => {
     try {
       await updateCaseStatus(caseId, { hospitalStatus: 'accepted' });
-      // On navigue immédiatement vers le suivi (Tracking)
-      const updatedCase = activeCases.find(c => c.id === caseId);
-      if (updatedCase) {
-        navigation.navigate("HospitalCaseDetail", { 
-          caseData: { ...updatedCase, hospitalStatus: 'accepted' } 
-        });
-      }
+      // On ne navigue plus vers le détail pour rester sur le dashboard (stay on dashboard)
     } catch (err) {
       console.error("[Dashboard] Error accepting case:", err);
     }
@@ -573,11 +583,6 @@ export function HospitalDashboardTab({ navigation }: any) {
       <HospitalHeader />
 
       <View style={styles.topHeader}>
-
-        <CapacitySelector />
-
-        <View style={styles.headerSeparator} />
-
         <DashboardSegmentedControl 
           activeTab={activeTab} 
           onTabChange={setActiveTab} 
@@ -696,10 +701,8 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.mainBackground },
   topHeader: { 
     paddingHorizontal: 24, 
-    paddingTop: 16, 
-    paddingBottom: 12, 
-    borderBottomLeftRadius: 36, 
-    borderBottomRightRadius: 36, 
+    paddingTop: 4, 
+    paddingBottom: 8, 
     backgroundColor: "#0A0A0A",
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },

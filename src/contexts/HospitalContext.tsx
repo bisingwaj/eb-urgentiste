@@ -435,11 +435,17 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       if (transition.hospitalStatus) {
         updateObj.hospital_status = transition.hospitalStatus;
         updateObj.hospital_responded_at = new Date().toISOString();
+        
+        // If hospital accepts, we immediately move to en_route_hospital status
+        // Only if we haven't already moved past this stage (safety check)
+        const canAdvanceStatus = !['en_route_hospital', 'arrived_hospital', 'completed', 'mission_end'].includes(currentDispatch.status);
+        if (transition.hospitalStatus === 'accepted' && canAdvanceStatus) {
+          updateObj.status = 'en_route_hospital';
+        }
       }
       if (transition.hospitalNotes) {
         updateObj.hospital_notes = transition.hospitalNotes;
       } else if (transition.hospitalStatus === 'accepted') {
-        /** PROMPT_CURSOR_HOPITAL_WORKFLOW §2 — note par défaut si non fournie */
         updateObj.hospital_notes = "Accepté par l'établissement";
       }
 
