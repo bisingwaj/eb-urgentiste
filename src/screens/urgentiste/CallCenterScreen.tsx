@@ -650,7 +650,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       return 'Appel en cours…';
     }
     if (routeParams.target === 'pbx') {
-      return routeParams.phoneNumber || 'PBX';
+      return routeParams.patientName ? `Appel ${routeParams.patientName}` : (routeParams.phoneNumber || 'PBX');
     }
     return routeParams.target === 'patient' ? `Appel ${routeParams.patientName || ''}` : 'Appel en cours…';
   };
@@ -764,7 +764,11 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
 
         <View style={styles.headerCenter}>
           <Text style={styles.headerBrand}>
-            {routeParams.target === 'pbx' ? (routeParams.phoneNumber || 'PBX') : routeParams.target === 'patient' ? (routeParams.patientName || 'Patient') : 'Centrale'}
+            {routeParams.target === 'pbx' 
+              ? (routeParams.patientName ? `Appel ${routeParams.patientName}` : (routeParams.phoneNumber || 'PBX')) 
+              : routeParams.target === 'patient' 
+                ? (routeParams.patientName || 'Patient') 
+                : 'Centrale'}
           </Text>
           <View style={styles.headerStatus}>
             <View style={[styles.statusDot, { backgroundColor: st.dot }]} />
@@ -853,20 +857,22 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
               <MaterialIcons name={isMuted ? 'mic-off' : 'mic'} size={26} color={isMuted ? '#FFF' : '#111'} />
             </AppTouchableOpacity>
 
-            <AppTouchableOpacity
-              style={[
-                styles.roundBtn,
-                callType === 'video' ? styles.roundBtnLight : styles.roundBtnDim,
-              ]}
-              onPress={() => void toggleVideoMode()}
-              disabled={!mediaReady}
-            >
-              <MaterialIcons
-                name={callType === 'video' ? 'videocam' : 'videocam-off'}
-                size={26}
-                color="#FFF"
-              />
-            </AppTouchableOpacity>
+            {routeParams.target !== 'pbx' && (
+              <AppTouchableOpacity
+                style={[
+                  styles.roundBtn,
+                  callType === 'video' ? styles.roundBtnLight : styles.roundBtnDim,
+                ]}
+                onPress={() => void toggleVideoMode()}
+                disabled={!mediaReady}
+              >
+                <MaterialIcons
+                  name={callType === 'video' ? 'videocam' : 'videocam-off'}
+                  size={26}
+                  color="#FFF"
+                />
+              </AppTouchableOpacity>
+            )}
 
             <AppTouchableOpacity
               style={[styles.roundBtn, isSpeakerOn ? styles.roundBtnLight : styles.roundBtnDark]}

@@ -470,7 +470,11 @@ export function MissionActiveScreen({ navigation }: any) {
                     Alert.alert('Erreur', 'Numéro de téléphone non disponible.');
                     return;
                   }
-                  navigation.navigate('CallCenter', { target: 'pbx', phoneNumber: activeMission.caller.phone });
+                  navigation.navigate('CallCenter', { 
+                    target: 'pbx', 
+                    phoneNumber: activeMission.caller.phone,
+                    patientName: activeMission.caller.name
+                  });
                 }}
               >
                 <MaterialIcons name="phone" size={24} color="#000" />
