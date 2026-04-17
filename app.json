@@ -52,14 +52,7 @@
           "microphonePermission": "Nécessaire pour communiquer avec les victimes."
         }
       ],
-      [
-        "expo-build-properties",
-        {
-          "android": {
-            "ndkVersion": "27.1.12297006"
-          }
-        }
-      ],
+      "expo-build-properties",
       [
         "expo-image-picker",
         {
@@ -71,6 +64,7 @@
       "@rnmapbox/maps",
       "expo-secure-store",
       "./plugins/with-notifee-repository",
+      "./plugins/with-ndk-config",
       [
         "expo-local-authentication",
         {

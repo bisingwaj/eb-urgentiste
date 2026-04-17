@@ -2,9 +2,6 @@
 
 buildscript {
   ext {
-<<<<<<< HEAD
-    ndkVersion = "27.1.12297006"
-=======
     // NDK version is read from local.properties (gitignored) so each
     // developer can use their own NDK without causing merge conflicts.
     // To override, add this line to android/local.properties:
@@ -16,7 +13,6 @@ buildscript {
       localPropsFile.withInputStream { localProps.load(it) }
     }
     ndkVersion = localProps.getProperty('ndk.version', '26.1.10909125')
->>>>>>> e30ad3392af33785d35e859ffe184163fd8cf562
   }
   repositories {
     google()
