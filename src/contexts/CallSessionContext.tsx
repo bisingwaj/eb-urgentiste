@@ -1,10 +1,13 @@
 import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { leaveAgoraChannel } from '../services/agoraRtc';
+import { endSipCall } from '../lib/sipCall';
 
 export type MinimizedCallSnapshot = {
   callId: string;
   callType: 'audio' | 'video';
+  provider: 'agora' | 'pbx';
+  phoneNumber?: string;
   answeredAtIso: string | null;
   callState: 'connecting' | 'calling' | 'active';
   isMuted: boolean;
@@ -44,7 +47,11 @@ export function CallSessionProvider({ children }: { children: React.ReactNode })
           const status = payload.new?.status as string | undefined;
           if (status && ['completed', 'failed', 'missed'].includes(status)) {
             // Call ended remotely while minimized
-            leaveAgoraChannel();
+            if (minimized?.provider === 'pbx') {
+              void endSipCall();
+            } else {
+              leaveAgoraChannel();
+            }
             setMinimized(null);
           }
         }

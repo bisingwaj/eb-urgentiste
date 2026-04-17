@@ -39,7 +39,9 @@ export function FloatingCallBar() {
         <MaterialIcons name="phone-in-talk" size={22} color="#FFF" />
         <View style={styles.textCol}>
           <Text style={styles.title}>Appel en cours</Text>
-          <Text style={styles.sub}>Centrale · Touchez pour revenir</Text>
+          <Text style={styles.sub}>
+            {minimized.provider === 'pbx' ? (minimized.phoneNumber || 'PBX') : 'Centrale'} · Touchez pour revenir
+          </Text>
         </View>
         <MaterialIcons name="keyboard-arrow-up" size={26} color="rgba(255,255,255,0.85)" />
       </AppTouchableOpacity>

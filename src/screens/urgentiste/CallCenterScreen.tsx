@@ -35,6 +35,8 @@ import {
   setSpeakerphoneOn,
   setVideoPublishingEnabled,
 } from '../../services/agoraRtc';
+import { startSipCall, endSipCall } from '../../lib/sipCall';
+import { SessionState } from 'sip.js';
 
 type CallState = 'connecting' | 'calling' | 'active';
 type CallType = 'audio' | 'video';
@@ -184,11 +186,16 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   }, [callState, callType]);
 
   const cleanupAndGoBack = useCallback(() => {
+    const isPbx = routeParams.target === 'pbx';
     setMinimized(null);
     cleanupSubscription();
     setAgoraRtcCallbacks({});
     setMediaReady(false);
-    leaveAgoraChannel();
+    if (isPbx) {
+      void endSipCall();
+    } else {
+      leaveAgoraChannel();
+    }
     setCallState('connecting');
     setCurrentCallId(null);
     setAnsweredAtIso(null);
@@ -201,9 +208,10 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     setPipOffset({ x: 0, y: 0 });
     incomingJoinCallIdRef.current = null;
     navigation.goBack();
-  }, [cleanupSubscription, navigation, setMinimized]);
+  }, [cleanupSubscription, navigation, setMinimized, routeParams.target]);
 
   const endCallLocal = useCallback(async () => {
+    const isPbx = routeParams.target === 'pbx' || minimizedSnapshot?.provider === 'pbx';
     let durationSec = callDuration;
     if (answeredAtIso) {
       durationSec = Math.max(
@@ -212,23 +220,27 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       );
     }
     try {
-      leaveAgoraChannel();
-      if (currentCallId) {
-        await supabase
-          .from('call_history')
-          .update({
-            status: 'completed',
-            ended_by: 'rescuer',
-            ended_at: new Date().toISOString(),
-            duration_seconds: durationSec,
-          })
-          .eq('id', currentCallId);
+      if (isPbx) {
+        await endSipCall();
+      } else {
+        leaveAgoraChannel();
+        if (currentCallId) {
+          await supabase
+            .from('call_history')
+            .update({
+              status: 'completed',
+              ended_by: 'rescuer',
+              ended_at: new Date().toISOString(),
+              duration_seconds: durationSec,
+            })
+            .eq('id', currentCallId);
+        }
       }
     } catch (e) {
       console.error('[Call] Erreur endCall:', e);
     }
     cleanupAndGoBack();
-  }, [currentCallId, callDuration, answeredAtIso, cleanupAndGoBack]);
+  }, [currentCallId, callDuration, answeredAtIso, cleanupAndGoBack, routeParams.target, minimizedSnapshot?.provider]);
 
   const endCallRemotely = useCallback(async () => {
     leaveAgoraChannel();
@@ -238,13 +250,16 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   endCallRemotelyRef.current = endCallRemotely;
 
   const minimizeCall = useCallback(() => {
-    if (!currentCallId) {
+    const isPbx = routeParams.target === 'pbx' || !!currentCallId === false; // SIP often misses ID
+    if (!currentCallId && !isPbx) {
       navigation.goBack();
       return;
     }
     setMinimized({
-      callId: currentCallId,
+      callId: currentCallId || 'pbx-active',
       callType,
+      provider: isPbx ? 'pbx' : 'agora',
+      phoneNumber: routeParams.phoneNumber,
       answeredAtIso,
       callState,
       isMuted,
@@ -271,6 +286,8 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     mediaReady,
     setMinimized,
     navigation,
+    routeParams.target,
+    routeParams.phoneNumber,
   ]);
 
   useLayoutEffect(() => {
@@ -369,6 +386,36 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   }, []);
 
   const initiateCall = async (type: CallType) => {
+    const isPbx = routeParams.target === 'pbx';
+
+    if (isPbx) {
+      if (!routeParams.phoneNumber) {
+        Alert.alert('Erreur', 'Numéro de téléphone manquant.');
+        navigation.goBack();
+        return;
+      }
+      setCallType('audio');
+      setIsLocalCameraOff(true);
+      setCallState('calling');
+      try {
+        await startSipCall(
+          routeParams.phoneNumber,
+          () => cleanupAndGoBack(),
+          () => setCallState('calling'),
+          () => {
+            setCallState('active');
+            setAnsweredAtIso(new Date().toISOString());
+          }
+        );
+        setMediaReady(true);
+      } catch (err) {
+        console.error('[Call] SIP Error:', err);
+        Alert.alert('Erreur PBX', "Impossible de lancer l'appel via PBX.");
+        navigation.goBack();
+      }
+      return;
+    }
+
     const uid = session?.user?.id;
     if (!uid) {
       Alert.alert('Erreur', 'Session invalide.');
@@ -602,6 +649,9 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     if (callState === 'calling') {
       return 'Appel en cours…';
     }
+    if (routeParams.target === 'pbx') {
+      return routeParams.phoneNumber || 'PBX';
+    }
     return routeParams.target === 'patient' ? `Appel ${routeParams.patientName || ''}` : 'Appel en cours…';
   };
 
@@ -714,7 +764,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
 
         <View style={styles.headerCenter}>
           <Text style={styles.headerBrand}>
-            {routeParams.target === 'patient' ? (routeParams.patientName || 'Patient') : 'Centrale'}
+            {routeParams.target === 'pbx' ? (routeParams.phoneNumber || 'PBX') : routeParams.target === 'patient' ? (routeParams.patientName || 'Patient') : 'Centrale'}
           </Text>
           <View style={styles.headerStatus}>
             <View style={[styles.statusDot, { backgroundColor: st.dot }]} />

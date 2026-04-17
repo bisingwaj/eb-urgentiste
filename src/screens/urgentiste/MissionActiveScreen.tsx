@@ -53,7 +53,6 @@ export function MissionActiveScreen({ navigation }: any) {
   const [myLocation, setMyLocation] = useState<Location.LocationObject | null>(null);
   const myHeadingDeg = useMapPuckHeading(myLocation);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [sipCallState, setSipCallState] = useState<'idle' | 'calling' | 'active'>('idle');
   const [isCalling, setIsCalling] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [isAddressExpanded, setIsAddressExpanded] = useState(false);
@@ -216,20 +215,6 @@ export function MissionActiveScreen({ navigation }: any) {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-
-      {sipCallState !== 'idle' && (
-        <View style={styles.sipBanner}>
-          <Text style={styles.sipText}>
-            {sipCallState === 'calling' ? 'Appel PBX en cours...' : 'En ligne via PBX'}
-          </Text>
-          <AppTouchableOpacity style={styles.sipHangup} onPress={() => {
-            endSipCall();
-            setSipCallState('idle');
-          }}>
-            <MaterialCommunityIcons name="phone-hangup" size={24} color="#FFF" />
-          </AppTouchableOpacity>
-        </View>
-      )}
 
       {/* MAP BOX PRO */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]}>
@@ -485,17 +470,7 @@ export function MissionActiveScreen({ navigation }: any) {
                     Alert.alert('Erreur', 'Numéro de téléphone non disponible.');
                     return;
                   }
-                  try {
-                    setSipCallState('calling');
-                    await startSipCall(
-                      activeMission.caller.phone,
-                      () => setSipCallState('idle'),
-                      () => setSipCallState('active')
-                    );
-                  } catch (err) {
-                    Alert.alert('Erreur SIP', "Impossible de lancer l'appel normal VoIP.");
-                    setSipCallState('idle');
-                  }
+                  navigation.navigate('CallCenter', { target: 'pbx', phoneNumber: activeMission.caller.phone });
                 }}
               >
                 <MaterialIcons name="phone" size={24} color="#000" />
@@ -643,7 +618,4 @@ const styles = StyleSheet.create({
     borderRadius: 16, backgroundColor: 'rgba(211, 47, 47, 0.12)', borderWidth: 1, borderColor: 'rgba(211, 47, 47, 0.3)' 
   },
   cancelText: { color: '#FF5252', fontSize: 13, fontWeight: '900', letterSpacing: 2, opacity: 0.9 },
-  sipBanner: { position: 'absolute', top: 50, left: 16, right: 16, backgroundColor: '#E74C3C', borderRadius: 12, zIndex: 1000, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, elevation: 5, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4 },
-  sipText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
-  sipHangup: { backgroundColor: 'rgba(0,0,0,0.2)', padding: 8, borderRadius: 20 }
 });

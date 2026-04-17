@@ -90,7 +90,7 @@ packagingOptions {
         pickFirst 'lib/armeabi-v7a/libc++_shared.so'
     }
 // @generated end @rnmapbox/maps-libcpp
-    ndkVersion "26.1.10909125"
+    ndkVersion rootProject.ext.ndkVersion
 
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion

@@ -83,10 +83,17 @@ function setupTransportReconnect() {
   });
 }
 
+export type SipSessionState = SessionState;
+
+export const getSipCallState = (): SessionState | null => {
+  return currentInviter?.state || null;
+};
+
 export const startSipCall = async (
   targetPhone: string,
   onTerminated?: () => void,
-  onCalling?: () => void
+  onCalling?: () => void,
+  onActive?: () => void
 ) => {
   try {
     const { data: { user }, error: authErr } = await supabase.auth.getUser();
@@ -149,6 +156,8 @@ export const startSipCall = async (
         InCallManager.start({ media: 'audio' });
         InCallManager.setForceSpeakerphoneOn(false);
         if (onCalling) onCalling();
+      } else if (state === SessionState.Established) {
+        if (onActive) onActive();
       } else if (state === SessionState.Terminated) {
         InCallManager.stop();
         if (onTerminated) onTerminated();
