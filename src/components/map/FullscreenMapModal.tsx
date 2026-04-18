@@ -3,8 +3,9 @@ import {
   Modal,
   View,
   StyleSheet,
-StatusBar,
-  Platform} from 'react-native';
+  StatusBar,
+  Platform
+} from 'react-native';
 import { AppTouchableOpacity } from '../ui/AppTouchableOpacity';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
@@ -34,25 +35,25 @@ export function FullscreenMapModal({ visible, onClose, children, topOverlay }: F
       animationType="fade"
       presentationStyle="fullScreen"
       onRequestClose={onClose}
-      statusBarTranslucent={Platform.OS === 'android'}
+      statusBarTranslucent={false}
     >
-      <StatusBar barStyle="light-content" />
-      <View style={styles.root}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
+      <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
         {children}
 
         {topOverlay != null ? (
-          <View style={[styles.topOverlayWrap, { paddingTop: insets.top + 52 }]} pointerEvents="box-none">
+          <View style={[styles.topOverlayWrap, { paddingTop: 52 }]} pointerEvents="box-none">
             {topOverlay}
           </View>
         ) : null}
 
         <AppTouchableOpacity
-          style={[styles.closeBtn, { top: insets.top + 10 }]}
+          style={[styles.closeBtn, { top: 55, left: 16 }]}
           onPress={onClose}
           accessibilityRole="button"
           accessibilityLabel="Fermer la carte plein écran"
         >
-          <MaterialIcons name="close" color="#FFF" size={26} />
+          <MaterialIcons name="arrow-back" color="#FFF" size={26} />
         </AppTouchableOpacity>
       </View>
     </Modal>
@@ -69,16 +70,19 @@ const styles = StyleSheet.create({
   },
   closeBtn: {
     position: 'absolute',
-    right: 12,
-    zIndex: 30,
+    top: 40,
+    left: 16,
+    zIndex: 999,
     width: 44,
     height: 44,
-    borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 10,
   },
   topOverlayWrap: {
     position: 'absolute',

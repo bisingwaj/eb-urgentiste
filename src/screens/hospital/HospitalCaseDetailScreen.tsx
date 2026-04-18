@@ -251,9 +251,27 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const ambulanceDirectionDeg = useResolveHeadingFromRemotePosition({ lat: ambulanceLat, lng: ambulanceLng, headingFromServer: ambulanceHeadingRaw, speedMps: ambulanceSpeed });
 
   const mapCameraBounds = useMemo(() => {
-    if (routeResults[0]?.geometry) return geometryToCameraBounds(routeResults[0].geometry, 80);
+    // If we have a route, follow the route geometry
+    if (routeResults[0]?.geometry) {
+      return geometryToCameraBounds(routeResults[0].geometry, 80);
+    }
+    // If no route yet but we have positions, follow the two points
+    if (hospitalCoord && ambulanceLat != null && ambulanceLng != null) {
+      const minLat = Math.min(hospitalCoord[1], ambulanceLat);
+      const maxLat = Math.max(hospitalCoord[1], ambulanceLat);
+      const minLng = Math.min(hospitalCoord[0], ambulanceLng);
+      const maxLng = Math.max(hospitalCoord[0], ambulanceLng);
+      return {
+        ne: [maxLng, maxLat],
+        sw: [minLng, minLat],
+        paddingTop: 80,
+        paddingBottom: 80,
+        paddingLeft: 80,
+        paddingRight: 80,
+      };
+    }
     return null;
-  }, [routeResults]);
+  }, [routeResults, hospitalCoord, ambulanceLat, ambulanceLng]);
 
   const mapMarkers = useMemo((): EBMapMarker[] => {
     const list: EBMapMarker[] = [];
@@ -385,7 +403,6 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
               )}
             </View>
           </View>
-
           {/* TIMELINE (compact) */}
           <View style={styles.timelineRow}>
             {caseData.dispatchCreatedAt && (
@@ -527,18 +544,13 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           </View>
         ) : null}
 
-        {/* SECTION 4: LOGISTIQUE & TRANSPORT */}
         <View style={styles.contentSection}>
           <Text style={styles.sectionLabel}>LOGISTIQUE & TRANSPORT</Text>
 
           <View style={styles.logisticsCard}>
-            {/* 1. RESCUE UNIT FIRST */}
             <View style={styles.transportTeamBlock}>
               <View style={styles.teamHeader}>
                 <Text style={styles.teamLabel}>ÉQUIPE D'INTERVENTION</Text>
-                <AppTouchableOpacity style={styles.teamCallBtn} onPress={handleCall}>
-                  <MaterialIcons name="phone" size={18} color={colors.success} />
-                </AppTouchableOpacity>
               </View>
 
               <View style={styles.teamDetailsRow}>
@@ -550,6 +562,9 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                   <Text style={styles.agentName}>{rescuerName || 'En attente...'}</Text>
                   {caseData.unitVehiclePlate && <Text style={styles.vehiclePlate}>{caseData.unitVehiclePlate}</Text>}
                 </View>
+                <AppTouchableOpacity style={styles.teamCallBtn} onPress={handleCall}>
+                  <MaterialIcons name="phone" size={20} color={colors.success} />
+                </AppTouchableOpacity>
               </View>
             </View>
 
@@ -563,42 +578,46 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
               </View>
             </View>
 
-            <View style={styles.etaStats}>
-              <View style={styles.etaStatItem}>
-                <MaterialIcons name="timer" size={14} color="#FFF" style={{ opacity: 0.5 }} />
-                <Text style={styles.etaStatVal}>{etaMainDisplay}</Text>
-              </View>
-              <View style={styles.etaStatSep} />
-              <View style={styles.etaStatItem}>
-                <MaterialIcons name="navigation" size={14} color="#FFF" style={{ opacity: 0.5 }} />
-                <Text style={styles.etaStatVal}>{distanceMainDisplay}</Text>
-              </View>
-            </View>
 
-            {/* INTEGRATED MAP VIEW (CLICKABLE) */}
-            {showAmbulanceTracking && (
-              <AppTouchableOpacity
-                activeOpacity={0.9}
-                style={styles.miniMapContainer}
-                onPress={() => setMapFullscreenOpen(true)}
-              >
-                <EBMap
-                  mode="TRACKING"
-                  style={styles.miniMap}
-                  markers={mapMarkers}
-                  routeData={routeResults.length > 0 ? { routes: routeResults, selectedIndex: 0 } : undefined}
-                  cameraConfig={mapCameraConfig}
-                  rotateEnabled={true}
-                  zoomEnabled={true}
-                  scrollEnabled={true}
-                />
-                <View style={styles.miniMapOverlay}>
-                  <MaterialIcons name="fullscreen" size={20} color="#FFF" />
-                </View>
-              </AppTouchableOpacity>
-            )}
+
           </View>
         </View>
+
+        {/* FULL-WIDTH INTEGRATED MAP (OUTSIDE CARD) */}
+        {showAmbulanceTracking && (
+          <AppTouchableOpacity
+            activeOpacity={0.9}
+            style={styles.fullWidthMapContainer}
+            onPress={() => setMapFullscreenOpen(true)}
+          >
+            <EBMap
+              mode="TRACKING"
+              style={styles.miniMap}
+              markers={mapMarkers}
+              routeData={routeResults.length > 0 ? { routes: routeResults, selectedIndex: 0 } : undefined}
+              cameraConfig={mapCameraConfig}
+              rotateEnabled={true}
+              zoomEnabled={true}
+              scrollEnabled={true}
+            />
+            <View style={styles.miniMapOverlay}>
+              <MaterialIcons name="fullscreen" size={20} color="#FFF" />
+            </View>
+
+            {/* FLOATING TELEMETRY PILL */}
+            <View style={styles.mapTelemetryPill}>
+              <View style={styles.telemetryItem}>
+                <MaterialIcons name="timer" size={12} color="#4285F4" />
+                <Text style={styles.telemetryStat}>{etaMainDisplay}</Text>
+              </View>
+              <View style={styles.telemetrySep} />
+              <View style={styles.telemetryItem}>
+                <MaterialIcons name="navigation" size={12} color="#34A853" />
+                <Text style={styles.telemetryStat}>{distanceMainDisplay}</Text>
+              </View>
+            </View>
+          </AppTouchableOpacity>
+        )}
 
       </ScrollView>
 
@@ -689,7 +708,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           markers={mapMarkers}
           routeData={routeResults.length > 0 ? { routes: routeResults, selectedIndex: 0 } : undefined}
           cameraConfig={mapCameraConfig}
-          compassEnabled={true}
+          compassEnabled={false}
           rotateEnabled={true}
           zoomEnabled={true}
         />
@@ -848,15 +867,43 @@ const styles = StyleSheet.create({
   addressBody: { color: '#FFF', fontSize: 15, fontWeight: '700', lineHeight: 22 },
   etaStats: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
   etaStatItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  etaStatVal: { color: '#FFF', fontSize: 13, fontWeight: '900' },
-  etaStatSep: { width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.15)' },
-  miniMapContainer: {
-    height: 260,
-    marginTop: 20,
-    marginBottom: 4,
-    borderRadius: 16,
-    overflow: 'hidden',
-    borderWidth: 1,
+  mapTelemetryPill: {
+    position: 'absolute',
+    top: 12,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  telemetryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  telemetryStat: {
+    color: '#3C4043',
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  telemetrySep: {
+    width: 1,
+    height: 12,
+    backgroundColor: 'rgba(60, 64, 67, 0.15)',
+    marginHorizontal: 10,
+  },
+  fullWidthMapContainer: {
+    height: 450,
+    marginTop: 32,
+    marginBottom: 0,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
     backgroundColor: '#0a0a0a',
   },

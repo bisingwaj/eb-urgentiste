@@ -1,5 +1,6 @@
 import React, { forwardRef, useMemo, useCallback, useState } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MapboxMapView, MapboxMapViewProps } from './MapboxMapView';
 import { colors } from '../../theme/colors';
@@ -92,6 +93,9 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
     ...mapProps
   } = props;
 
+  const insets = useSafeAreaInsets();
+  const mapRef = React.useRef<Mapbox.MapView>(null);
+  const cameraRef = React.useRef<Mapbox.Camera>(null);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
   const [mapStyle, setMapStyle] = useState<string>(Mapbox.StyleURL.Light);
   const [cameraState, setCameraState] = useState({
@@ -102,15 +106,23 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
   });
 
   const handleRecenter = useCallback(() => {
-    if (myLocation) {
-      setCameraState(prev => ({ ...prev, center: myLocation, zoom: 17 }));
-    } else if (markers.length > 0) {
-      setCameraState(prev => ({ ...prev, center: markers[0].coordinate, zoom: 16 }));
+    const target = myLocation || (markers.length > 0 ? markers[0].coordinate : null);
+    if (target) {
+      cameraRef.current?.setCamera({
+        centerCoordinate: target,
+        zoomLevel: 17,
+        animationDuration: 1000,
+        animationMode: 'flyTo',
+      });
     }
   }, [myLocation, markers]);
 
   const handleResetNorth = useCallback(() => {
-    setCameraState(prev => ({ ...prev, heading: 0 }));
+    cameraRef.current?.setCamera({
+      heading: 0,
+      animationDuration: 1000,
+      animationMode: 'flyTo',
+    });
   }, []);
 
   const toggleMapStyle = useCallback(() => {
@@ -203,7 +215,7 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
   return (
     <View style={styles.container}>
       <MapboxMapView
-        ref={ref}
+        ref={mapRef}
         style={StyleSheet.absoluteFill}
         styleURL={mapStyle}
         onPress={handlePress}
@@ -211,10 +223,16 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
         pitchEnabled={true}
         scrollEnabled={true}
         zoomEnabled={true}
+        compassEnabled={false}
         {...mapProps}
       >
         <Mapbox.Camera
-          {...(cameraConfig?.bounds ? { bounds: cameraConfig.bounds } : {
+          ref={cameraRef}
+          {...(cameraConfig?.bounds ? { 
+            bounds: cameraConfig.bounds,
+            heading: cameraState.heading,
+            pitch: cameraState.pitch,
+          } : {
             centerCoordinate: cameraState.center,
             zoomLevel: cameraState.zoom,
             heading: cameraState.heading,
@@ -370,24 +388,23 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
         )}
       </MapboxMapView>
 
-      <View style={styles.fabTopRight}>
-        <AppTouchableOpacity style={styles.fabBtn}>
-          <MaterialIcons name="add-location" size={24} color="#5F6368" />
-        </AppTouchableOpacity>
-      </View>
 
-      <View style={styles.controlsContainer}>
+
+      <View style={[
+        styles.controlsContainer,
+        { bottom: showSheet ? 150 : insets.bottom + 20 }
+      ]}>
         {/* Layers Toggle (3 Circles / Stack) */}
         <AppTouchableOpacity style={styles.controlBtn} onPress={toggleMapStyle}>
           <MaterialCommunityIcons name="layers-outline" size={24} color="#5F6368" />
         </AppTouchableOpacity>
 
-        {/* Compass Reset */}
+        {/* Compass Reset (MIDDLE) */}
         <AppTouchableOpacity style={styles.controlBtn} onPress={handleResetNorth}>
           <Compass size={22} color="#5F6368" />
         </AppTouchableOpacity>
 
-        {/* Recenter */}
+        {/* Target Recenter (BOTTOM) */}
         <AppTouchableOpacity style={styles.controlBtn} onPress={handleRecenter}>
           <Target size={24} color="#4285F4" />
         </AppTouchableOpacity>
