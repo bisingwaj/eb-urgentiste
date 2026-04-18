@@ -121,6 +121,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const [otherReason, setOtherReason] = useState("");
   const [accepting, setAccepting] = useState(false);
   const [refusing, setRefusing] = useState(false);
+  const [showHistoryExpanded, setShowHistoryExpanded] = useState(false);
 
   // Hold-to-Accept Animation
   const holdProgress = useRef(new Animated.Value(0)).current;
@@ -322,71 +323,67 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
 
       <ScrollView style={styles.mainScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
 
-        {/* SECTION 1: PATIENT PROFILE (BLENDED HERO) */}
+        {/* SECTION 1: PATIENT IDENTITY CARD */}
         <View style={styles.profileSection}>
           <View style={styles.profileMainRow}>
             <PatientAvatar />
             <View style={styles.profileIdInfo}>
-              <Text style={styles.profileName}>{caseData.victimName}</Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.profileName} numberOfLines={1}>{caseData.victimName || 'Patient inconnu'}</Text>
+                <View style={[styles.levelPill, { backgroundColor: levelCfg.bg, borderColor: levelCfg.color + '40' }]}>
+                  <Text style={[styles.levelPillText, { color: levelCfg.color }]}>{levelCfg.label}</Text>
+                </View>
+              </View>
               <View style={styles.profileMetaRow}>
-                <Text style={styles.profileMetaValue}>{caseData.sex} · </Text>
-                <Text style={styles.profileMetaValue}>{caseData.age || '?'}</Text>
-                <Text style={styles.profileMetaLabel}>ans</Text>
+                <Text style={styles.profileMetaValue}>{caseData.sex === 'M' ? 'Homme' : caseData.sex === 'F' ? 'Femme' : caseData.sex}</Text>
+                {caseData.age ? (
+                  <>
+                    <View style={styles.metaDot} />
+                    <Text style={styles.profileMetaValue}>{caseData.age} ans</Text>
+                  </>
+                ) : null}
                 {caseData.patientProfile?.bloodType && (
                   <>
                     <View style={styles.metaDot} />
-                    <Text style={[styles.profileMetaValue, { color: colors.primary }]}>{caseData.patientProfile.bloodType}</Text>
+                    <View style={styles.bloodBadge}>
+                      <Text style={styles.bloodBadgeText}>{caseData.patientProfile.bloodType}</Text>
+                    </View>
                   </>
                 )}
               </View>
               {caseData.callerPhone && (
-                <View style={styles.profileContactLine}>
-                  <MaterialIcons name="phone" size={12} color={colors.textMuted} />
+                <AppTouchableOpacity style={styles.profileContactLine} onPress={() => Linking.openURL(`tel:${caseData.callerPhone}`)}>
+                  <MaterialIcons name="phone" size={12} color={colors.secondary} />
                   <Text style={styles.profilePhone}>{caseData.callerPhone}</Text>
-                </View>
+                </AppTouchableOpacity>
               )}
-
-              {/* CHRONOLOGY LABELS */}
-              <View style={styles.chronologyContainer}>
-                {caseData.dispatchCreatedAt && (
-                  <View style={styles.chronologyItem}>
-                    <Text style={styles.chronologyLabel}>Demande:</Text>
-                    <Text style={styles.chronologyValue}>{formatDetailedDateTime(caseData.dispatchCreatedAt)}</Text>
-                  </View>
-                )}
-                {caseData.hospitalRespondedAt && (
-                   <View style={styles.chronologyItem}>
-                    <Text style={styles.chronologyLabel}>Accepté:</Text>
-                    <Text style={styles.chronologyValue}>{formatDetailedDateTime(caseData.hospitalRespondedAt)}</Text>
-                  </View>
-                )}
-                {caseData.triageRecordedAt && (
-                   <View style={styles.chronologyItem}>
-                    <Text style={styles.chronologyLabel}>Admis:</Text>
-                    <Text style={styles.chronologyValue}>{formatDetailedDateTime(caseData.triageRecordedAt)}</Text>
-                  </View>
-                )}
-              </View>
             </View>
           </View>
 
-          {(caseData.patientProfile?.allergies?.length || caseData.patientProfile?.medicalHistory?.length) ? (
-            <View style={styles.historyBlock}>
-              <View style={styles.historyDivider} />
-              {caseData.patientProfile?.allergies?.length ? (
-                <View style={styles.historyItem}>
-                  <Text style={styles.historyLabel}>ALLERGIES</Text>
-                  <Text style={[styles.historyValue, { color: colors.primary }]}>{caseData.patientProfile.allergies.join(', ')}</Text>
-                </View>
-              ) : null}
-              {caseData.patientProfile?.medicalHistory?.length ? (
-                <View style={styles.historyItem}>
-                  <Text style={styles.historyLabel}>ANTÉCÉDENTS MÉDICAUX</Text>
-                  <Text style={styles.historyValue}>{caseData.patientProfile.medicalHistory.join(', ')}</Text>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
+          {/* TIMELINE (compact) */}
+          <View style={styles.timelineRow}>
+            {caseData.dispatchCreatedAt && (
+              <View style={styles.timelineChip}>
+                <View style={[styles.timelineDot, { backgroundColor: '#FF9800' }]} />
+                <Text style={styles.timelineLabel}>Signalé</Text>
+                <Text style={styles.timelineValue}>{formatDetailedDateTime(caseData.dispatchCreatedAt)}</Text>
+              </View>
+            )}
+            {caseData.hospitalRespondedAt && (
+              <View style={styles.timelineChip}>
+                <View style={[styles.timelineDot, { backgroundColor: colors.success }]} />
+                <Text style={styles.timelineLabel}>Accepté</Text>
+                <Text style={styles.timelineValue}>{formatDetailedDateTime(caseData.hospitalRespondedAt)}</Text>
+              </View>
+            )}
+            {caseData.triageRecordedAt && (
+              <View style={styles.timelineChip}>
+                <View style={[styles.timelineDot, { backgroundColor: colors.secondary }]} />
+                <Text style={styles.timelineLabel}>Admis</Text>
+                <Text style={styles.timelineValue}>{formatDetailedDateTime(caseData.triageRecordedAt)}</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* SECTION 2: BILAN INITIAL / SYMPTÔMES (CHECKLIST STYLE) */}
@@ -444,6 +441,44 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 ))}
               </View>
             )}
+
+            {/* COLLAPSIBLE: Allergies & Medical History */}
+            {(caseData.patientProfile?.allergies?.length || caseData.patientProfile?.medicalHistory?.length) ? (
+              <View style={styles.historyCollapsible}>
+                <AppTouchableOpacity
+                  style={styles.historyToggle}
+                  onPress={() => setShowHistoryExpanded(!showHistoryExpanded)}
+                >
+                  <MaterialIcons name="medical-information" size={16} color="rgba(255,255,255,0.4)" />
+                  <Text style={styles.historyToggleText}>Antécédents & Allergies</Text>
+                  <MaterialIcons
+                    name={showHistoryExpanded ? "expand-less" : "expand-more"}
+                    size={20}
+                    color="rgba(255,255,255,0.3)"
+                  />
+                </AppTouchableOpacity>
+                {showHistoryExpanded && (
+                  <View style={styles.historyContent}>
+                    {caseData.patientProfile?.allergies?.length ? (
+                      <View style={styles.historyItem}>
+                        <Text style={styles.historyLabel}>ALLERGIES</Text>
+                        <Text style={[styles.historyValue, { color: colors.primary }]}>
+                          {caseData.patientProfile.allergies.join(', ')}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {caseData.patientProfile?.medicalHistory?.length ? (
+                      <View style={styles.historyItem}>
+                        <Text style={styles.historyLabel}>ANTÉCÉDENTS MÉDICAUX</Text>
+                        <Text style={styles.historyValue}>
+                          {caseData.patientProfile.medicalHistory.join(', ')}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                )}
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -737,6 +772,7 @@ const styles = StyleSheet.create({
   profileSection: { 
     backgroundColor: '#0A0A0A', 
     paddingHorizontal: 16, 
+    paddingTop: 12,
     paddingBottom: 24,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)',
@@ -744,21 +780,30 @@ const styles = StyleSheet.create({
   profileMainRow: { flexDirection: 'row', alignItems: 'center' },
   avatarBox: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   profileIdInfo: { flex: 1 },
-  profileName: { color: '#FFF', fontSize: 22, fontWeight: '800' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  profileName: { color: '#FFF', fontSize: 22, fontWeight: '800', flexShrink: 1 },
+  levelPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  levelPillText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
   profileMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  profileMetaValue: { color: 'rgba(255,255,255,0.8)', fontSize: 14, fontWeight: '800' },
-  profileMetaLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '700', marginLeft: 2 },
+  profileMetaValue: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600' },
   metaDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 8 },
+  bloodBadge: { backgroundColor: 'rgba(255,82,82,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: 'rgba(255,82,82,0.2)' },
+  bloodBadgeText: { color: colors.primary, fontSize: 12, fontWeight: '800' },
   profileContactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  profilePhone: { color: 'rgba(255,255,255,0.5)', fontSize: 12, fontWeight: '700' },
+  profilePhone: { color: colors.secondary, fontSize: 13, fontWeight: '700' },
   
-  chronologyContainer: { marginTop: 12, gap: 4 },
-  chronologyItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  chronologyLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 11, fontWeight: '800' },
-  chronologyValue: { color: colors.secondary, fontSize: 11, fontWeight: '700' },
+  // COMPACT TIMELINE
+  timelineRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+  timelineChip: { flexDirection: 'column', alignItems: 'center', gap: 4, flex: 1 },
+  timelineDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 2 },
+  timelineLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '800', textTransform: 'uppercase' },
+  timelineValue: { color: '#FFF', fontSize: 11, fontWeight: '700' },
 
-  historyBlock: { marginTop: 20 },
-  historyDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: 16 },
+  // COLLAPSIBLE HISTORY (Inside Bilan Initial)
+  historyCollapsible: { marginTop: 16, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 16 },
+  historyToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  historyToggleText: { flex: 1, color: 'rgba(255,255,255,0.6)', fontSize: 12, fontWeight: '800', letterSpacing: 0.5, textTransform: 'uppercase' },
+  historyContent: { marginTop: 12, backgroundColor: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
   historyItem: { marginBottom: 12 },
   historyLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
   historyValue: { color: '#FFF', fontSize: 13, fontWeight: '600', lineHeight: 20 },
