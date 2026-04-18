@@ -3,8 +3,8 @@ import { View, Text, StyleSheet, Platform } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppTouchableOpacity } from '../../../components/ui/AppTouchableOpacity';
 import { colors } from '../../../theme/colors';
-import type { EmergencyCase } from '../HospitalDashboardTab';
-import { getLevelConfig, getStatusConfig } from '../HospitalDashboardTab';
+import { EmergencyCase } from '../hospitalTypes';
+import { getLevelConfig, getStatusConfig } from '../hospitalUtils';
 
 interface ActiveCaseItemProps {
   caseItem: EmergencyCase;
