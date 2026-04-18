@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Platform, Modal, TouchableWithoutFeedback, Image } from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform, Modal, TouchableWithoutFeedback, Image, ActivityIndicator, Alert } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { AppTouchableOpacity } from '../../../components/ui/AppTouchableOpacity';
@@ -22,13 +22,22 @@ export const HospitalHeader: React.FC<HospitalHeaderProps> = ({
 }) => {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { pendingAlertCount, hospitalCapacity, updateHospitalCapacity } = useHospital();
+  const { pendingAlertCount, structureInfo, updateStructureInfo } = useHospital();
   const { profile } = useAuth();
 
   const [showCapModal, setShowCapModal] = React.useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = React.useState(false);
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  const getAvailabilityInfo = () => {
+    const isOpen = structureInfo?.is_open ?? true;
+    if (isOpen) {
+      return { color: '#00E676', label: 'OUVERT' };
+    }
+    return { color: '#FF5252', label: 'FERMÉ' };
+  };
 
   useEffect(() => {
     if (pendingAlertCount > 0) {
@@ -49,15 +58,6 @@ export const HospitalHeader: React.FC<HospitalHeaderProps> = ({
       opacityAnim.setValue(0);
     }
   }, [pendingAlertCount, pulseAnim, opacityAnim]);
-
-  const getCapacityInfo = () => {
-    switch (hospitalCapacity) {
-      case 'fluid': return { color: '#00E676', label: 'FLUIDE' };
-      case 'saturated': return { color: '#FFB74D', label: 'SATURÉ' };
-      case 'diversion': return { color: '#FF5252', label: 'DÉTOUR' };
-      default: return { color: 'rgba(255,255,255,0.2)', label: 'INCONNU' };
-    }
-  };
 
   const displayName = profile?.linkedStructure?.name || profile?.first_name || 'Hôpital';
   const hasAlert = pendingAlertCount > 0;
@@ -113,9 +113,9 @@ export const HospitalHeader: React.FC<HospitalHeaderProps> = ({
             style={styles.capacityBtn}
             onPress={() => setShowCapModal(true)}
           >
-            <View style={[styles.radarOrb, { backgroundColor: getCapacityInfo().color }]} />
-            <Text style={[styles.radarText, { color: getCapacityInfo().color }]}>
-              {getCapacityInfo().label}
+            <View style={[styles.radarOrb, { backgroundColor: getAvailabilityInfo().color }]} />
+            <Text style={[styles.radarText, { color: getAvailabilityInfo().color }]}>
+              {getAvailabilityInfo().label}
             </Text>
             <MaterialIcons name="arrow-drop-down" size={16} color="rgba(255,255,255,0.3)" />
           </AppTouchableOpacity>
@@ -123,41 +123,72 @@ export const HospitalHeader: React.FC<HospitalHeaderProps> = ({
       </View>
 
       <Modal visible={showCapModal} transparent animationType="fade">
-        <TouchableWithoutFeedback onPress={() => setShowCapModal(false)}>
+        <TouchableWithoutFeedback onPress={() => !isUpdatingStatus && setShowCapModal(false)}>
           <View style={styles.modalOverlay}>
             <TouchableWithoutFeedback>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>CAPACITÉ DE L'HÔPITAL</Text>
+                <Text style={styles.modalTitle}>STATUT DE L'ÉTABLISSEMENT</Text>
                 
-                <AppTouchableOpacity style={styles.capOption} onPress={() => { updateHospitalCapacity('fluid'); setShowCapModal(false); }}>
+                <AppTouchableOpacity 
+                  style={[styles.capOption, isUpdatingStatus && { opacity: 0.6 }]} 
+                  disabled={isUpdatingStatus}
+                  onPress={async () => { 
+                    setIsUpdatingStatus(true);
+                    try {
+                      await updateStructureInfo({ is_open: true });
+                      setShowCapModal(false); 
+                    } catch (e: any) {
+                      Alert.alert("Erreur", e.message);
+                    } finally {
+                      setIsUpdatingStatus(false);
+                    }
+                  }}
+                >
                   <View style={[styles.orbLarge, { backgroundColor: '#00E676' }]} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.capLabel}>FLUIDE (DISPONIBLE)</Text>
-                    <Text style={styles.capSub}>Prise en charge immédiate possible</Text>
+                    <Text style={styles.capLabel}>OUVERT / DISPONIBLE</Text>
+                    <Text style={styles.capSub}>L'établissement reçoit des urgences normalement</Text>
                   </View>
-                  {hospitalCapacity === 'fluid' && <MaterialIcons name="check" size={20} color="#00E676" />}
+                  {isUpdatingStatus && (structureInfo?.is_open ?? true) ? (
+                    <ActivityIndicator size="small" color="#00E676" />
+                  ) : (
+                    (structureInfo?.is_open ?? true) && <MaterialIcons name="check" size={20} color="#00E676" />
+                  )}
                 </AppTouchableOpacity>
 
-                <AppTouchableOpacity style={styles.capOption} onPress={() => { updateHospitalCapacity('saturated'); setShowCapModal(false); }}>
-                  <View style={[styles.orbLarge, { backgroundColor: '#FFB74D' }]} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.capLabel}>SATURÉ (LIMITÉ)</Text>
-                    <Text style={styles.capSub}>Temps d'attente prolongé probable</Text>
-                  </View>
-                  {hospitalCapacity === 'saturated' && <MaterialIcons name="check" size={20} color="#FFB74D" />}
-                </AppTouchableOpacity>
-
-                <AppTouchableOpacity style={styles.capOption} onPress={() => { updateHospitalCapacity('diversion'); setShowCapModal(false); }}>
+                <AppTouchableOpacity 
+                  style={[styles.capOption, isUpdatingStatus && { opacity: 0.6 }]} 
+                  disabled={isUpdatingStatus}
+                  onPress={async () => { 
+                    setIsUpdatingStatus(true);
+                    try {
+                      await updateStructureInfo({ is_open: false });
+                      setShowCapModal(false); 
+                    } catch (e: any) {
+                      Alert.alert("Erreur", e.message);
+                    } finally {
+                      setIsUpdatingStatus(false);
+                    }
+                  }}
+                >
                   <View style={[styles.orbLarge, { backgroundColor: '#FF5252' }]} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.capLabel}>DÉTOUR (URGENCE SEULEMENT)</Text>
-                    <Text style={styles.capSub}>Cas critiques uniquement accepté</Text>
+                    <Text style={styles.capLabel}>FERMÉ / INDISPONIBLE</Text>
+                    <Text style={styles.capSub}>Interrompre la réception de nouvelles urgences</Text>
                   </View>
-                  {hospitalCapacity === 'diversion' && <MaterialIcons name="check" size={20} color="#FF5252" />}
+                  {isUpdatingStatus && structureInfo?.is_open === false ? (
+                    <ActivityIndicator size="small" color="#FF5252" />
+                  ) : (
+                    structureInfo?.is_open === false && <MaterialIcons name="check" size={20} color="#FF5252" />
+                  )}
                 </AppTouchableOpacity>
 
-                <AppTouchableOpacity style={styles.modalClose} onPress={() => setShowCapModal(false)}>
-                  <Text style={styles.closeText}>FERMER</Text>
+                <AppTouchableOpacity 
+                  style={styles.modalClose} 
+                  onPress={() => setShowCapModal(false)}
+                  disabled={isUpdatingStatus}
+                >
+                  <Text style={[styles.closeText, isUpdatingStatus && { opacity: 0.5 }]}>ANNULER</Text>
                 </AppTouchableOpacity>
               </View>
             </TouchableWithoutFeedback>
