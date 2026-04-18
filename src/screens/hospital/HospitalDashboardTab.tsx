@@ -156,6 +156,7 @@ export interface EmergencyCase {
   provisionalDiagnosis?: string;
   triageNotes?: string;
   triageRecordedAt?: string;
+  admittedAt?: string;
   // Prise en charge (JSON `hospital_data` — tableaux persistés par `HospitalPriseEnChargeScreen`)
   observations?: unknown[];
   treatments?: unknown[];

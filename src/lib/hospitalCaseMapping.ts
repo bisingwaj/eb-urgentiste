@@ -210,6 +210,7 @@ export function mapDispatchRowToEmergencyCase(
     provisionalDiagnosis: hData.provisionalDiagnosis,
     triageNotes: typeof hData.triageNotes === 'string' ? hData.triageNotes : undefined,
     triageRecordedAt: typeof hData.triageRecordedAt === 'string' ? hData.triageRecordedAt : undefined,
+    admittedAt: typeof hData.admittedAt === 'string' ? hData.admittedAt : undefined,
 
     observations: Array.isArray(hData.observations) ? hData.observations : undefined,
     treatments: Array.isArray(hData.treatments) ? hData.treatments : undefined,
