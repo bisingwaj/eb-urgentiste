@@ -6,7 +6,7 @@ import {
   EmergencyCase,
   CaseStatus,
   HospitalStatus,
-} from '../screens/hospital/HospitalDashboardTab';
+} from '../screens/hospital/hospitalTypes';
 import { mergeHospitalDataPartial } from '../lib/hospitalMerge';
 import { mapDispatchRowToEmergencyCase } from '../lib/hospitalCaseMapping';
 import { buildHospitalReportPayload } from '../lib/hospitalReportPayload';
@@ -171,7 +171,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
           reportSentAt: new Date().toISOString(),
         });
         const { error: updErr } = await supabase.from('dispatches').update({ hospital_data: merged }).eq('id', caseData.id);
-        if (updErr?.code === '42703') {
+        if (updErr?.code === '42703' || updErr?.code === 'PGRST204') {
           console.warn('[HospitalContext] hospital_data column missing; skip reportSent merge.');
         } else if (updErr) {
           console.error('[HospitalContext] merge reportSent', updErr);
@@ -201,7 +201,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
           .eq('id', structureId);
 
         if (error) {
-          if (error.code === '42703') {
+          if (error.code === '42703' || error.code === 'PGRST204') {
             console.warn('[HospitalContext] capacity_status column missing in health_structures table. Keeping local state.');
           } else {
             throw error;
@@ -460,13 +460,13 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
 
       let updateError = await performUpdate(updateObj);
 
-      if (updateError?.code === '42703') {
+      if (updateError?.code === '42703' || updateError?.code === 'PGRST204') {
         const stripped = { ...updateObj };
         delete stripped.hospital_data;
         console.warn('[HospitalContext] hospital_data missing; retrying without JSON.');
         updateError = await performUpdate(stripped);
       }
-      if (updateError?.code === '42703') {
+      if (updateError?.code === '42703' || updateError?.code === 'PGRST204') {
         const stripped = { ...updateObj };
         delete stripped.hospital_data;
         delete stripped.admission_recorded_at;
@@ -474,7 +474,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         console.warn('[HospitalContext] admission_recorded_* missing; retrying without.');
         updateError = await performUpdate(stripped);
       }
-      if (updateError?.code === '42703') {
+      if (updateError?.code === '42703' || updateError?.code === 'PGRST204') {
         const stripped = { ...updateObj };
         delete stripped.hospital_data;
         delete stripped.admission_recorded_at;
