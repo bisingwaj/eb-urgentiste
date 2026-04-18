@@ -186,7 +186,28 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   };
 
   const handleGoToAdmission = () => {
-    navigation.navigate('HospitalAdmission', { caseData });
+    // Route to the correct clinical step based on saved progress
+    const hStatus = caseData.hospitalDetailStatus || caseData.status;
+    if (hStatus === 'monitoring') {
+      navigation.navigate('HospitalClosure', { caseData });
+    } else if (hStatus === 'prise_en_charge') {
+      navigation.navigate('HospitalMonitoring', { caseData });
+    } else if (hStatus === 'triage') {
+      navigation.navigate('HospitalPriseEnCharge', { caseData });
+    } else {
+      // Default: start from admission (which leads to triage)
+      navigation.navigate('HospitalAdmission', { caseData });
+    }
+  };
+
+  const getResumeLabel = () => {
+    const hStatus = caseData.hospitalDetailStatus || caseData.status;
+    switch (hStatus) {
+      case 'triage': return 'CONTINUER · PRISE EN CHARGE';
+      case 'prise_en_charge': return 'CONTINUER · MONITORING';
+      case 'monitoring': return 'CONTINUER · CLÔTURE';
+      default: return 'PROCÉDER AU BILAN CLINIQUE';
+    }
   };
 
   const handleAdmitPatient = useCallback(async () => {
@@ -591,7 +612,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
               style={[styles.mainCtaBtn, { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.secondary }]}
               onPress={handleGoToAdmission}
             >
-              <Text style={[styles.mainCtaBtnText, { color: colors.secondary }]}>PROCÉDER AU BILAN CLINIQUE</Text>
+              <Text style={[styles.mainCtaBtnText, { color: colors.secondary }]}>{getResumeLabel()}</Text>
               <MaterialIcons name="chevron-right" size={24} color={colors.secondary} />
             </AppTouchableOpacity>
           </View>
