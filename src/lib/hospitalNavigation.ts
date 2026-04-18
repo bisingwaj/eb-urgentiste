@@ -9,6 +9,8 @@ export const POST_AMBULANCE_TRACKING_STATUSES: readonly CaseStatus[] = [
   'triage',
   'prise_en_charge',
   'monitoring',
+  'arrived',
+  'handedOver',
 ] as const;
 
 /**
