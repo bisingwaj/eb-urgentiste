@@ -119,6 +119,8 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     setCaseData((prev) => ({ ...prev, ...updated }));
   }, [activeCases, caseData.id]);
 
+  const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false);
+  const [dashboardScrollEnabled, setDashboardScrollEnabled] = useState(true);
   const [showRefusalModal, setShowRefusalModal] = useState(route.params?.autoOpenRefuse === true);
   const [selectedReason, setSelectedReason] = useState("");
   const [otherReason, setOtherReason] = useState("");
@@ -262,8 +264,8 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
       const minLng = Math.min(hospitalCoord[0], ambulanceLng);
       const maxLng = Math.max(hospitalCoord[0], ambulanceLng);
       return {
-        ne: [maxLng, maxLat],
-        sw: [minLng, minLat],
+        ne: [maxLng, maxLat] as [number, number],
+        sw: [minLng, minLat] as [number, number],
         paddingTop: 80,
         paddingBottom: 80,
         paddingLeft: 80,
@@ -368,7 +370,12 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     <View style={{ flex: 1, backgroundColor: colors.mainBackground }}>
       <HospitalHeader showBack={true} title="Détails Admission" />
 
-      <ScrollView style={styles.mainScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 220 }}>
+      <ScrollView 
+        style={styles.mainScroll} 
+        showsVerticalScrollIndicator={false} 
+        contentContainerStyle={{ paddingBottom: 220 }}
+        scrollEnabled={dashboardScrollEnabled}
+      >
 
         {/* SECTION 1: PATIENT IDENTITY CARD */}
         <View style={styles.profileSection}>
@@ -578,17 +585,23 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
               </View>
             </View>
 
-
-
           </View>
         </View>
 
         {/* FULL-WIDTH INTEGRATED MAP (OUTSIDE CARD) */}
         {showAmbulanceTracking && (
-          <AppTouchableOpacity
-            activeOpacity={0.9}
+          <View 
             style={styles.fullWidthMapContainer}
-            onPress={() => setMapFullscreenOpen(true)}
+            onStartShouldSetResponderCapture={() => {
+              setDashboardScrollEnabled(false);
+              return false;
+            }}
+            onResponderRelease={() => {
+              setDashboardScrollEnabled(true);
+            }}
+            onResponderTerminate={() => {
+              setDashboardScrollEnabled(true);
+            }}
           >
             <EBMap
               mode="TRACKING"
@@ -599,10 +612,16 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
               rotateEnabled={true}
               zoomEnabled={true}
               scrollEnabled={true}
+              pitchEnabled={true}
             />
-            <View style={styles.miniMapOverlay}>
-              <MaterialIcons name="fullscreen" size={20} color="#FFF" />
-            </View>
+
+            <AppTouchableOpacity
+              style={styles.miniMapFullscreenBtn}
+              onPress={() => setMapFullscreenOpen(true)}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="fullscreen" size={24} color="#FFF" />
+            </AppTouchableOpacity>
 
             {/* FLOATING TELEMETRY PILL */}
             <View style={styles.mapTelemetryPill}>
@@ -616,12 +635,10 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 <Text style={styles.telemetryStat}>{distanceMainDisplay}</Text>
               </View>
             </View>
-          </AppTouchableOpacity>
+          </View>
         )}
-
       </ScrollView>
 
-      {/* FOOTER ACTIONS */}
       <View style={[styles.footerActions, { paddingBottom: insets.bottom + 16 }]}>
         {needsHospitalInteraction ? (
           <View style={styles.actionRowPrimary}>
@@ -900,12 +917,25 @@ const styles = StyleSheet.create({
   },
   fullWidthMapContainer: {
     height: 450,
-    marginTop: 32,
+    marginTop: 24,
     marginBottom: 0,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    backgroundColor: '#0a0a0a',
+    position: 'relative',
+    backgroundColor: '#000',
+  },
+  miniMap: {
+    flex: 1,
+  },
+  miniMapFullscreenBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
   miniMapOverlay: {
     position: 'absolute',
@@ -919,9 +949,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
-  },
-  miniMap: {
-    flex: 1,
   },
   teamDivider: {
     height: 1,
