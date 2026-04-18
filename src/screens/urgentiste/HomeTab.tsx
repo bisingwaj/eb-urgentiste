@@ -12,6 +12,8 @@ import { useConnectivity } from '../../hooks/useConnectivity';
 import { useDialog } from '../../contexts/GlobalDialogContext';
 import { supabase } from '../../lib/supabase';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
+import { DeviceEventEmitter } from 'react-native';
+import { ALARM_STOP_EVENT } from '../../services/AlarmService';
 import * as Location from 'expo-location';
 import Mapbox from '@rnmapbox/maps';
 import { Navigation2, Activity } from 'lucide-react-native';
@@ -257,6 +259,8 @@ export function HomeTab({ navigation }: any) {
         // SUCCESS
         confirmProgress.setValue(0);
         setIsModalMinimized(true);
+        // Stop any active alarm sound as the user has interacted
+        DeviceEventEmitter.emit(ALARM_STOP_EVENT);
         // CRITICAL: Mark mission as in-progress in Supabase
         void updateDispatchStatus('en_route');
         navigation.navigate('MissionActive', { mission: activeMission });
@@ -616,6 +620,8 @@ export function HomeTab({ navigation }: any) {
                       navigation.navigate('MissionActive', { mission: activeMission });
                     }
                   } else {
+                    // STOP THE ALARM ONLY WHEN THE USER CLICKS TO SEE THE ALERT
+                    DeviceEventEmitter.emit(ALARM_STOP_EVENT);
                     setIsModalMinimized(false);
                   }
                 }}

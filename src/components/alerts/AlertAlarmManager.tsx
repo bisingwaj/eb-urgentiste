@@ -49,27 +49,6 @@ export function AlertAlarmManager() {
     };
   }, []);
 
-  // ── Stopper l'alarme quand l'app revient au foreground ──
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
-      const previousState = appStateRef.current;
-      appStateRef.current = nextState;
-
-      if (
-        nextState === 'active' &&
-        (previousState === 'background' || previousState === 'inactive')
-      ) {
-        if (AlarmService.isPlaying()) {
-          console.log('[AlertAlarmManager] 📱 Foreground — stopping alarm');
-          AlarmService.stopAlarm();
-        }
-        NotificationService.dismissAll();
-      }
-    });
-
-    return () => subscription.remove();
-  }, []);
-
   // ── Stopper l'alarme si la mission change ──
   useEffect(() => {
     const currentId = activeMission?.id ?? null;
