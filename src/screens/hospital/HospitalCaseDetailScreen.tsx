@@ -43,11 +43,11 @@ const { width } = Dimensions.get('window');
 const getLevelConfig = (level: UrgencyLevel) => {
   switch (level) {
     case 'critique':
-      return { color: '#FF5252', bg: 'rgba(255, 82, 82, 0.12)', label: 'CRITIQUE' };
+      return { color: '#EF5350', bg: 'rgba(239, 83, 80, 0.08)', label: 'CRITIQUE' };
     case 'urgent':
-      return { color: '#FF9800', bg: 'rgba(255, 152, 0, 0.12)', label: 'URGENT' };
+      return { color: '#FFA726', bg: 'rgba(255, 167, 38, 0.08)', label: 'URGENT' };
     case 'stable':
-      return { color: '#69F0AE', bg: 'rgba(105, 240, 174, 0.12)', label: 'STABLE' };
+      return { color: '#66BB6A', bg: 'rgba(102, 187, 106, 0.08)', label: 'STABLE' };
   }
 };
 
@@ -330,12 +330,9 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
             <View style={styles.profileIdInfo}>
               <View style={styles.nameRow}>
                 <Text style={styles.profileName} numberOfLines={1}>{caseData.victimName || 'Patient inconnu'}</Text>
-                <View style={[styles.levelPill, { backgroundColor: levelCfg.bg, borderColor: levelCfg.color + '40' }]}>
-                  <Text style={[styles.levelPillText, { color: levelCfg.color }]}>{levelCfg.label}</Text>
-                </View>
               </View>
               <View style={styles.profileMetaRow}>
-                <Text style={styles.profileMetaValue}>{caseData.sex === 'M' ? 'Homme' : caseData.sex === 'F' ? 'Femme' : caseData.sex}</Text>
+                <Text style={styles.profileMetaValue}>{caseData.sex === 'F' ? 'Femme' : "Homme"}</Text>
                 {caseData.age ? (
                   <>
                     <View style={styles.metaDot} />
@@ -364,23 +361,27 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           <View style={styles.timelineRow}>
             {caseData.dispatchCreatedAt && (
               <View style={styles.timelineChip}>
-                <View style={[styles.timelineDot, { backgroundColor: '#FF9800' }]} />
+                <View style={[styles.timelineDot, { backgroundColor: '#FFB74D' }]} />
                 <Text style={styles.timelineLabel}>Signalé</Text>
                 <Text style={styles.timelineValue}>{formatDetailedDateTime(caseData.dispatchCreatedAt)}</Text>
               </View>
             )}
             {caseData.hospitalRespondedAt && (
               <View style={styles.timelineChip}>
-                <View style={[styles.timelineDot, { backgroundColor: colors.success }]} />
+                <View style={[styles.timelineDot, { backgroundColor: colors.secondary + 'CC' }]} />
                 <Text style={styles.timelineLabel}>Accepté</Text>
                 <Text style={styles.timelineValue}>{formatDetailedDateTime(caseData.hospitalRespondedAt)}</Text>
               </View>
             )}
-            {caseData.triageRecordedAt && (
+            {(caseData.admittedAt || caseData.triageRecordedAt || caseData.status === 'admis' || caseData.arrivalTime) && (
               <View style={styles.timelineChip}>
-                <View style={[styles.timelineDot, { backgroundColor: colors.secondary }]} />
+                <View style={[styles.timelineDot, { backgroundColor: colors.success + 'CC' }]} />
                 <Text style={styles.timelineLabel}>Admis</Text>
-                <Text style={styles.timelineValue}>{formatDetailedDateTime(caseData.triageRecordedAt)}</Text>
+                <Text style={styles.timelineValue}>
+                  {caseData.admittedAt ? formatDetailedDateTime(caseData.admittedAt) : 
+                   caseData.triageRecordedAt ? formatDetailedDateTime(caseData.triageRecordedAt) : 
+                   (caseData.arrivalTime || '--:--')}
+                </Text>
               </View>
             )}
           </View>
@@ -390,7 +391,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
         <View style={styles.clinicalModule}>
           <View style={styles.moduleHeader}>
             <MaterialIcons name="fact-check" size={18} color={levelCfg.color} />
-            <Text style={[styles.moduleTitle, { color: levelCfg.color }]}>BILAN INITIAL (URGENTISTE)</Text>
+            <Text style={[styles.moduleTitle, { color: levelCfg.color }]}>BILAN INITIAL — {levelCfg.label}</Text>
           </View>
 
           <View style={styles.symptomsCard}>
@@ -631,13 +632,13 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
               </AppTouchableOpacity>
             ) : (
               <View style={styles.blockingContainer}>
-                 <View style={styles.blockingMessage}>
-                    <MaterialCommunityIcons name="clock-alert-outline" size={18} color="#FFB74D" />
-                    <Text style={styles.blockingText}>L'unité n'a pas encore validé son arrivée (Arrivé à l'hôpital)</Text>
-                 </View>
-                 <View style={[styles.mainCtaBtn, { opacity: 0.3, backgroundColor: 'rgba(255,255,255,0.1)' }]}>
-                    <Text style={[styles.mainCtaBtnText, { color: 'rgba(255,255,255,0.4)' }]}>EN ATTENTE D'ARRIVÉE</Text>
-                 </View>
+                <View style={styles.blockingMessage}>
+                  <MaterialCommunityIcons name="clock-alert-outline" size={18} color="#FFB74D" />
+                  <Text style={styles.blockingText}>L'unité n'a pas encore validé son arrivée (Arrivé à l'hôpital)</Text>
+                </View>
+                <View style={[styles.mainCtaBtn, { opacity: 0.3, backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                  <Text style={[styles.mainCtaBtnText, { color: 'rgba(255,255,255,0.4)' }]}>EN ATTENTE D'ARRIVÉE</Text>
+                </View>
               </View>
             )}
           </View>
@@ -769,29 +770,27 @@ const styles = StyleSheet.create({
   sectionLabel: { color: 'rgba(255,255,255,0.2)', fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 16 },
 
   // PROFILE SECTION (BLENDED HERO)
-  profileSection: { 
-    backgroundColor: '#0A0A0A', 
-    paddingHorizontal: 16, 
+  profileSection: {
+    backgroundColor: '#0A0A0A',
+    paddingHorizontal: 16,
     paddingTop: 12,
     paddingBottom: 24,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(255,255,255,0.06)',
   },
   profileMainRow: { flexDirection: 'row', alignItems: 'center' },
-  avatarBox: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+  avatarBox: { width: 52, height: 52, borderRadius: 26, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
   profileIdInfo: { flex: 1 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
-  profileName: { color: '#FFF', fontSize: 22, fontWeight: '800', flexShrink: 1 },
-  levelPill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
-  levelPillText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
-  profileMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-  profileMetaValue: { color: 'rgba(255,255,255,0.8)', fontSize: 13, fontWeight: '600' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  profileName: { color: '#FFF', fontSize: 20, fontWeight: '800' },
+  profileMetaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  profileMetaValue: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '600' },
   metaDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 8 },
   bloodBadge: { backgroundColor: 'rgba(255,82,82,0.1)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 1, borderColor: 'rgba(255,82,82,0.2)' },
   bloodBadgeText: { color: colors.primary, fontSize: 12, fontWeight: '800' },
   profileContactLine: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
   profilePhone: { color: colors.secondary, fontSize: 13, fontWeight: '700' },
-  
+
   // COMPACT TIMELINE
   timelineRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 20, backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   timelineChip: { flexDirection: 'column', alignItems: 'center', gap: 4, flex: 1 },
@@ -887,12 +886,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12
   },
   mainCtaBtnText: { color: '#000', fontSize: 14, fontWeight: '900' },
-  
+
   blockingContainer: { gap: 12 },
-  blockingMessage: { 
-    flexDirection: 'row', alignItems: 'center', gap: 10, 
-    backgroundColor: 'rgba(255, 183, 77, 0.1)', 
-    padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 183, 77, 0.2)' 
+  blockingMessage: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(255, 183, 77, 0.1)',
+    padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 183, 77, 0.2)'
   },
   blockingText: { flex: 1, color: '#FFB74D', fontSize: 12, fontWeight: '700', lineHeight: 16 },
 

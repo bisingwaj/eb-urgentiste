@@ -137,6 +137,7 @@ export function HospitalAdmissionScreen({ route, navigation }: any) {
                   arrivalMode,
                   arrivalState,
                   admissionService,
+                  admittedAt: new Date().toISOString(),
                 }
               });
               await clearDraft();
