@@ -65,9 +65,11 @@ function MarkerHost({ children }: { children: React.ReactNode }) {
 export const IncidentMarker = memo(function IncidentMarker({
   priority,
   onPress,
+  label,
 }: {
   priority: Priority;
   onPress?: () => void;
+  label?: string;
 }) {
   const bg = priorityColor(priority);
   return (
@@ -76,6 +78,11 @@ export const IncidentMarker = memo(function IncidentMarker({
       <Pressable onPress={onPress} style={[styles.incident, { backgroundColor: bg, borderColor: '#FFF' }]}>
         <TriangleAlert size={18} color="#FFFFFF" strokeWidth={2.5} />
       </Pressable>
+      {label && (
+        <View style={styles.topLabel}>
+          <Text style={styles.topLabelText}>{label.toUpperCase()}</Text>
+        </View>
+      )}
     </MarkerHost>
   );
 });

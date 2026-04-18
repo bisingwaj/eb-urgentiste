@@ -260,7 +260,7 @@ export function HospitalFleetScreen() {
         coordinate: [lng, lat],
         headingDeg: heading,
         status: realtimePos?.status || c.dispatchStatus || 'en_route',
-        label: unitAgentNames[uid] || c.unitCallsign || `UNITÉ ${uid.slice(0, 3).toUpperCase()}`,
+        label: unitAgentNames[uid] || c.urgentisteName || `UNITÉ ${uid.slice(0, 3).toUpperCase()}`,
         priority: c.level === 'critique' ? 'high' : 'medium',
         data: c
       });

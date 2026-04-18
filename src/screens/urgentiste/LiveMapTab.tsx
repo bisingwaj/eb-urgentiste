@@ -241,6 +241,8 @@ export function LiveMapTab() {
     Record<string, boolean>
   >(() => defaultEstablishmentFilter());
 
+  const [rescuerNames, setRescuerNames] = useState<Record<string, string>>({});
+
   const routeCriterionRef = useRef(routeCriterion);
   routeCriterionRef.current = routeCriterion;
 
@@ -485,7 +487,27 @@ export function LiveMapTab() {
       .lte("lat", b.maxLat)
       .gte("lng", b.minLng)
       .lte("lng", b.maxLng);
-    if (r) setRescuers(r as RescuerData[]);
+    
+    if (r) {
+      setRescuers(r as RescuerData[]);
+      // Resolve names for these rescuers
+      const uids = r.map(x => x.user_id).filter(Boolean);
+      if (uids.length > 0) {
+        const { data: names } = await supabase
+          .from('users_directory')
+          .select('auth_user_id, first_name, last_name')
+          .in('auth_user_id', uids);
+        
+        if (names) {
+          const map: Record<string, string> = {};
+          names.forEach(n => {
+            const full = `${n.first_name || ''} ${n.last_name || ''}`.trim();
+            if (full) map[n.auth_user_id] = full;
+          });
+          setRescuerNames(map);
+        }
+      }
+    }
 
     const { data: h } = await supabase
       .from("health_structures")
@@ -897,6 +919,7 @@ export function LiveMapTab() {
                 <UnitMarker
                   status={r.status}
                   headingDeg={r.heading != null && r.heading >= 0 ? r.heading : undefined}
+                  label={rescuerNames[r.user_id]}
                   onPress={() => setSelection({ kind: "rescuer", data: r })}
                 />
               </Mapbox.MarkerView>
@@ -909,7 +932,7 @@ export function LiveMapTab() {
                 coordinate={displayCoord}
               >
                 <HospitalMarker
-                  label={h.short_name || h.name.slice(0, 10)}
+                  label={h.short_name || h.name}
                   beds={h.available_beds}
                   onPress={() => setSelection({ kind: "hospital", data: h })}
                 />
@@ -924,6 +947,7 @@ export function LiveMapTab() {
               >
                 <IncidentMarker
                   priority={inc.priority}
+                  label={inc.reference?.slice(-6).toUpperCase()}
                   onPress={() =>
                     setSelection({ kind: "incident", data: inc })
                   }
@@ -1073,167 +1097,77 @@ export function LiveMapTab() {
         </View>
 
         {selection && destLngLat && (
-          <View style={[styles.destSheet, { bottom: spacing.sm }]}>
-            <View style={styles.destSheetInner}>
-              <View style={styles.destHeader}>
+          <View style={styles.floatingInfoContainer}>
+            <View style={styles.tacticalCard}>
+              <View style={styles.cardHeader}>
+                <View style={[styles.statusDot, { backgroundColor: selection.kind === 'incident' ? '#FF453A' : colors.success }]} />
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.destTitle} numberOfLines={2}>
-                    {selectionTitle}
-                  </Text>
-                  <Text style={styles.destSubtitle} numberOfLines={2}>
-                    {selectionSubtitle}
-                  </Text>
+                  <Text style={styles.unitName} numberOfLines={1}>{selectionTitle}</Text>
+                  <Text style={styles.caseRef} numberOfLines={1}>{selectionSubtitle}</Text>
                 </View>
-                <AppTouchableOpacity
-                  onPress={clearSelection}
-                  hitSlop={12}
-                  style={styles.destClose}
-                >
-                  <MaterialIcons
-                    name="close"
-                    size={22}
-                    color="rgba(255,255,255,0.6)"
-                  />
+                <AppTouchableOpacity onPress={clearSelection} hitSlop={12}>
+                  <MaterialIcons name="close" size={22} color="rgba(255,255,255,0.4)" />
                 </AppTouchableOpacity>
               </View>
 
-              {routeLoading ? (
-                <View style={styles.routeLoadingRow}>
-                  <ActivityIndicator color={colors.secondary} size="small" />
-                  <Text style={styles.destMeta}>Calcul de l’itinéraire…</Text>
-                </View>
-              ) : routeInfo ? (
-                <View style={styles.routeStats}>
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <MaterialIcons name="timer" size={20} color={colors.secondary} />
                   <View>
-                    <Text style={styles.routeStatLabel}>Distance</Text>
-                    <Text style={styles.routeStatValue}>
-                      {formatDistanceMeters(routeInfo.distance)}
-                    </Text>
-                  </View>
-                  <View>
-                    <Text style={styles.routeStatLabel}>Temps estimé</Text>
-                    <Text style={styles.routeStatValue}>
-                      {formatDurationSeconds(routeInfo.duration)}
+                    <Text style={styles.statLabel}>TEMPS ESTIMÉ</Text>
+                    <Text style={styles.statValue}>
+                      {routeLoading ? '...' : (selectedRoute ? formatDurationSeconds(selectedRoute.duration) : '—')}
                     </Text>
                   </View>
                 </View>
-              ) : null}
+
+                <View style={styles.statDivider} />
+
+                <View style={styles.statItem}>
+                  <MaterialIcons name="straighten" size={20} color="#34A853" />
+                  <View>
+                    <Text style={styles.statLabel}>DISTANCE</Text>
+                    <Text style={styles.statValue}>
+                      {routeLoading ? '...' : (selectedRoute ? formatDistanceMeters(selectedRoute.distance) : '—')}
+                    </Text>
+                  </View>
+                </View>
+              </View>
 
               {routeList.length > 1 && (
                 <View style={styles.routePickSection}>
-                  <Text style={styles.routePickLabel}>Itinéraires</Text>
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.routeChipsRow}
-                  >
+                  <Text style={styles.routePickLabel}>ITINÉRAIRES ALTERNATIFS</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.routeChipsRow}>
                     {routeList.map((r, idx) => (
                       <AppTouchableOpacity
                         key={`route-chip-${idx}`}
-                        style={[
-                          styles.routeChip,
-                          idx === selectedRouteIndex && styles.routeChipActive,
-                        ]}
+                        style={[styles.routeChip, idx === selectedRouteIndex && styles.routeChipActive]}
                         onPress={() => onSelectRouteIndex(idx)}
                       >
-                        <Text style={styles.routeChipTitle}>#{idx + 1}</Text>
-                        <Text style={styles.routeChipMeta}>
-                          {formatDurationSeconds(r.duration)}
-                        </Text>
-                        <Text style={styles.routeChipMetaSmall}>
-                          {formatDistanceMeters(r.distance)}
-                        </Text>
+                        <Text style={styles.routeChipTitle}>MODÈLE {idx + 1}</Text>
+                        <Text style={styles.routeChipMeta}>{formatDurationSeconds(r.duration)}</Text>
                       </AppTouchableOpacity>
                     ))}
                   </ScrollView>
-                  <View style={styles.criterionRow}>
-                    <AppTouchableOpacity
-                      style={[
-                        styles.criterionBtn,
-                        routeCriterion === "fastest" && styles.criterionBtnOn,
-                      ]}
-                      onPress={() => onApplyCriterion("fastest")}
-                    >
-                      <Text style={styles.criterionBtnText}>Plus rapide</Text>
-                    </AppTouchableOpacity>
-                    <AppTouchableOpacity
-                      style={[
-                        styles.criterionBtn,
-                        routeCriterion === "shortest" && styles.criterionBtnOn,
-                      ]}
-                      onPress={() => onApplyCriterion("shortest")}
-                    >
-                      <Text style={styles.criterionBtnText}>Plus court</Text>
-                    </AppTouchableOpacity>
-                  </View>
                 </View>
               )}
 
-              {selectedRoute && selectedRoute.steps.length > 0 && (
-                <View style={styles.ttsSection}>
-                  <View style={styles.ttsHeader}>
-                    <MaterialIcons
-                      name="record-voice-over"
-                      size={18}
-                      color={colors.secondary}
-                    />
-                    <Text style={styles.ttsTitle}>Guidage vocal</Text>
-                    <View style={{ flex: 1 }} />
-                    <Text style={styles.ttsAutoLabel}>Auto</Text>
-                    <Switch
-                      value={autoTts}
-                      onValueChange={setAutoTts}
-                      trackColor={{
-                        false: "#333",
-                        true: colors.secondary + "88",
-                      }}
-                    />
-                  </View>
-                  <View style={styles.ttsButtons}>
-                    <AppTouchableOpacity
-                      style={styles.ttsBtn}
-                      onPress={speakTtsNext}
-                    >
-                      <Text style={styles.ttsBtnText}>Étape suivante</Text>
-                    </AppTouchableOpacity>
-                    <AppTouchableOpacity
-                      style={styles.ttsBtnOutline}
-                      onPress={speakTtsRepeat}
-                    >
-                      <Text style={styles.ttsBtnTextOutline}>Répéter</Text>
-                    </AppTouchableOpacity>
-                  </View>
-                </View>
-              )}
-
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.destActions}
-              >
+              <View style={styles.destActions}>
                 <AppTouchableOpacity
                   style={styles.destBtnPrimary}
-                  onPress={() =>
-                    openExternalDirections(destLngLat[1], destLngLat[0])
-                  }
+                  onPress={() => openExternalDirections(destLngLat[1], destLngLat[0])}
                 >
                   <MaterialIcons name="map" size={18} color="#fff" />
                   <Text style={styles.destBtnPrimaryText}>Google Maps</Text>
                 </AppTouchableOpacity>
                 <AppTouchableOpacity
                   style={styles.destBtnSecondary}
-                  onPress={() =>
-                    openWazeDirections(destLngLat[1], destLngLat[0])
-                  }
+                  onPress={() => openWazeDirections(destLngLat[1], destLngLat[0])}
                 >
-                  <MaterialCommunityIcons
-                    name="waze"
-                    size={18}
-                    color={colors.secondary}
-                  />
+                  <MaterialCommunityIcons name="waze" size={18} color={colors.secondary} />
                   <Text style={styles.destBtnSecondaryText}>Waze</Text>
                 </AppTouchableOpacity>
-              </ScrollView>
+              </View>
             </View>
           </View>
         )}
@@ -1435,71 +1369,80 @@ const styles = StyleSheet.create({
   legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
   legendText: { fontSize: 12, fontWeight: "600", color: "rgba(255,255,255,0.7)" },
 
-  destSheet: {
-    position: "absolute",
-    left: spacing.sm,
-    right: spacing.sm,
-    zIndex: 30,
-    elevation: 24,
+  floatingInfoContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    zIndex: 100,
   },
-  destSheetInner: {
-    backgroundColor: "rgba(14,14,14,0.96)",
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderHairline,
-  },
-  destHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: spacing.sm,
-  },
-  destTitle: { ...typography.screenTitle, fontSize: 18 },
-  destSubtitle: { ...typography.bodyMuted, marginTop: 4 },
-  destClose: { padding: 4 },
-  routeLoadingRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: spacing.sm,
-  },
-  destMeta: { ...typography.bodyMuted },
-  routeStats: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderHairline,
-  },
-  routeStatLabel: { ...typography.sectionLabel, marginBottom: 4 },
-  routeStatValue: { ...typography.metric, fontSize: 17 },
-  destActions: { flexDirection: "row", gap: spacing.sm, paddingBottom: 4 },
-  destBtnPrimary: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: colors.secondary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 11,
-    borderRadius: radius.md,
-  },
-  destBtnPrimaryText: { color: "#fff", fontWeight: "700", fontSize: 14 },
-  destBtnSecondary: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+  tacticalCard: {
+    width: '100%',
+    backgroundColor: 'rgba(20, 20, 20, 0.95)',
+    borderRadius: 24,
+    padding: 16,
     borderWidth: 1,
-    borderColor: colors.secondary + "55",
-    paddingHorizontal: spacing.md,
-    paddingVertical: 11,
-    borderRadius: radius.md,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  destBtnSecondaryText: {
-    color: colors.secondary,
-    fontWeight: "700",
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 10,
+  },
+  unitName: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  caseRef: {
+    color: 'rgba(255, 255, 255, 0.4)',
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+  },
+  statItem: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    marginHorizontal: 12,
+  },
+  statLabel: {
+    color: 'rgba(255, 255, 255, 0.4)',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  statValue: {
+    color: '#FFF',
     fontSize: 14,
+    fontWeight: '700',
   },
   routePickSection: { marginBottom: spacing.md },
   routePickLabel: { ...typography.sectionLabel, marginBottom: spacing.sm },
@@ -1525,6 +1468,41 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   routeChipMetaSmall: { ...typography.bodyMuted, fontSize: 12, marginTop: 2 },
+  destActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 12,
+  },
+  destBtnPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.secondary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+  },
+  destBtnPrimaryText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  destBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  destBtnSecondaryText: {
+    color: colors.secondary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
   criterionRow: {
     flexDirection: "row",
     gap: spacing.sm,
