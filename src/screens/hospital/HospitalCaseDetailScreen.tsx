@@ -18,9 +18,8 @@ import {
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
-import { MapboxMapView } from '../../components/map/MapboxMapView';
+import { EBMap, EBMapMarker } from '../../components/map/EBMap';
 import { FullscreenMapModal } from '../../components/map/FullscreenMapModal';
-import { HospitalMarker, UnitMarker } from '../../components/map/mapMarkers';
 import { useResolveHeadingFromRemotePosition } from '../../hooks/useResolveHeadingFromLocation';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -33,6 +32,8 @@ import {
   buildRouteFeature,
   geometryToCameraBounds,
   formatDurationSeconds,
+  formatDistanceMeters,
+  type RouteResult,
 } from '../../lib/mapbox';
 import type { EmergencyCase, UrgencyLevel } from './HospitalDashboardTab';
 import { POST_AMBULANCE_TRACKING_STATUSES } from '../../lib/hospitalNavigation';
@@ -101,7 +102,9 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const isPendingHospitalResponse = !caseData.hospitalStatus || caseData.hospitalStatus === 'pending';
   const needsHospitalInteraction = isPendingHospitalResponse && !isEnRoute;
 
-  const showAmbulanceTracking = hasHospitalAccepted && !!caseData.unitId && !POST_AMBULANCE_TRACKING_STATUSES.includes(caseData.status);
+  const showAmbulanceTracking = !!caseData.unitId &&
+    !POST_AMBULANCE_TRACKING_STATUSES.includes(caseData.status) &&
+    caseData.hospitalStatus !== 'refused';
 
   const hospitalCoord = useMemo((): [number, number] | null => {
     const lat = caseData.assignedStructureLat;
@@ -229,8 +232,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const [ambulanceHeadingRaw, setAmbulanceHeadingRaw] = useState<number | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [rescuerName, setRescuerName] = useState<string>('Unité');
-  const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [routeDurationSec, setRouteDurationSec] = useState<number | null>(null);
+  const [routeResults, setRouteResults] = useState<RouteResult[]>([]);
   const lastRouteFetch = useRef(0);
 
   const hasAmbulancePosition = ambulanceLat != null && ambulanceLng != null;
@@ -238,21 +240,48 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   useEffect(() => {
     if (!showAmbulanceTracking || !hospitalCoord || ambulanceLat == null || ambulanceLng == null) return;
     const now = Date.now();
-    if (now - lastRouteFetch.current < 15000 && routeGeoJSON) return;
-    lastRouteFetch.current = now;
     const origin: [number, number] = [ambulanceLng, ambulanceLat];
     getRoute(origin, hospitalCoord, { profile: 'driving-traffic' }).then((result) => {
       if (result) {
-        setRouteGeoJSON(buildRouteFeature(result.geometry));
-        setRouteDurationSec(result.duration);
+        setRouteResults([result]);
       }
     });
   }, [ambulanceLat, ambulanceLng, hospitalCoord, showAmbulanceTracking]);
 
+  const ambulanceDirectionDeg = useResolveHeadingFromRemotePosition({ lat: ambulanceLat, lng: ambulanceLng, headingFromServer: ambulanceHeadingRaw, speedMps: ambulanceSpeed });
+
   const mapCameraBounds = useMemo(() => {
-    if (routeGeoJSON?.features[0]?.geometry) return geometryToCameraBounds(routeGeoJSON.features[0].geometry as GeoJSON.LineString, 80);
+    if (routeResults[0]?.geometry) return geometryToCameraBounds(routeResults[0].geometry, 80);
     return null;
-  }, [routeGeoJSON]);
+  }, [routeResults]);
+
+  const mapMarkers = useMemo((): EBMapMarker[] => {
+    const list: EBMapMarker[] = [];
+    if (hospitalCoord) {
+      list.push({ id: 'hospital', type: 'hospital', coordinate: hospitalCoord, label: 'Hôpital' });
+    }
+    if (hasAmbulancePosition) {
+      list.push({
+        id: 'ambulance',
+        type: 'unit',
+        coordinate: [ambulanceLng!, ambulanceLat!],
+        status: 'en_route',
+        headingDeg: ambulanceDirectionDeg
+      });
+    }
+    return list;
+  }, [hospitalCoord, hasAmbulancePosition, ambulanceLng, ambulanceLat, ambulanceDirectionDeg]);
+
+  const mapCameraConfig = useMemo(() => {
+    if (mapCameraBounds) {
+      return { bounds: mapCameraBounds };
+    }
+    // Precise street-level view (scale ~70-100m) of the hospital if no route yet
+    if (hospitalCoord) {
+      return { center: hospitalCoord, zoom: 17.0 };
+    }
+    return undefined;
+  }, [mapCameraBounds, hospitalCoord]);
 
   useEffect(() => {
     if (!showAmbulanceTracking || !caseData.unitId) return;
@@ -285,10 +314,10 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     return () => { isMounted = false; if (channel) supabase.removeChannel(channel); };
   }, [showAmbulanceTracking, caseData.unitId]);
 
-  const ambulanceDirectionDeg = useResolveHeadingFromRemotePosition({ lat: ambulanceLat, lng: ambulanceLng, headingFromServer: ambulanceHeadingRaw, speedMps: ambulanceSpeed });
   const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false);
 
-  const etaMainDisplay = routeDurationSec != null ? formatDurationSeconds(routeDurationSec) : caseData.eta || '—';
+  const etaMainDisplay = routeResults[0]?.duration != null ? formatDurationSeconds(routeResults[0].duration) : caseData.eta || '—';
+  const distanceMainDisplay = routeResults[0]?.distance != null ? formatDistanceMeters(routeResults[0].distance) : caseData.distance || '—';
 
   const formatAssessmentValue = (val: any) => {
     if (val === true || val === "true") return ASSESSMENT_VALUES.true;
@@ -321,7 +350,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     <View style={{ flex: 1, backgroundColor: colors.mainBackground }}>
       <HospitalHeader showBack={true} title="Détails Admission" />
 
-      <ScrollView style={styles.mainScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 140 }}>
+      <ScrollView style={styles.mainScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 220 }}>
 
         {/* SECTION 1: PATIENT IDENTITY CARD */}
         <View style={styles.profileSection}>
@@ -378,9 +407,9 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 <View style={[styles.timelineDot, { backgroundColor: colors.success + 'CC' }]} />
                 <Text style={styles.timelineLabel}>Admis</Text>
                 <Text style={styles.timelineValue}>
-                  {caseData.admittedAt ? formatDetailedDateTime(caseData.admittedAt) : 
-                   caseData.triageRecordedAt ? formatDetailedDateTime(caseData.triageRecordedAt) : 
-                   (caseData.arrivalTime || '--:--')}
+                  {caseData.admittedAt ? formatDetailedDateTime(caseData.admittedAt) :
+                    caseData.triageRecordedAt ? formatDetailedDateTime(caseData.triageRecordedAt) :
+                      (caseData.arrivalTime || '--:--')}
                 </Text>
               </View>
             )}
@@ -503,33 +532,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
           <Text style={styles.sectionLabel}>LOGISTIQUE & TRANSPORT</Text>
 
           <View style={styles.logisticsCard}>
-            <View style={styles.addressHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.addressTitle}>Localisation du patient</Text>
-                <Text style={styles.addressBody} numberOfLines={2}>{caseData.address}</Text>
-              </View>
-              <AppTouchableOpacity
-                style={styles.mapTriggerBtn}
-                onPress={() => setMapFullscreenOpen(true)}
-              >
-                <MaterialIcons name="map" size={20} color={colors.secondary} />
-              </AppTouchableOpacity>
-            </View>
-
-            <View style={styles.etaStats}>
-              <View style={styles.etaStatItem}>
-                <MaterialIcons name="timer" size={14} color="#FFF" style={{ opacity: 0.5 }} />
-                <Text style={styles.etaStatVal}>{etaMainDisplay}</Text>
-              </View>
-              <View style={styles.etaStatSep} />
-              <View style={styles.etaStatItem}>
-                <MaterialIcons name="navigation" size={14} color="#FFF" style={{ opacity: 0.5 }} />
-                <Text style={styles.etaStatVal}>{caseData.distance || '--'}</Text>
-              </View>
-            </View>
-
-            <View style={styles.teamDivider} />
-
+            {/* 1. RESCUE UNIT FIRST */}
             <View style={styles.transportTeamBlock}>
               <View style={styles.teamHeader}>
                 <Text style={styles.teamLabel}>ÉQUIPE D'INTERVENTION</Text>
@@ -549,32 +552,53 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 </View>
               </View>
             </View>
+
+            <View style={styles.teamDivider} />
+
+            {/* 2. ADDRESS NEXT */}
+            <View style={styles.addressHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.addressTitle}>Localisation du patient</Text>
+                <Text style={styles.addressBody} numberOfLines={2}>{caseData.address}</Text>
+              </View>
+            </View>
+
+            <View style={styles.etaStats}>
+              <View style={styles.etaStatItem}>
+                <MaterialIcons name="timer" size={14} color="#FFF" style={{ opacity: 0.5 }} />
+                <Text style={styles.etaStatVal}>{etaMainDisplay}</Text>
+              </View>
+              <View style={styles.etaStatSep} />
+              <View style={styles.etaStatItem}>
+                <MaterialIcons name="navigation" size={14} color="#FFF" style={{ opacity: 0.5 }} />
+                <Text style={styles.etaStatVal}>{distanceMainDisplay}</Text>
+              </View>
+            </View>
+
+            {/* INTEGRATED MAP VIEW (CLICKABLE) */}
+            {showAmbulanceTracking && (
+              <AppTouchableOpacity
+                activeOpacity={0.9}
+                style={styles.miniMapContainer}
+                onPress={() => setMapFullscreenOpen(true)}
+              >
+                <EBMap
+                  mode="TRACKING"
+                  style={styles.miniMap}
+                  markers={mapMarkers}
+                  routeData={routeResults.length > 0 ? { routes: routeResults, selectedIndex: 0 } : undefined}
+                  cameraConfig={mapCameraConfig}
+                  rotateEnabled={true}
+                  zoomEnabled={true}
+                  scrollEnabled={true}
+                />
+                <View style={styles.miniMapOverlay}>
+                  <MaterialIcons name="fullscreen" size={20} color="#FFF" />
+                </View>
+              </AppTouchableOpacity>
+            )}
           </View>
         </View>
-
-        {/* MAP TRACKING (IF ACCEPTED) */}
-        {showAmbulanceTracking && (
-          <View style={styles.embeddedMapWrap}>
-            <MapboxMapView style={styles.embeddedMap} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} zoomEnabled={true} rotateEnabled={false}>
-              {mapCameraBounds && <Mapbox.Camera bounds={mapCameraBounds} animationDuration={1000} />}
-              {hospitalCoord && (
-                <Mapbox.MarkerView id="hosp-mark" coordinate={hospitalCoord}>
-                  <HospitalMarker label="Hôpital" beds={0} />
-                </Mapbox.MarkerView>
-              )}
-              {hasAmbulancePosition && (
-                <Mapbox.MarkerView id="amb-mark" coordinate={[ambulanceLng!, ambulanceLat!]}>
-                  <UnitMarker status="en_route" headingDeg={ambulanceDirectionDeg} />
-                </Mapbox.MarkerView>
-              )}
-              {routeGeoJSON && (
-                <Mapbox.ShapeSource id="rt-src" shape={routeGeoJSON}>
-                  <Mapbox.LineLayer id="rt-layer" style={{ lineColor: colors.routePrimary, lineWidth: 4, lineOpacity: 0.8 }} />
-                </Mapbox.ShapeSource>
-              )}
-            </MapboxMapView>
-          </View>
-        )}
 
       </ScrollView>
 
@@ -659,24 +683,16 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
         visible={mapFullscreenOpen}
         onClose={() => setMapFullscreenOpen(false)}
       >
-        <MapboxMapView style={styles.embeddedMap} styleURL={Mapbox.StyleURL.Dark} compassEnabled={true}>
-          {mapCameraBounds && <Mapbox.Camera bounds={mapCameraBounds} animationDuration={1000} />}
-          {hospitalCoord && (
-            <Mapbox.MarkerView id="hosp-mark-fs" coordinate={hospitalCoord}>
-              <HospitalMarker label="Hôpital" beds={0} />
-            </Mapbox.MarkerView>
-          )}
-          {hasAmbulancePosition && (
-            <Mapbox.MarkerView id="amb-mark-fs" coordinate={[ambulanceLng!, ambulanceLat!]}>
-              <UnitMarker status="en_route" headingDeg={ambulanceDirectionDeg} />
-            </Mapbox.MarkerView>
-          )}
-          {routeGeoJSON && (
-            <Mapbox.ShapeSource id="rt-src-fs" shape={routeGeoJSON}>
-              <Mapbox.LineLayer id="rt-layer-fs" style={{ lineColor: colors.routePrimary, lineWidth: 6, lineOpacity: 0.9 }} />
-            </Mapbox.ShapeSource>
-          )}
-        </MapboxMapView>
+        <EBMap
+          mode="TRACKING"
+          style={StyleSheet.absoluteFill}
+          markers={mapMarkers}
+          routeData={routeResults.length > 0 ? { routes: routeResults, selectedIndex: 0 } : undefined}
+          cameraConfig={mapCameraConfig}
+          compassEnabled={true}
+          rotateEnabled={true}
+          zoomEnabled={true}
+        />
       </FullscreenMapModal>
 
       {/* REFUSAL MODAL */}
@@ -830,17 +846,42 @@ const styles = StyleSheet.create({
   addressHeader: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 },
   addressTitle: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 6 },
   addressBody: { color: '#FFF', fontSize: 15, fontWeight: '700', lineHeight: 22 },
-  mapTriggerBtn: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: 'rgba(68,138,255,0.1)',
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(68,138,255,0.2)'
-  },
-  etaStats: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  etaStats: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12 },
   etaStatItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   etaStatVal: { color: '#FFF', fontSize: 13, fontWeight: '900' },
   etaStatSep: { width: 1, height: 12, backgroundColor: 'rgba(255,255,255,0.15)' },
-  teamDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginVertical: 16 },
+  miniMapContainer: {
+    height: 260,
+    marginTop: 20,
+    marginBottom: 4,
+    borderRadius: 16,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: '#0a0a0a',
+  },
+  miniMapOverlay: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  miniMap: {
+    flex: 1,
+  },
+  teamDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    marginHorizontal: -4,
+    marginBottom: 16,
+  },
   transportTeamBlock: {},
   teamHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   teamLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
@@ -851,10 +892,6 @@ const styles = StyleSheet.create({
   unitCallsign: { color: '#FFF', fontSize: 16, fontWeight: '800' },
   agentName: { color: 'rgba(255,255,255,0.4)', fontSize: 12, fontWeight: '600' },
   vehiclePlate: { color: colors.secondary, fontSize: 11, fontWeight: '900', marginTop: 2 },
-
-  // EMBEDDED MAP
-  embeddedMapWrap: { marginHorizontal: 16, marginTop: 24, borderRadius: 20, overflow: 'hidden', height: 200, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  embeddedMap: { flex: 1 },
 
   // FOOTER
   footerActions: {

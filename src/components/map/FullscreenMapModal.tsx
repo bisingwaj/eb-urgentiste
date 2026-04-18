@@ -26,6 +26,8 @@ type FullscreenMapModalProps = {
 export function FullscreenMapModal({ visible, onClose, children, topOverlay }: FullscreenMapModalProps) {
   const insets = useSafeAreaInsets();
 
+  if (!visible) return null;
+
   return (
     <Modal
       visible={visible}
@@ -36,9 +38,7 @@ export function FullscreenMapModal({ visible, onClose, children, topOverlay }: F
     >
       <StatusBar barStyle="light-content" />
       <View style={styles.root}>
-        <MapboxMapView style={styles.map} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
-          {children}
-        </MapboxMapView>
+        {children}
 
         {topOverlay != null ? (
           <View style={[styles.topOverlayWrap, { paddingTop: insets.top + 52 }]} pointerEvents="box-none">
