@@ -58,6 +58,13 @@ export function HospitalAdminScreen({ navigation }: any) {
           color: "#69F0AE",
           route: "HospitalStats",
         },
+        {
+          id: "hospital_profile",
+          label: "Profil de l'établissement",
+          icon: "hospital-building",
+          color: "#FFA726",
+          route: "HospitalProfileEdit",
+        },
       ],
     },
     {

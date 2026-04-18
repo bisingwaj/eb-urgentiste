@@ -23,6 +23,13 @@ const SETTINGS_GROUPS = [
         route: "HospitalHistory",
       },
       {
+        id: "profile",
+        label: "Profil de l'établissement",
+        icon: "hospital-building",
+        color: "#FFA726",
+        route: "HospitalProfileEdit",
+      },
+      {
         id: "stats",
         label: "Statistiques du service",
         icon: "chart-box-outline",

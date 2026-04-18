@@ -50,6 +50,7 @@ import { HospitalHistoryScreen } from './src/screens/hospital/HospitalHistoryScr
 import { HospitalStatsScreen } from './src/screens/hospital/HospitalStatsScreen';
 import { HospitalSettingsScreen } from './src/screens/hospital/HospitalSettingsScreen';
 import { HospitalSearchScreen } from './src/screens/hospital/HospitalSearchScreen';
+import { HospitalProfileEditScreen } from './src/screens/hospital/HospitalProfileEditScreen';
 
 // Urgentiste Screens
 import { CallCenterScreen } from './src/screens/urgentiste/CallCenterScreen';
@@ -174,6 +175,7 @@ function RootNavigator() {
           <Stack.Screen name="HospitalSettings" component={HospitalSettingsScreen} />
           <Stack.Screen name="HospitalAdmissionsList" component={HospitalSearchScreen} />
           <Stack.Screen name="HospitalUrgencyDetail" component={HospitalUrgencyDetailScreen} />
+          <Stack.Screen name="HospitalProfileEdit" component={HospitalProfileEditScreen} />
 
           {/* Urgentiste Stack */}
           <Stack.Screen
