@@ -16,6 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import type { EmergencyCase } from './HospitalDashboardTab';
 import { useHospital } from '../../contexts/HospitalContext';
+import { HospitalHeader } from './components/HospitalHeader';
 import { outcomeKeyToDischargeType } from '../../lib/hospitalReportPayload';
 
 const OUTCOME_OPTIONS = [
@@ -99,15 +100,8 @@ export function HospitalClosureScreen({ route, navigation }: any) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-      {/* App bar */}
-      <View style={styles.appBar}>
-        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </AppTouchableOpacity>
-        <Text style={styles.appBarTitle}>Clôture du cas</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <View style={styles.safeArea}>
+      <HospitalHeader showBack title="Clôture" />
 
       <ScrollView
         style={styles.scroll}
@@ -165,6 +159,9 @@ export function HospitalClosureScreen({ route, navigation }: any) {
 
       {/* Primary Action */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <AppTouchableOpacity style={styles.backStepBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.backStepText}>Retour</Text>
+        </AppTouchableOpacity>
         <AppTouchableOpacity
           style={[styles.closeBtn, ((!outcome || !finalDiagnosis || closing) && styles.disabledBtn)]}
           onPress={handleClose}
@@ -174,13 +171,13 @@ export function HospitalClosureScreen({ route, navigation }: any) {
             <ActivityIndicator color="#FFF" />
           ) : (
             <>
-              <Text style={styles.closeBtnText}>Générer le Rapport Final</Text>
+              <Text style={styles.closeBtnText}>Générer le Rapport</Text>
               <MaterialIcons name="description" color="#FFF" size={24} />
             </>
           )}
         </AppTouchableOpacity>
       </View>
-      </SafeAreaView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -200,8 +197,10 @@ const styles = StyleSheet.create({
   input: { color: '#FFF', fontSize: 14, minHeight: 80, lineHeight: 22 },
   timeCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1A1A1A', borderRadius: 14, padding: 16, gap: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
   timeText: { color: '#FFF', fontSize: 16, fontWeight: '700' },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 14, backgroundColor: colors.mainBackground, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
-  closeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16, borderRadius: 28, backgroundColor: colors.primary },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 14, backgroundColor: colors.mainBackground, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', gap: 12 },
+  backStepBtn: { flex: 1, height: 56, borderRadius: 28, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+  backStepText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  closeBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16, borderRadius: 28, backgroundColor: colors.primary },
   closeBtnText: { color: '#FFF', fontWeight: '800', fontSize: 16 },
   disabledBtn: { opacity: 0.5 },
 });

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Animated, Platform, Modal, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, Animated, Platform, Modal, TouchableWithoutFeedback, Image } from 'react-native';
 import { MaterialCommunityIcons, MaterialIcons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { AppTouchableOpacity } from '../../../components/ui/AppTouchableOpacity';
@@ -83,7 +83,7 @@ export const HospitalHeader: React.FC<HospitalHeaderProps> = ({
         ) : (
           <View style={styles.logoRow}>
             <View style={styles.logoCircle}>
-              <MaterialCommunityIcons name="shield-cross" size={22} color={colors.secondary} />
+              <Image source={require('../../../../assets/icon.png')} style={styles.logoImage} />
             </View>
             {hasAlert && (
               <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
@@ -216,6 +216,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: 'rgba(56, 182, 255, 0.2)',
+    overflow: 'hidden',
+  },
+  logoImage: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
   dashboardAlertBadge: {
     flexDirection: 'row',
