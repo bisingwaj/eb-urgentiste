@@ -72,6 +72,8 @@ export interface EBMapProps extends Omit<MapboxMapViewProps, 'onPress'> {
   };
   /** For grouping on Fleet screen */
   useClustering?: boolean;
+  /** Whether to show navigation controls (Layers, Compass, Recenter) */
+  showControls?: boolean;
 }
 
 /**
@@ -90,6 +92,7 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
     onMapPress,
     cameraConfig,
     useClustering = false,
+    showControls = true,
     ...mapProps
   } = props;
 
@@ -390,25 +393,27 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
 
 
 
-      <View style={[
-        styles.controlsContainer,
-        { bottom: showSheet ? 150 : insets.bottom + 20 }
-      ]}>
-        {/* Layers Toggle (3 Circles / Stack) */}
-        <AppTouchableOpacity style={styles.controlBtn} onPress={toggleMapStyle}>
-          <MaterialCommunityIcons name="layers-outline" size={24} color="#5F6368" />
-        </AppTouchableOpacity>
+      {showControls && (
+        <View style={[
+          styles.controlsContainer,
+          { bottom: showSheet ? 150 : insets.bottom + 20 }
+        ]}>
+          {/* Layers Toggle (3 Circles / Stack) */}
+          <AppTouchableOpacity style={styles.controlBtn} onPress={toggleMapStyle}>
+            <MaterialCommunityIcons name="layers-outline" size={24} color="#5F6368" />
+          </AppTouchableOpacity>
 
-        {/* Compass Reset (MIDDLE) */}
-        <AppTouchableOpacity style={styles.controlBtn} onPress={handleResetNorth}>
-          <Compass size={22} color="#5F6368" />
-        </AppTouchableOpacity>
+          {/* Compass Reset (MIDDLE) */}
+          <AppTouchableOpacity style={styles.controlBtn} onPress={handleResetNorth}>
+            <Compass size={22} color="#5F6368" />
+          </AppTouchableOpacity>
 
-        {/* Target Recenter (BOTTOM) */}
-        <AppTouchableOpacity style={styles.controlBtn} onPress={handleRecenter}>
-          <Target size={24} color="#4285F4" />
-        </AppTouchableOpacity>
-      </View>
+          {/* Target Recenter (BOTTOM) */}
+          <AppTouchableOpacity style={styles.controlBtn} onPress={handleRecenter}>
+            <Target size={24} color="#4285F4" />
+          </AppTouchableOpacity>
+        </View>
+      )}
 
       {showSheet && routeData && (
         <EBMapSheet

@@ -120,7 +120,6 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   }, [activeCases, caseData.id]);
 
   const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false);
-  const [dashboardScrollEnabled, setDashboardScrollEnabled] = useState(true);
   const [showRefusalModal, setShowRefusalModal] = useState(route.params?.autoOpenRefuse === true);
   const [selectedReason, setSelectedReason] = useState("");
   const [otherReason, setOtherReason] = useState("");
@@ -334,7 +333,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     return () => { isMounted = false; if (channel) supabase.removeChannel(channel); };
   }, [showAmbulanceTracking, caseData.unitId]);
 
-  const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false);
+
 
   const etaMainDisplay = routeResults[0]?.duration != null ? formatDurationSeconds(routeResults[0].duration) : caseData.eta || '—';
   const distanceMainDisplay = routeResults[0]?.distance != null ? formatDistanceMeters(routeResults[0].distance) : caseData.distance || '—';
@@ -374,7 +373,6 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
         style={styles.mainScroll} 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={{ paddingBottom: 220 }}
-        scrollEnabled={dashboardScrollEnabled}
       >
 
         {/* SECTION 1: PATIENT IDENTITY CARD */}
@@ -590,18 +588,10 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
 
         {/* FULL-WIDTH INTEGRATED MAP (OUTSIDE CARD) */}
         {showAmbulanceTracking && (
-          <View 
+          <AppTouchableOpacity 
+            activeOpacity={0.9}
             style={styles.fullWidthMapContainer}
-            onStartShouldSetResponderCapture={() => {
-              setDashboardScrollEnabled(false);
-              return false;
-            }}
-            onResponderRelease={() => {
-              setDashboardScrollEnabled(true);
-            }}
-            onResponderTerminate={() => {
-              setDashboardScrollEnabled(true);
-            }}
+            onPress={() => setMapFullscreenOpen(true)}
           >
             <EBMap
               mode="TRACKING"
@@ -609,19 +599,17 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
               markers={mapMarkers}
               routeData={routeResults.length > 0 ? { routes: routeResults, selectedIndex: 0 } : undefined}
               cameraConfig={mapCameraConfig}
-              rotateEnabled={true}
-              zoomEnabled={true}
-              scrollEnabled={true}
-              pitchEnabled={true}
+              rotateEnabled={false}
+              zoomEnabled={false}
+              scrollEnabled={false}
+              pitchEnabled={false}
+              compassEnabled={false}
+              showControls={false}
             />
 
-            <AppTouchableOpacity
-              style={styles.miniMapFullscreenBtn}
-              onPress={() => setMapFullscreenOpen(true)}
-              activeOpacity={0.7}
-            >
+            <View style={styles.miniMapFullscreenBtn}>
               <MaterialIcons name="fullscreen" size={24} color="#FFF" />
-            </AppTouchableOpacity>
+            </View>
 
             {/* FLOATING TELEMETRY PILL */}
             <View style={styles.mapTelemetryPill}>
@@ -635,7 +623,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 <Text style={styles.telemetryStat}>{distanceMainDisplay}</Text>
               </View>
             </View>
-          </View>
+          </AppTouchableOpacity>
         )}
       </ScrollView>
 
