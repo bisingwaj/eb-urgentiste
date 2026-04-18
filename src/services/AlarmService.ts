@@ -1,17 +1,21 @@
 import { Audio } from 'expo-av';
-import { Vibration, Platform } from 'react-native';
+import { Vibration, Platform, DeviceEventEmitter } from 'react-native';
 
 /**
  * AlarmService — Singleton qui gère la sonnerie d'alarme urgente.
  *
  * • Joue un son de sirène en boucle (même en arrière-plan, même écran verrouillé)
  * • Fait vibrer le téléphone en continu
- * • S'arrête quand l'app revient au premier plan (foreground)
+ * • S'arrête quand l'app revient au premier plan (foreground) ou via STOP_ALARM
  */
+
+export const ALARM_STOP_EVENT = 'STOP_ALARM_EVENT';
 class AlarmServiceClass {
   private sound: Audio.Sound | null = null;
   private isAlarmPlaying = false;
   private vibrationInterval: ReturnType<typeof setInterval> | null = null;
+  private autoStopTimeout: ReturnType<typeof setTimeout> | null = null;
+  private readonly AUTO_STOP_MS = 10 * 60 * 1000; // 10 minutes
 
   /**
    * Configure le mode audio pour jouer en arrière-plan et ignorer le mode silencieux.
@@ -24,6 +28,9 @@ class AlarmServiceClass {
         playsInSilentModeIOS: true,
         shouldDuckAndroid: false,
         playThroughEarpieceAndroid: false,
+        // Correction interruption : ne pas mélanger (DoNotMix) pour garder la priorité
+        interruptionModeIOS: (Audio as any).InterruptionModeIOS?.DoNotMix || 1,
+        interruptionModeAndroid: (Audio as any).InterruptionModeAndroid?.DoNotMix || 1,
       });
     } catch (err) {
       console.warn('[AlarmService] Failed to configure audio mode:', err);
@@ -67,6 +74,13 @@ class AlarmServiceClass {
       // 3. Démarrer la vibration continue
       this.startContinuousVibration();
 
+      // 4. Sécurité : arrêt automatique après 10 minutes pour la batterie
+      if (this.autoStopTimeout) clearTimeout(this.autoStopTimeout);
+      this.autoStopTimeout = setTimeout(() => {
+        console.log('[AlarmService] 🕒 Hard limit reached (10m) — auto-stopping');
+        this.stopAlarm();
+      }, this.AUTO_STOP_MS);
+
       console.log('[AlarmService] ✅ Alarm started successfully');
     } catch (err) {
       console.error('[AlarmService] ❌ Failed to start alarm:', err);
@@ -84,6 +98,11 @@ class AlarmServiceClass {
 
     console.log('[AlarmService] 🔇 Stopping alarm...');
     this.isAlarmPlaying = false;
+
+    if (this.autoStopTimeout) {
+      clearTimeout(this.autoStopTimeout);
+      this.autoStopTimeout = null;
+    }
 
     // Arrêter la vibration
     this.stopContinuousVibration();
@@ -109,8 +128,8 @@ class AlarmServiceClass {
    * Vibration en boucle avec un pattern "urgence".
    */
   private startContinuousVibration(): void {
-    // Pattern : vibrer 800ms, pause 400ms, vibrer 800ms, pause 400ms...
-    const pattern = [0, 800, 400, 800, 400, 800, 400, 800];
+    // Pattern rythmique type sirène / urgence : vibrer 500ms, pause 200ms, vibrer 500ms, pause 200ms...
+    const pattern = [0, 500, 200, 500, 200, 500, 800];
 
     if (Platform.OS === 'android') {
       // Sur Android, le paramètre `true` = repeat

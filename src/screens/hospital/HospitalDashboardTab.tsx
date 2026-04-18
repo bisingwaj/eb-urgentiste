@@ -17,12 +17,14 @@ import { colors } from "../../theme/colors";
 import type { TransportModeCode } from "../../lib/transportMode";
 import { useAuth } from "../../contexts/AuthContext";
 import { useHospital } from "../../contexts/HospitalContext";
-import {
-  countActiveAdmissions,
-  countCriticalOpen,
-  countPendingHospital,
-  isCaseClosed,
-} from "../../lib/hospitalStats";
+import { CapacitySelector } from "./components/CapacitySelector";
+import { ALARM_STOP_EVENT } from "../../services/AlarmService";
+import { DeviceEventEmitter } from "react-native";
+import { DashboardSegmentedControl, HospitalTab } from "./components/DashboardSegmentedControl";
+import { ActiveCaseItem } from "./components/ActiveCaseItem";
+import { IncomingCaseItem } from "./components/IncomingCaseItem";
+import { formatRelativeTime } from "../../utils/timeFormat";
+import { HospitalHeader } from "./components/HospitalHeader";
 
 const { width } = Dimensions.get("window");
 
@@ -30,11 +32,17 @@ export type UrgencyLevel = "critique" | "urgent" | "stable";
 export type CaseStatus =
   | "en_attente"
   | "en_cours"
+  | "arrived"
+  | "handedOver"
   | "admis"
   | "triage"
   | "prise_en_charge"
   | "monitoring"
   | "termine";
+
+/** Terminé ou Sorti du périmètre actif */
+const isCaseClosed = (c: EmergencyCase) => 
+  ['termine', 'handedOver'].includes(c.status); 
 
 /** Valeurs `hospital_data.monitoringStatus` (spec Lovable) */
 export type MonitoringPatientStatus = "amelioration" | "stable" | "degradation";
@@ -61,6 +69,7 @@ export interface EmergencyCase {
   urgentisteName: string;
   urgentistePhone: string;
   eta: string;
+  distance?: string;
   status: CaseStatus;
   address: string;
   timestamp: string;
@@ -95,6 +104,8 @@ export interface EmergencyCase {
   hospitalStatus?: HospitalStatus;
   hospitalNotes?: string;
   hospitalRespondedAt?: string;
+  /** Le statut clinique interne déclaré par l'hôpital (ex: 'admis', 'triage', 'termine') */
+  hospitalDetailStatus?: string;
 
   // Patient Profile Extended details
   patientProfile?: {
@@ -136,11 +147,16 @@ export interface EmergencyCase {
     painScore?: string;
     weight?: string;
   };
+  /** Bilan structuré de l'urgentiste (conscient, respiration, etc.) */
+  medicalAssessment?: Record<string, any>;
+  /** Liste des soins prodigués par l'urgentiste (careChecklist) */
+  careChecklist?: string[];
   /** Symptômes — chaîne ou liste (JSON `hospital_data`) */
   symptoms?: string | string[];
   provisionalDiagnosis?: string;
   triageNotes?: string;
   triageRecordedAt?: string;
+  admittedAt?: string;
   // Prise en charge (JSON `hospital_data` — tableaux persistés par `HospitalPriseEnChargeScreen`)
   observations?: unknown[];
   treatments?: unknown[];
@@ -390,6 +406,20 @@ export const getStatusConfig = (status: CaseStatus) => {
         label: "En route",
         icon: "local-shipping" as const,
       };
+    case "arrived":
+      return {
+        color: "#E040FB",
+        bg: "rgba(224, 64, 251, 0.15)",
+        label: "Arrivé",
+        icon: "place" as const,
+      };
+    case "handedOver":
+      return {
+        color: colors.textMuted,
+        bg: "rgba(255, 255, 255, 0.05)",
+        label: "Remis",
+        icon: "transfer-within-a-station" as const,
+      };
     case "admis":
       return {
         color: "#00E676",
@@ -422,20 +452,39 @@ export const getStatusConfig = (status: CaseStatus) => {
       return {
         color: colors.textMuted,
         bg: "rgba(255, 255, 255, 0.05)",
-        label: "Terminé",
+        label: "Sorti",
         icon: "archive" as const,
       };
   }
 };
 
+function EmptyState({ title, sub }: { title: string, sub: string }) {
+  return (
+    <View style={styles.emptyContainer}>
+      <View style={styles.emptyIconCircle}>
+        <MaterialCommunityIcons name="check-all" size={32} color="rgba(255,255,255,0.2)" />
+      </View>
+      <Text style={styles.emptyTitle}>{title}</Text>
+      <Text style={styles.emptySub}>{sub}</Text>
+    </View>
+  );
+}
+
+const formatCaseTime = (dateString?: string) => {
+  return formatRelativeTime(dateString);
+};
+
 export function HospitalDashboardTab({ navigation }: any) {
   const { profile, refreshProfile } = useAuth();
-  const { activeCases, isLoading, listBlocker, lastFetchError, refresh } = useHospital();
+  const { activeCases, isLoading, listBlocker, lastFetchError, refresh, updateCaseStatus } = useHospital();
   const [refreshing, setRefreshing] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       void refreshProfile();
+      // Silencer l'alarme si on revient sur le dashboard 
+      // (interraction implicite avec la liste)
+      DeviceEventEmitter.emit(ALARM_STOP_EVENT);
     }, [refreshProfile]),
   );
 
@@ -452,7 +501,7 @@ export function HospitalDashboardTab({ navigation }: any) {
     [refresh, refreshProfile],
   );
 
-  const { displayName, displayIdLine, displayAddress, displayPhone } = useMemo(() => {
+  const { displayName } = useMemo(() => {
     const userLabel =
       profile?.first_name || profile?.last_name
         ? `${profile?.first_name ?? ""} ${profile?.last_name ?? ""}`.trim()
@@ -462,158 +511,90 @@ export function HospitalDashboardTab({ navigation }: any) {
       struct?.name?.trim() ||
       userLabel ||
       "Structure sanitaire";
-    const displayIdLineResolved =
-      profile?.agent_login_id != null &&
-      String(profile.agent_login_id).length > 0
-        ? `Identifiant : ${profile.agent_login_id}`
-        : profile?.matricule != null && String(profile.matricule).length > 0
-          ? `Matricule : ${profile.matricule}`
-          : profile?.id != null
-            ? `ID : ${profile.id.slice(0, 8)}…`
-            : null;
-    const displayAddressResolved =
-      struct?.address?.trim() || profile?.address?.trim() || "";
-    const displayPhoneResolved =
-      struct?.phone?.trim() || profile?.phone?.trim() || "";
     return {
       displayName: displayNameResolved,
-      displayIdLine: displayIdLineResolved,
-      displayAddress: displayAddressResolved,
-      displayPhone: displayPhoneResolved,
     };
   }, [profile]);
 
-  const [filter, setFilter] = useState<
-    "all" | "en_attente" | "en_cours" | "termine"
-  >("all");
+  const [activeTab, setActiveTab] = useState<HospitalTab>("requests");
 
-  const filteredCases = activeCases.filter((c) => {
-    if (filter === "all") return !isCaseClosed(c);
-    return c.status === filter;
-  });
+  // 1. DEMANDES (Pending Triage)
+  const requestCases = useMemo(() => {
+    return activeCases
+      .filter(c => c.hospitalStatus === 'pending' && !isCaseClosed(c))
+      .sort((a, b) => new Date(b.dispatchCreatedAt || 0).getTime() - new Date(a.dispatchCreatedAt || 0).getTime());
+  }, [activeCases]);
 
-  /** Alertes `hospital_status === 'pending'` en tête (workflow Lovable hôpital). */
-  const sortedFilteredCases = useMemo(() => {
-    const list = [...filteredCases];
-    list.sort((a, b) => {
-      const ap = a.hospitalStatus === "pending" ? 0 : 1;
-      const bp = b.hospitalStatus === "pending" ? 0 : 1;
-      if (ap !== bp) return ap - bp;
-      return 0;
-    });
-    return list;
-  }, [filteredCases]);
+  // 2. EN ROUTE & ARRIVÉS (Incoming but not admitted)
+  const enRouteCases = useMemo(() => {
+    return activeCases
+      .filter(c => 
+        c.hospitalStatus === 'accepted' && 
+        (c.dispatchStatus === 'en_route_hospital' || c.dispatchStatus === 'arrived_hospital' || c.dispatchStatus === 'completed' || c.dispatchStatus === 'mission_end') &&
+        !['admis', 'triage', 'prise_en_charge', 'monitoring', 'termine'].includes(c.hospitalDetailStatus || '')
+      )
+      .sort((a, b) => {
+         const timeA = new Date(a.hospitalRespondedAt || a.dispatchCreatedAt || 0).getTime();
+         const timeB = new Date(b.hospitalRespondedAt || b.dispatchCreatedAt || 0).getTime();
+         return timeB - timeA;
+      });
+  }, [activeCases]);
 
-  const criticalCount = useMemo(
-    () => countCriticalOpen(activeCases),
-    [activeCases],
-  );
-  const activeCount = useMemo(
-    () => countActiveAdmissions(activeCases),
-    [activeCases],
-  );
+  // 3. ADMISSIONS (Officially at the clinic)
+  const admissionCases = useMemo(() => {
+    return activeCases
+      .filter(c => 
+        c.hospitalStatus === 'accepted' && 
+        ['admis', 'triage', 'prise_en_charge', 'monitoring'].includes(c.hospitalDetailStatus || '')
+      )
+      .sort((a, b) => {
+        const timeA = new Date(a.triageRecordedAt || a.arrivalTime || a.hospitalRespondedAt || a.dispatchCreatedAt || 0).getTime();
+        const timeB = new Date(b.triageRecordedAt || b.arrivalTime || b.hospitalRespondedAt || b.dispatchCreatedAt || 0).getTime();
+        return timeB - timeA;
+      });
+  }, [activeCases]);
 
-  const pendingHospitalCount = useMemo(
-    () => countPendingHospital(activeCases),
-    [activeCases],
-  );
+  const tabCounts: Record<HospitalTab, number> = useMemo(() => ({
+    requests: requestCases.length,
+    en_route: enRouteCases.length,
+    admissions: admissionCases.length,
+  }), [requestCases.length, enRouteCases.length, admissionCases.length]);
+
+  const handleQuickAccept = async (caseId: string) => {
+    try {
+      await updateCaseStatus(caseId, { hospitalStatus: 'accepted' });
+      // On ne navigue plus vers le détail pour rester sur le dashboard (stay on dashboard)
+    } catch (err) {
+      console.error("[Dashboard] Error accepting case:", err);
+    }
+  };
+
+  const handleQuickRefuse = (caseId: string) => {
+    // On redirige vers le détail pour choisir la raison du refus (workflow sécurisé)
+    const caseItem = activeCases.find(c => c.id === caseId);
+    if (caseItem) {
+      navigation.navigate("HospitalCaseDetail", { caseData: caseItem, autoOpenRefuse: true });
+    }
+  };
+
 
   return (
-    <TabScreenSafeArea style={styles.safeArea}>
+    <View style={styles.safeArea}>
       <StatusBar barStyle="light-content" />
+      <HospitalHeader />
 
       <View style={styles.topHeader}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerTextBlock}>
-            <Text style={styles.greetingText}>Centre hospitalier</Text>
-            {!profile ? (
-              <ActivityIndicator
-                color={colors.secondary}
-                style={{ marginTop: 14, alignSelf: "flex-start" }}
-              />
-            ) : (
-              <>
-                <Text style={styles.hospitalName} numberOfLines={2}>
-                  {displayName}
-                </Text>
-                {displayIdLine ? (
-                  <Text style={styles.headerIdLine}>{displayIdLine}</Text>
-                ) : null}
-                {displayAddress ? (
-                  <View style={styles.headerMetaRow}>
-                    <MaterialIcons
-                      name="location-on"
-                      size={15}
-                      color={colors.secondary}
-                    />
-                    <Text style={styles.headerMetaText} numberOfLines={2}>
-                      {displayAddress}
-                    </Text>
-                  </View>
-                ) : null}
-                {displayPhone ? (
-                  <View style={styles.headerMetaRow}>
-                    <MaterialIcons
-                      name="phone"
-                      size={15}
-                      color={colors.success}
-                    />
-                    <Text style={styles.headerMetaText} numberOfLines={1}>
-                      {displayPhone}
-                    </Text>
-                  </View>
-                ) : null}
-                {profile.zone?.trim() ? (
-                  <View style={styles.headerMetaRow}>
-                    <MaterialIcons name="map" size={15} color="#90CAF9" />
-                    <Text style={styles.headerMetaText} numberOfLines={1}>
-                      {profile.zone.trim()}
-                    </Text>
-                  </View>
-                ) : null}
-              </>
-            )}
-          </View>
-          <AppTouchableOpacity
-            style={styles.notifBtn}
-            onPress={() => navigation.navigate("Notifications")}
-            accessibilityLabel="Notifications"
-          >
-            <MaterialCommunityIcons name="bell-badge-outline" color="#FFF" size={26} />
-            {pendingHospitalCount > 0 ? (
-              <View style={styles.notifBadge}>
-                <Text style={styles.notifBadgeText}>
-                  {pendingHospitalCount > 9 ? "9+" : pendingHospitalCount}
-                </Text>
-              </View>
-            ) : null}
-          </AppTouchableOpacity>
-        </View>
-
-        <View style={styles.summaryContainer}>
-          <View style={[styles.mainSummaryCard, { backgroundColor: "#FF5252" }]}>
-            <View style={styles.cardHeader}>
-              <MaterialCommunityIcons name="alert-decagram" color="#FFF" size={22} />
-              <Text style={styles.summaryLabel}>Urgences vitales</Text>
-            </View>
-            <Text style={styles.summaryNumber}>{criticalCount}</Text>
-            <View style={styles.cardGlow} />
-          </View>
-          <View style={[styles.mainSummaryCard, { backgroundColor: colors.secondary }]}>
-            <View style={styles.cardHeader}>
-              <MaterialCommunityIcons name="account-clock" color="#FFF" size={22} />
-              <Text style={styles.summaryLabel}>Admissions actives</Text>
-            </View>
-            <Text style={styles.summaryNumber}>{activeCount}</Text>
-            <View style={styles.cardGlow} />
-          </View>
-        </View>
+        <DashboardSegmentedControl 
+          activeTab={activeTab} 
+          onTabChange={setActiveTab} 
+          counts={tabCounts} 
+        />
       </View>
 
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -645,68 +626,87 @@ export function HospitalDashboardTab({ navigation }: any) {
             </Text>
           </View>
         ) : null}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Alertes récentes</Text>
-          <View style={styles.filterOptions}>
-            <AppTouchableOpacity onPress={() => setFilter("all")}><Text style={[styles.filterLabel, filter === "all" && styles.filterLabelActive]}>Tous</Text></AppTouchableOpacity>
-            <AppTouchableOpacity onPress={() => setFilter("en_attente")}><Text style={[styles.filterLabel, filter === "en_attente" && styles.filterLabelActive]}>Signalés</Text></AppTouchableOpacity>
-          </View>
-        </View>
 
-        {isLoading && activeCases.length === 0 ? (
-          <ActivityIndicator color={colors.secondary} style={{ marginTop: 40 }} />
-        ) : sortedFilteredCases.length === 0 ? (
-          <View style={{ alignItems: "center", marginTop: 40, paddingHorizontal: 24 }}>
-            <MaterialIcons name="inbox" size={48} color="rgba(255,255,255,0.2)" />
-            <Text style={{ color: "rgba(255,255,255,0.4)", marginTop: 16, textAlign: "center" }}>
-              {listBlocker === "no_structure_link"
-                ? "Corrigez la liaison structure ci-dessus pour voir les alertes."
-                : listBlocker === "supabase_error"
-                  ? "Erreur de chargement."
-                  : "Aucune alerte assignée à votre structure pour l’instant. Vérifiez que la centrale a bien renseigné assigned_structure_id sur le dispatch."}
-            </Text>
-          </View>
-        ) : (
-          sortedFilteredCases.map((caseItem) => {
-            const lCfg = getLevelConfig(caseItem.level);
-            const sCfg = getStatusConfig(caseItem.status);
-            const needsHospitalAnswer = caseItem.hospitalStatus === "pending";
-            return (
-              <AppTouchableOpacity key={caseItem.id} style={styles.alertCard} onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })} activeOpacity={0.9}>
-                <View style={styles.cardInfo}>
-                  <View style={styles.cardHeaderRow}>
-                    <View style={styles.timePill}><MaterialCommunityIcons name="clock-outline" color="rgba(255,255,255,0.4)" size={14} /><Text style={styles.timeText}>{caseItem.timestamp}</Text></View>
-                    <View style={[styles.levelTag, { borderColor: lCfg?.color }]}><Text style={[styles.levelLabelText, { color: lCfg?.color }]}>{lCfg?.label}</Text></View>
-                  </View>
-                  {needsHospitalAnswer ? (
-                    <View style={styles.pendingHospitalBadge}>
-                      <MaterialIcons name="touch-app" size={14} color="#FFB74D" />
-                      <Text style={styles.pendingHospitalBadgeText}>Réponse requise — accepter ou refuser</Text>
-                    </View>
-                  ) : null}
-                  <Text style={styles.victimName}>{caseItem.victimName}</Text>
-                  <Text style={styles.urgencyType}>{caseItem.typeUrgence?.toUpperCase()}</Text>
-                  <View style={styles.locationInfo}><MaterialIcons name="location-on" color={colors.secondary} size={16} /><Text style={styles.addressText} numberOfLines={1}>{caseItem.address}</Text></View>
-                  <View style={styles.cardDivider} />
-                  <View style={styles.cardFooterRow}>
-                    {sCfg && <View style={[styles.statusBadge, { backgroundColor: sCfg.bg }]}><MaterialIcons name={sCfg.icon} color={sCfg.color} size={14} /><Text style={[styles.statusBadgeText, { color: sCfg.color }]}>{sCfg.label}</Text></View>}
-                    <View style={styles.etaContainer}><Text style={styles.etaLabel}>Arrivée : </Text><Text style={styles.etaValue}>{caseItem.eta}</Text></View>
-                  </View>
-                </View>
-                <View style={styles.arrowContainer}><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={24} /></View>
-              </AppTouchableOpacity>
-            );
-          })
-        )}
+        {/* --- DYNAMIC LIST BASED ON TAB --- */}
+        <View style={styles.tabContentContainer}>
+          {activeTab === 'requests' && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Demandes Entrantes</Text>
+              </View>
+              {requestCases.length > 0 ? (
+                requestCases.map((caseItem) => (
+                  <IncomingCaseItem 
+                    key={caseItem.id} 
+                    caseItem={caseItem} 
+                    onAccept={handleQuickAccept}
+                    onRefuse={handleQuickRefuse}
+                    onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
+                    displayTime={formatCaseTime(caseItem.dispatchCreatedAt)}
+                  />
+                ))
+              ) : (
+                <EmptyState title="Aucune demande en attente" sub="Toutes les alertes ont été traitées." />
+              )}
+            </>
+          )}
+
+          {activeTab === 'en_route' && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Urgences en approche</Text>
+              </View>
+              {enRouteCases.length > 0 ? (
+                enRouteCases.map((caseItem) => (
+                  <ActiveCaseItem 
+                    key={caseItem.id} 
+                    caseItem={caseItem} 
+                    mode="en_route"
+                    onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
+                    displayTime={formatCaseTime(caseItem.hospitalRespondedAt || caseItem.dispatchCreatedAt)}
+                  />
+                ))
+              ) : (
+                <EmptyState title="Aucune urgence en route" sub="Aucun patient n'est actuellement en approche." />
+              )}
+            </>
+          )}
+
+          {activeTab === 'admissions' && (
+            <>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Patients Admis / Triage</Text>
+              </View>
+              {admissionCases.length > 0 ? (
+                admissionCases.map((caseItem) => (
+                  <ActiveCaseItem 
+                    key={caseItem.id} 
+                    caseItem={caseItem} 
+                    mode="admissions"
+                    onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
+                    displayTime={formatCaseTime(caseItem.triageRecordedAt || caseItem.arrivalTime || caseItem.hospitalRespondedAt)}
+                  />
+                ))
+              ) : (
+                <EmptyState title="Aucune admission active" sub="Aucun patient n'est actuellement hospitalisé." />
+              )}
+            </>
+          )}
+        </View>
       </ScrollView>
-    </TabScreenSafeArea>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.mainBackground },
-  topHeader: { paddingHorizontal: 24, paddingTop: 16, paddingBottom: 24, borderBottomLeftRadius: 36, borderBottomRightRadius: 36, backgroundColor: "#0A0A0A" },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 },
+  topHeader: { 
+    paddingHorizontal: 24, 
+    paddingTop: 4, 
+    paddingBottom: 8, 
+    backgroundColor: "#0A0A0A",
+  },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
   headerTextBlock: { flex: 1, paddingRight: 12 },
   greetingText: { color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: "800", letterSpacing: 0.5 },
   hospitalName: { color: "#FFF", fontSize: 24, fontWeight: "700", marginTop: 4 },
@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 18,
   },
-  notifBtn: { width: 50, height: 50, borderRadius: 18, backgroundColor: "#1A1A1A", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
+  notifBtn: { width: 50, height: 50, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.05)", justifyContent: "center", alignItems: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" },
   notifBadge: {
     position: "absolute",
     top: 6,
@@ -740,19 +740,29 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     backgroundColor: "#FF5252",
     borderWidth: 2,
-    borderColor: "#1A1A1A",
+    borderColor: "#0A0A0A",
     justifyContent: "center",
     alignItems: "center",
     paddingHorizontal: 3,
   },
   notifBadgeText: { color: "#FFF", fontSize: 11, fontWeight: "900" },
-  summaryContainer: { flexDirection: "row", gap: 12 },
+  summaryContainer: { flexDirection: "row", gap: 12, marginBottom: 4 },
   mainSummaryCard: { flex: 1, height: 110, borderRadius: 28, padding: 20, overflow: "hidden", justifyContent: "center" },
   cardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
   summaryLabel: { color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
   summaryNumber: { color: "#FFF", fontSize: 36, fontWeight: "900" },
   cardGlow: { position: "absolute", right: -20, bottom: -20, width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(255,255,255,0.15)" },
   scrollView: { flex: 1 },
+  decisionCenter: {
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  decisionScroll: {
+    paddingLeft: 20,
+    paddingRight: 10,
+    paddingBottom: 20,
+    paddingTop: 5,
+  },
   configBanner: {
     marginHorizontal: 20,
     marginTop: 12,
@@ -778,42 +788,58 @@ const styles = StyleSheet.create({
     color: "#FFB74D",
     fontWeight: "700",
   },
-  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, marginVertical: 20 },
-  sectionTitle: { color: "#FFF", fontSize: 18, fontWeight: "600" },
-  filterOptions: { flexDirection: "row", gap: 16 },
-  filterLabel: { color: "rgba(255,255,255,0.3)", fontSize: 13, fontWeight: "800" },
-  filterLabelActive: { color: colors.secondary },
-  alertCard: { backgroundColor: "#1A1A1A", marginHorizontal: 20, borderRadius: 32, padding: 22, flexDirection: "row", alignItems: "center", marginBottom: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.05)" },
-  cardInfo: { flex: 1 },
-  cardHeaderRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  pendingHospitalBadge: {
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 24, paddingTop: 16, marginBottom: 12 },
+  sectionTitle: { color: "rgba(255,255,255,0.3)", fontSize: 11, fontWeight: "900", letterSpacing: 1, textTransform: "uppercase" },
+  tabContentContainer: { marginTop: 8 },
+  liveBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255, 82, 82, 0.1)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#FF5252" },
+  liveText: { color: "#FF5252", fontSize: 10, fontWeight: "900" },
+  headerSeparator: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    marginVertical: 12,
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  emptyIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(255,255,255,0.03)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  emptyTitle: {
+    color: "#FFF",
+    fontSize: 18,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+  emptySub: {
+    color: "rgba(255,255,255,0.4)",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 24,
+    lineHeight: 20,
+  },
+  admissionsBtn: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    alignSelf: "flex-start",
-    marginBottom: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    backgroundColor: "rgba(255, 183, 77, 0.12)",
+    backgroundColor: "rgba(56, 182, 255, 0.1)",
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: "rgba(255, 183, 77, 0.35)",
+    borderColor: "rgba(56, 182, 255, 0.2)",
   },
-  pendingHospitalBadgeText: { color: "#FFB74D", fontSize: 12, fontWeight: "800", flex: 1 },
-  timePill: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(255,255,255,0.05)", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
-  timeText: { color: "rgba(255,255,255,0.6)", fontSize: 12, fontWeight: "700" },
-  levelTag: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
-  levelLabelText: { fontSize: 12, fontWeight: "900", letterSpacing: 0.5 },
-  victimName: { color: "#FFF", fontSize: 20, fontWeight: "900", marginBottom: 4 },
-  urgencyType: { color: colors.secondary, fontSize: 12, fontWeight: "800", letterSpacing: 1, marginBottom: 10 },
-  locationInfo: { flexDirection: "row", alignItems: "center", gap: 8 },
-  addressText: { color: "rgba(255,255,255,0.4)", fontSize: 13, fontWeight: "600" },
-  cardDivider: { height: 1, backgroundColor: "rgba(255,255,255,0.05)", marginVertical: 18 },
-  cardFooterRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  statusBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14 },
-  statusBadgeText: { fontSize: 13, fontWeight: "800" },
-  etaContainer: { flexDirection: "row", alignItems: "center" },
-  etaLabel: { color: "rgba(255,255,255,0.3)", fontSize: 13, fontWeight: "800" },
-  etaValue: { color: "#FFF", fontSize: 16, fontWeight: "900" },
-  arrowContainer: { marginLeft: 16 },
+  admissionsBtnText: {
+    color: colors.secondary,
+    fontSize: 14,
+    fontWeight: "700",
+  },
 });

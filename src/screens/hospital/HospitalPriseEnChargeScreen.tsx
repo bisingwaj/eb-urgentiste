@@ -17,6 +17,7 @@ import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import type { EmergencyCase } from "./HospitalDashboardTab";
 import { useHospital } from "../../contexts/HospitalContext";
+import { HospitalHeader } from "./components/HospitalHeader";
 
 const { width, height } = Dimensions.get("window");
 
@@ -232,23 +233,8 @@ export function HospitalPriseEnChargeScreen({ route, navigation }: any) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding" enabled={true} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
+      <HospitalHeader showBack={true} title="Prise en Charge" />
 
-      {/* 🔝 HEADER */}
-      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
-        <View style={styles.headerRow}>
-          <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.closeBtn}>
-            <MaterialIcons name="close" color="#FFF" size={22} />
-          </AppTouchableOpacity>
-          <View style={styles.headerTitleBox}>
-            <Text style={styles.patientName} numberOfLines={1}>{caseData.victimName}</Text>
-            <Text style={styles.caseMeta}>{caseData.id} · {caseData.age} ans</Text>
-          </View>
-          <View style={styles.headerTimer}>
-            <MaterialIcons name="timer" color={colors.secondary} size={14} />
-            <Text style={styles.timerText}>{formatTime(timer)}</Text>
-          </View>
-        </View>
-      </View>
 
       <View style={styles.tabBar}>
         {([

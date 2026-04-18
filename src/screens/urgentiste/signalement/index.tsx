@@ -13,8 +13,6 @@ import { StepAssessment } from './components/StepAssessment';
 import { StepAid } from './components/StepAid';
 import { StepDecision } from './components/StepDecision';
 import { StepAssignment } from './components/StepAssignment';
-import { StepTransportMode } from './components/StepTransportMode';
-import { StepTransport } from './components/StepTransport';
 import { StepClosure } from './components/StepClosure';
 import { FullscreenMapModal } from '../../../components/map/FullscreenMapModal';
 import { MapboxMapView } from '../../../components/map/MapboxMapView';
@@ -38,7 +36,7 @@ export default function SignalementScreen(props: any) {
       fadeAnim, mapFullscreenOpen, setMapFullscreenOpen,
       voipLoading, terrainPhotoBusy, radarAnim, notifyAnim, isAssigned,
       handleArrivalOnScene, handleConfirmAssessment, handleToggleCare, handleConfirmAid,
-      handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure,
+      handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure, handleCompleteMission,
       pickAndUploadTerrainPhoto, runVictimVoip, runVictimPstn,
       pan, panResponder, transitionTo, formatTime
    } = logic;
@@ -53,8 +51,6 @@ export default function SignalementScreen(props: any) {
             case 'aid': return "Premiers Soins";
             case 'decision': return "Orientation";
             case 'assignment': return "Destination";
-            case 'transport_mode': return "Mode Transport";
-            case 'transport': return "Évacuation";
             case 'arrival': return "En Route";
             default: return formatIncidentType(selectedMission?.type);
          }
@@ -98,7 +94,7 @@ export default function SignalementScreen(props: any) {
    // Map content for the fullscreen modal
    const renderFullscreenMapChildren = () => {
       // Logic for drawing markers based on step
-      const isHospitalStep = step === "assignment" || step === "transport" || step === "transport_mode";
+      const isHospitalStep = step === "assignment";
       const destCoords = isHospitalStep && targetHospital?.coords
          ? [targetHospital.coords.longitude, targetHospital.coords.latitude]
          : [selectedMission?.location?.lng || 15.307045, selectedMission?.location?.lat || -4.322447];
@@ -243,34 +239,9 @@ export default function SignalementScreen(props: any) {
                   />
                )}
 
-               {step === "transport_mode" && (
-                  <StepTransportMode
-                     transportMode={transportMode}
-                     onSelectTransportMode={handleSelectTransportMode}
-                     renderStepInlineHeader={renderStepInlineHeader}
-                  />
-               )}
-
-               {step === "transport" && targetHospital && (
-                  <StepTransport
-                     targetHospital={targetHospital}
-                     urgentisteLoc={urgentisteLoc}
-                     urgentisteHeadingDeg={urgentisteHeadingDeg}
-                     hospitalRouteGeoJSON={logic.hospitalRouteGeoJSON}
-                     hospitalRouteDuration={logic.hospitalRouteDuration}
-                     hospitalRouteDistance={logic.hospitalRouteDistance}
-                     hospitalRouteCameraBounds={logic.hospitalRouteCameraBounds}
-                     transportMode={transportMode}
-                     insets={insets}
-                     onBack={() => props.navigation.goBack()}
-                     onOpenFullscreenMap={() => setMapFullscreenOpen(true)}
-                     onArrivedAtHospital={handleArrivedAtHospital}
-                  />
-               )}
-
                {step === "closure" && (
                   <StepClosure
-                     onReturnToDashboard={() => props.navigation.goBack()}
+                     onReturnToDashboard={handleCompleteMission}
                      renderStepInlineHeader={renderStepInlineHeader}
                   />
                )}

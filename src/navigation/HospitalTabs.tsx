@@ -5,9 +5,9 @@ import { CustomTabBar } from './CustomTabBar';
 
 // Screens
 import { HospitalDashboardTab } from '../screens/hospital/HospitalDashboardTab';
-import { HospitalProfileTab } from '../screens/hospital/HospitalProfileTab';
-import { HospitalSettingsScreen } from '../screens/hospital/HospitalSettingsScreen';
-import { HospitalAdmissionsListScreen } from '../screens/hospital/HospitalAdmissionsListScreen';
+import { HospitalFleetScreen } from '../screens/hospital/HospitalFleetScreen';
+import { HospitalSearchScreen } from '../screens/hospital/HospitalSearchScreen';
+import { HospitalAdminScreen } from '../screens/hospital/HospitalAdminScreen';
 
 const HospitalTab = createBottomTabNavigator();
 
@@ -23,29 +23,30 @@ export function HospitalTabs() {
         name="Urgences" 
         component={HospitalDashboardTab} 
         options={{ 
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="alert-decagram-outline" color={color} size={size} /> 
+          tabBarLabel: "Accueil",
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="view-dashboard-outline" color={color} size={size} /> 
         }} 
       />
       <HospitalTab.Screen 
-        name="Admissions" 
-        component={HospitalAdmissionsListScreen} 
+        name="Flotte" 
+        component={HospitalFleetScreen} 
         options={{ 
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="clipboard-list-outline" color={color} size={size} /> 
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="map-marker-path" color={color} size={size} /> 
         }} 
       />
       <HospitalTab.Screen 
-        name="Paramètres" 
-        component={HospitalSettingsScreen} 
+        name="Recherche" 
+        component={HospitalSearchScreen} 
         options={{ 
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="dots-horizontal-circle-outline" color={color} size={size} />,
-          tabBarLabel: "Plus"
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="magnify" color={color} size={size} /> 
         }} 
       />
       <HospitalTab.Screen 
-        name="ProfilHopital" 
-        component={HospitalProfileTab} 
+        name="Administration" 
+        component={HospitalAdminScreen} 
         options={{ 
-          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="account-circle-outline" color={color} size={size} /> 
+          tabBarLabel: "Plus",
+          tabBarIcon: ({ color, size }) => <MaterialCommunityIcons name="menu" color={color} size={size} /> 
         }} 
       />
     </HospitalTab.Navigator>

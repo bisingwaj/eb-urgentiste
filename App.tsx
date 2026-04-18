@@ -4,9 +4,10 @@ import * as SystemUI from 'expo-system-ui';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { navigationRef } from './src/navigation/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar, View, Text, ScrollView, Appearance } from 'react-native';
+import { StatusBar, View, Text, ScrollView, Appearance, DeviceEventEmitter } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
+import { AlarmService, ALARM_STOP_EVENT } from './src/services/AlarmService';
 
 const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN?.trim();
 if (mapboxToken) {
@@ -48,7 +49,7 @@ import { HospitalIssuesScreen } from './src/screens/hospital/HospitalIssuesScree
 import { HospitalHistoryScreen } from './src/screens/hospital/HospitalHistoryScreen';
 import { HospitalStatsScreen } from './src/screens/hospital/HospitalStatsScreen';
 import { HospitalSettingsScreen } from './src/screens/hospital/HospitalSettingsScreen';
-import { HospitalAdmissionsListScreen } from './src/screens/hospital/HospitalAdmissionsListScreen';
+import { HospitalSearchScreen } from './src/screens/hospital/HospitalSearchScreen';
 
 // Urgentiste Screens
 import { CallCenterScreen } from './src/screens/urgentiste/CallCenterScreen';
@@ -93,22 +94,22 @@ function ConfigErrorScreen() {
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#050505' }} edges={['top', 'bottom', 'left', 'right']}>
       <View style={{ flex: 1, padding: 24, justifyContent: 'center' }}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-        <Text style={{ color: '#fff', fontSize: 20, fontWeight: '600', marginBottom: 12 }}>
-          Configuration manquante
-        </Text>
-        <Text style={{ color: '#ccc', fontSize: 15, lineHeight: 22 }}>
-          L’application a été compilée sans les variables{' '}
-          <Text style={{ color: colors.secondary }}>EXPO_PUBLIC_SUPABASE_URL</Text> et{' '}
-          <Text style={{ color: colors.secondary }}>EXPO_PUBLIC_SUPABASE_ANON_KEY</Text>.
-          {'\n\n'}
-          Pour un APK de test (EAS Build), ajoutez ces variables dans le tableau de bord Expo : projet →
-          Environment variables (profil preview / production), puis relancez le build.
-          {'\n\n'}
-          En local, renseignez-les dans <Text style={{ color: colors.secondary }}>.local.env</Text> (voir{' '}
-          <Text style={{ color: colors.secondary }}>.local.env.example</Text>).
-        </Text>
-      </ScrollView>
+        <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
+          <Text style={{ color: '#fff', fontSize: 20, fontWeight: '600', marginBottom: 12 }}>
+            Configuration manquante
+          </Text>
+          <Text style={{ color: '#ccc', fontSize: 15, lineHeight: 22 }}>
+            L’application a été compilée sans les variables{' '}
+            <Text style={{ color: colors.secondary }}>EXPO_PUBLIC_SUPABASE_URL</Text> et{' '}
+            <Text style={{ color: colors.secondary }}>EXPO_PUBLIC_SUPABASE_ANON_KEY</Text>.
+            {'\n\n'}
+            Pour un APK de test (EAS Build), ajoutez ces variables dans le tableau de bord Expo : projet →
+            Environment variables (profil preview / production), puis relancez le build.
+            {'\n\n'}
+            En local, renseignez-les dans <Text style={{ color: colors.secondary }}>.local.env</Text> (voir{' '}
+            <Text style={{ color: colors.secondary }}>.local.env.example</Text>).
+          </Text>
+        </ScrollView>
       </View>
     </SafeAreaView>
   );
@@ -171,7 +172,7 @@ function RootNavigator() {
           <Stack.Screen name="HospitalHistory" component={HospitalHistoryScreen} />
           <Stack.Screen name="HospitalStats" component={HospitalStatsScreen} />
           <Stack.Screen name="HospitalSettings" component={HospitalSettingsScreen} />
-          <Stack.Screen name="HospitalAdmissionsList" component={HospitalAdmissionsListScreen} />
+          <Stack.Screen name="HospitalAdmissionsList" component={HospitalSearchScreen} />
           <Stack.Screen name="HospitalUrgencyDetail" component={HospitalUrgencyDetailScreen} />
 
           {/* Urgentiste Stack */}
@@ -242,21 +243,32 @@ export default function App() {
             <AppLockProvider>
               <SafeAreaProvider>
                 <StatusBar barStyle="light-content" backgroundColor="#000000" />
-                <LocationGatekeeper>
-                  <NavigationContainer ref={navigationRef} theme={navTheme}>
-                    <CallSessionProvider>
-                      <PushTokenRegistration />
-                      <ForegroundSync />
-                      <RootNavigator />
-                      <FloatingCallBar />
-                      <IncomingCallSubscriber />
-                      <IncomingCallNotificationHandler />
-                      <GlobalAlert />
-                      <AlertAlarmManager />
-                      <HospitalAlertManager />
-                    </CallSessionProvider>
-                  </NavigationContainer>
-                </LocationGatekeeper>
+                <View
+                  style={{ flex: 1 }}
+                  onTouchStart={() => {
+                    // Silencer n'importe quelle alarme en cours sur interaction locale
+                    if (AlarmService.isPlaying()) {
+                      console.log('[App] 🔇 Interaction detected — silencing alarms');
+                      DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+                    }
+                  }}
+                >
+                  <LocationGatekeeper>
+                    <NavigationContainer ref={navigationRef} theme={navTheme}>
+                      <CallSessionProvider>
+                        <PushTokenRegistration />
+                        <ForegroundSync />
+                        <RootNavigator />
+                        <FloatingCallBar />
+                        <IncomingCallSubscriber />
+                        <IncomingCallNotificationHandler />
+                        <GlobalAlert />
+                        <AlertAlarmManager />
+                        <HospitalAlertManager />
+                      </CallSessionProvider>
+                    </NavigationContainer>
+                  </LocationGatekeeper>
+                </View>
               </SafeAreaProvider>
             </AppLockProvider>
           </HospitalProvider>

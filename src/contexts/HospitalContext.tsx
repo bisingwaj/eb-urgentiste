@@ -60,13 +60,21 @@ export type HospitalListBlocker =
   | 'no_structure_link'
   | 'supabase_error';
 
+export type HospitalCapacityStatus = 'fluid' | 'saturated' | 'diversion';
+
 interface HospitalContextType {
   activeCases: EmergencyCase[];
   isLoading: boolean;
+  /** État de saturation déclaré par l’hôpital */
+  hospitalCapacity: HospitalCapacityStatus;
+  isUpdatingCapacity: boolean;
   /** Raison métier / config si aucun dispatch n’est chargé (diagnostic) */
   listBlocker: HospitalListBlocker;
   lastFetchError: string | null;
+  /** Nombre d'alertes en attente (hospitalStatus === 'pending') */
+  pendingAlertCount: number;
   refresh: () => Promise<void>;
+  updateHospitalCapacity: (status: HospitalCapacityStatus) => Promise<void>;
   updateCaseStatus: (
     caseId: string,
     transition: {
@@ -104,8 +112,11 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   const { profile, session } = useAuth();
   const [activeCases, setActiveCases] = useState<EmergencyCase[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hospitalCapacity, setHospitalCapacity] = useState<HospitalCapacityStatus>('fluid');
+  const [isUpdatingCapacity, setIsUpdatingCapacity] = useState(false);
   const [listBlocker, setListBlocker] = useState<HospitalListBlocker>(null);
   const [lastFetchError, setLastFetchError] = useState<string | null>(null);
+  const [pendingAlertCount, setPendingAlertCount] = useState(0);
 
   const activeCasesRef = useRef(activeCases);
   useEffect(() => {
@@ -171,6 +182,38 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       await fetchCasesRef.current?.({ silent: true });
     },
     [profile?.health_structure_id, session?.user?.id]
+  );
+
+  const updateHospitalCapacity = useCallback(
+    async (status: HospitalCapacityStatus) => {
+      const structureId = profile?.health_structure_id;
+      if (!structureId) return;
+
+      setIsUpdatingCapacity(true);
+      try {
+        // En local d'abord pour réactivité
+        setHospitalCapacity(status);
+
+        // Sync Supabase
+        const { error } = await supabase
+          .from('health_structures')
+          .update({ capacity_status: status })
+          .eq('id', structureId);
+
+        if (error) {
+          if (error.code === '42703') {
+            console.warn('[HospitalContext] capacity_status column missing in health_structures table. Keeping local state.');
+          } else {
+            throw error;
+          }
+        }
+      } catch (err) {
+        console.error('[HospitalContext] updateHospitalCapacity error:', err);
+      } finally {
+        setIsUpdatingCapacity(false);
+      }
+    },
+    [profile?.health_structure_id]
   );
 
   const fetchCases = useCallback(async (options?: { silent?: boolean }) => {
@@ -283,6 +326,10 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       const mappedCases = data.map((d) =>
         mapDispatchRowToEmergencyCase(d, profileMap, responsesMap, unitPhoneByUnitId),
       );
+      
+      const pendingCount = mappedCases.filter(c => c.hospitalStatus === 'pending').length;
+      setPendingAlertCount(pendingCount);
+
       setActiveCases(mappedCases);
       void writeHospitalCasesCache(structureId, mappedCases);
     } catch (err: any) {
@@ -388,11 +435,17 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       if (transition.hospitalStatus) {
         updateObj.hospital_status = transition.hospitalStatus;
         updateObj.hospital_responded_at = new Date().toISOString();
+        
+        // If hospital accepts, we immediately move to en_route_hospital status
+        // Only if we haven't already moved past this stage (safety check)
+        const canAdvanceStatus = !['en_route_hospital', 'arrived_hospital', 'completed', 'mission_end'].includes(currentDispatch.status);
+        if (transition.hospitalStatus === 'accepted' && canAdvanceStatus) {
+          updateObj.status = 'en_route_hospital';
+        }
       }
       if (transition.hospitalNotes) {
         updateObj.hospital_notes = transition.hospitalNotes;
       } else if (transition.hospitalStatus === 'accepted') {
-        /** PROMPT_CURSOR_HOPITAL_WORKFLOW §2 — note par défaut si non fournie */
         updateObj.hospital_notes = "Accepté par l'établissement";
       }
 
@@ -452,9 +505,13 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       value={{
         activeCases,
         isLoading,
+        hospitalCapacity,
+        isUpdatingCapacity,
         listBlocker,
         lastFetchError,
+        pendingAlertCount,
         refresh: fetchCases,
+        updateHospitalCapacity,
         updateCaseStatus,
         sendHospitalReport,
       }}

@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import type { EmergencyCase, MonitoringPatientStatus } from './HospitalDashboardTab';
 import { useHospital } from '../../contexts/HospitalContext';
+import { HospitalHeader } from './components/HospitalHeader';
 
 const STATUS_OPTIONS = [
   { key: 'amelioration' as const, label: 'Amélioration', icon: 'trending-up' as const, color: colors.success },
@@ -110,14 +111,8 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <View style={styles.appBar}>
-        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </AppTouchableOpacity>
-        <Text style={styles.appBarTitle}>Monitoring Patient</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <View style={styles.safeArea}>
+      <HospitalHeader showBack title="Monitoring" />
 
       <ScrollView
         style={styles.scroll}
@@ -235,6 +230,9 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <AppTouchableOpacity style={styles.backStepBtn} onPress={() => navigation.goBack()}>
+          <Text style={styles.backStepText}>Retour</Text>
+        </AppTouchableOpacity>
         <AppTouchableOpacity
           style={[styles.submitBtn, saving && styles.submitBtnDisabled]}
           onPress={handleConfirm}
@@ -250,7 +248,7 @@ export function HospitalMonitoringScreen({ route, navigation }: any) {
           )}
         </AppTouchableOpacity>
       </View>
-      </SafeAreaView>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -287,8 +285,10 @@ const styles = StyleSheet.create({
   },
   noteContainer: { backgroundColor: '#1A1A1A', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', marginTop: 8 },
   noteInput: { color: '#FFF', fontSize: 14, padding: 16, minHeight: 120, lineHeight: 22 },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 14, backgroundColor: colors.mainBackground, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
-  submitBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16, borderRadius: 28, backgroundColor: colors.secondary },
+  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 14, backgroundColor: colors.mainBackground, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', flexDirection: 'row', gap: 12 },
+  backStepBtn: { flex: 1, height: 56, borderRadius: 28, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
+  backStepText: { color: '#FFF', fontSize: 15, fontWeight: '700' },
+  submitBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, paddingVertical: 16, borderRadius: 28, backgroundColor: colors.secondary },
   submitBtnDisabled: { opacity: 0.7 },
   submitBtnText: { color: '#FFF', fontWeight: '800', fontSize: 16 },
 });

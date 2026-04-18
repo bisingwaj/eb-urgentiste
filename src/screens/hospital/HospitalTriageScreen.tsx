@@ -20,6 +20,7 @@ import { colors } from "../../theme/colors";
 import type { EmergencyCase } from "./HospitalDashboardTab";
 import { normalizeBloodPressureInput } from "../../lib/bloodPressureInput";
 import { useHospital } from "../../contexts/HospitalContext";
+import { HospitalHeader } from './components/HospitalHeader';
 
 const TRIAGE_LEVELS = [
   {
@@ -484,40 +485,24 @@ export function HospitalTriageScreen({ route, navigation }: any) {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+    <View style={styles.safeArea}>
+      <HospitalHeader showBack title="Triage" />
+
+      <View style={styles.progressRow}>
+        <View style={styles.progressBarBg}>
+          <View style={[styles.progressBarFill, { width: `${(step / totalSteps) * 100}%` }]} />
+        </View>
+        <Text style={styles.progressText}>
+          Évaluation de triage · {step}/{totalSteps}
+        </Text>
+      </View>
+
       <KeyboardAvoidingView
-        style={styles.keyboardMain}
+        style={{ flex: 1 }}
         behavior="padding"
         enabled={true}
         keyboardVerticalOffset={Platform.OS === "ios" ? 56 : 0}
       >
-        <View style={styles.header}>
-          <AppTouchableOpacity onPress={handlePrev} style={styles.iconBtn}>
-            <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-          </AppTouchableOpacity>
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBarBg}>
-              <View
-                style={[
-                  styles.progressBarFill,
-                  { width: `${(step / totalSteps) * 100}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              Évaluation de triage · {step}/{totalSteps}
-            </Text>
-          </View>
-          <AppTouchableOpacity
-            onPress={handleOpenCaseDetail}
-            style={styles.headerLinkBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Voir le suivi et la carte"
-          >
-            <MaterialIcons name="map" size={22} color={colors.secondary} />
-          </AppTouchableOpacity>
-        </View>
-
         <View style={styles.content}>{renderStepContent()}</View>
 
         <View
@@ -528,7 +513,7 @@ export function HospitalTriageScreen({ route, navigation }: any) {
         >
           <AppTouchableOpacity style={styles.backStepBtn} onPress={handlePrev}>
             <Text style={styles.backStepText}>
-              {step === 1 ? "Annuler" : "Précédent"}
+              {step === 1 ? "Retour" : "Précédent"}
             </Text>
           </AppTouchableOpacity>
           <AppTouchableOpacity
@@ -566,13 +551,20 @@ export function HospitalTriageScreen({ route, navigation }: any) {
           </AppTouchableOpacity>
         </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.mainBackground },
-  keyboardMain: { flex: 1, minHeight: 0 },
+  progressRow: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    alignItems: 'center',
+    backgroundColor: '#0A0A0A',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
   header: {
     flexDirection: "row",
     alignItems: "center",

@@ -1,4 +1,5 @@
 import './src/push/incomingCallBackgroundTask';
+import './src/push/missionBackgroundTask';
 import './src/push/notifeeBackgroundHandler';
 import { registerRootComponent } from 'expo';
 

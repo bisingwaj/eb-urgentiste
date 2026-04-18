@@ -1,6 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { Platform } from 'react-native';
+import { Platform, DeviceEventEmitter } from 'react-native';
 import {
   INCOMING_CALL_ACTION_ACCEPT,
   INCOMING_CALL_ACTION_DECLINE,
@@ -12,6 +12,7 @@ import {
   displayIncomingCallWithNotifee,
   ensureNotifeeIncomingChannel,
 } from './notifeeIncomingCall';
+import { ALARM_STOP_EVENT } from '../services/AlarmService';
 
 /**
  * NotificationService — Gère les notifications locales du système (barre de notification).
@@ -28,7 +29,9 @@ Notifications.setNotificationHandler({
     shouldShowAlert: true,
     shouldShowBanner: true,
     shouldShowList: true,
-    shouldPlaySound: true,
+    // On désactive le son NATIF de la notification pour laisser AlarmService (expo-av) 
+    // gérer la sirène en boucle sans interruption par le système.
+    shouldPlaySound: false, 
     shouldSetBadge: true,
     priority: Notifications.AndroidNotificationPriority.MAX,
   }),
@@ -47,7 +50,7 @@ class NotificationServiceClass {
       lightColor: '#FF0000',
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       bypassDnd: true,
-      sound: 'alarm_alert.wav',
+      sound: null, // Silencing system notification pings
       enableVibrate: true,
       enableLights: true,
     });
@@ -59,7 +62,7 @@ class NotificationServiceClass {
       lightColor: '#1564bf',
       lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
       bypassDnd: true,
-      sound: 'alarm_alert.wav',
+      sound: null, // Silencing system notification pings
       enableVibrate: true,
       enableLights: true,
     });
@@ -92,7 +95,7 @@ class NotificationServiceClass {
       if (Platform.OS === 'android') {
         await ensureNotifeeIncomingChannel();
       }
-      await this.ensureIncomingCallCategories();
+      await this.ensureNotificationCategories();
     } catch (e) {
       console.warn('[NotificationService] ensurePushInfrastructure:', e);
     }
@@ -109,7 +112,7 @@ class NotificationServiceClass {
       await this.setupAndroidChannels();
       console.log('[NotificationService] ✅ Canaux Android créés');
 
-      await this.ensureIncomingCallCategories();
+      await this.ensureNotificationCategories();
 
       // Demander les permissions
       await this.requestPermissions();
@@ -232,9 +235,10 @@ class NotificationServiceClass {
     await Notifications.setBadgeCountAsync(0);
   }
 
-  /** Catégories iOS (actions Accepter / Refuser). */
-  async ensureIncomingCallCategories(): Promise<void> {
+  /** Catégories iOS (urgences, missions, appels). */
+  async ensureNotificationCategories(): Promise<void> {
     try {
+      // 1. Appels Entrants
       await Notifications.setNotificationCategoryAsync(INCOMING_CALL_CATEGORY_ID, [
         {
           identifier: INCOMING_CALL_ACTION_DECLINE,
@@ -250,8 +254,26 @@ class NotificationServiceClass {
           options: { opensAppToForeground: true },
         },
       ]);
+
+      // 2. Mission Urgente (Urgentiste)
+      await Notifications.setNotificationCategoryAsync('mission_alert', [
+        {
+          identifier: 'VIEW_MISSION',
+          buttonTitle: 'Voir la mission',
+          options: { opensAppToForeground: true },
+        },
+      ]);
+
+      // 3. Alerte Hôpital
+      await Notifications.setNotificationCategoryAsync('hospital_alert', [
+        {
+          identifier: 'VIEW_ALERT',
+          buttonTitle: 'Ouvrir le dossier',
+          options: { opensAppToForeground: true },
+        },
+      ]);
     } catch (e) {
-      console.warn('[NotificationService] ensureIncomingCallCategories:', e);
+      console.warn('[NotificationService] ensureNotificationCategories:', e);
     }
   }
 
