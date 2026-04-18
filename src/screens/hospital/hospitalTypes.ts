@@ -157,6 +157,27 @@ export interface EmergencyCase {
   reportSentAt?: string;
 }
 
+export interface HealthStructure {
+  id: string;
+  name: string;
+  short_name: string | null;
+  type?: string;
+  address: string | null;
+  phone: string | null;
+  email?: string | null;
+  opening_hours?: string | null;
+  primary_contact?: string | null;
+  capacity?: number;
+  available_beds?: number;
+  is_open?: boolean;
+  latitude?: number;
+  longitude?: number;
+  specialties?: string[];
+  equipments?: string[];
+  capacity_status?: string;
+  metadata?: Record<string, any>;
+}
+
 /** Terminé ou Sorti du périmètre actif */
 export const isCaseClosed = (c: EmergencyCase) => 
   ['termine', 'handedOver'].includes(c.status); 
