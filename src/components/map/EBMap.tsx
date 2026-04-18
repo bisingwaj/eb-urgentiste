@@ -165,22 +165,18 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
 
   // Split markers by type to handle clustering vs individual rendering
   const { pointMarkers, symbolMarkers } = useMemo(() => {
-    if (mode === 'FLEET' || useClustering) {
-      return { pointMarkers: [], symbolMarkers: markers };
-    }
-
     const processed: EBMapMarker[] = [];
-    const groupedTargetIds = new Set<string>();
+    const groupedIds = new Set<string>();
+    
     const units = markers.filter(m => m.type === 'unit');
-    const targets = markers.filter(m => m.type === 'incident' || m.type === 'hospital');
+    const targets = markers.filter(m => m.type === 'incident' || m.type === 'hospital' || m.type === 'me');
 
+    // 1. Proximity Grouping (Manual Clustering for high-fidelity)
     targets.forEach(t => {
       const unitsNear = units.filter(u => haversineMeters(u.coordinate, t.coordinate) < 25);
-
       if (unitsNear.length > 0) {
-        groupedTargetIds.add(t.id);
-        const unitIds = unitsNear.map(u => u.id);
-
+        groupedIds.add(t.id);
+        unitsNear.forEach(u => groupedIds.add(u.id));
         processed.push({
           ...t,
           id: `group-${t.id}`,
@@ -188,32 +184,23 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
           status: 'sur_site',
           priority: t.priority || unitsNear[0].priority,
           count: unitsNear.length,
-          groupedUnitIds: unitIds,
+          groupedUnitIds: unitsNear.map(u => u.id),
         });
       }
     });
 
+    // 2. Individual Units
     units.forEach(u => {
-      const isGrouped = targets.some(t => haversineMeters(u.coordinate, t.coordinate) < 25);
-      if (!isGrouped) {
-        processed.push(u);
-      }
+      if (!groupedIds.has(u.id)) processed.push(u);
     });
 
+    // 3. Isolated Targets / Me
     targets.forEach(t => {
-      if (!groupedTargetIds.has(t.id)) {
-        processed.push(t);
-      }
+      if (!groupedIds.has(t.id)) processed.push(t);
     });
 
-    markers.forEach(m => {
-      if (m.type !== 'unit' && m.type !== 'incident' && m.type !== 'hospital') {
-        processed.push(m);
-      }
-    });
-
-    return { pointMarkers: processed, symbolMarkers: [] };
-  }, [markers, mode, useClustering]);
+    return { pointMarkers: processed, symbolMarkers: [] as EBMapMarker[] };
+  }, [markers, mode]);
 
   return (
     <View style={styles.container}>
@@ -257,7 +244,9 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
 
         {routeData && routeData.routes.map((r, i) => {
           const isPrimary = i === routeData.selectedIndex;
-          if (!isPrimary && !routeData.showAlternatives) return null;
+          // In Fleet/Multi-unit mode, we want to see all primary routes
+          const shouldShow = isPrimary || routeData.showAlternatives || (mode === 'FLEET');
+          if (!shouldShow) return null;
 
           return (
             <Mapbox.ShapeSource

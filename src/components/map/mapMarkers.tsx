@@ -95,8 +95,8 @@ export const HospitalMarker = memo(function HospitalMarker({
         <Hospital size={16} color="#E53935" strokeWidth={2.5} />
       </Pressable>
       {label && (
-        <View style={styles.markerLabel}>
-          <Text style={styles.markerLabelText}>{label.toUpperCase()}</Text>
+        <View style={styles.topLabel}>
+          <Text style={styles.topLabelText}>{label.toUpperCase()}</Text>
         </View>
       )}
     </MarkerHost>
@@ -136,8 +136,8 @@ export const UnitMarker = memo(function UnitMarker({
         )}
       </Pressable>
       {label && label !== 'AMBULANCE' && (
-        <View style={styles.markerLabel}>
-          <Text style={styles.markerLabelText}>{label}</Text>
+        <View style={styles.topLabel}>
+          <Text style={styles.topLabelText} numberOfLines={1}>{label}</Text>
         </View>
       )}
     </MarkerHost>
@@ -274,21 +274,21 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
   },
-  markerLabel: {
+  topLabel: {
     position: 'absolute',
-    top: -18,
-    backgroundColor: 'rgba(5, 5, 5, 0.75)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-    borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.15)',
+    top: -32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 120, // Wide enough to center the text
   },
-  markerLabelText: {
+  topLabelText: {
     color: '#FFFFFF',
-    fontSize: 9,
+    fontSize: 11,
     fontWeight: '900',
-    letterSpacing: 0.5,
+    backgroundColor: 'transparent',
+    textShadowColor: 'rgba(0, 0, 0, 0.8)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   meContainer: {
     alignItems: 'center',

@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState, useEffect } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
@@ -99,6 +99,9 @@ export interface EmergencyCase {
   unitVehiclePlate?: string;
   /** Agent principal renseigné sur l’unité (`units.agent_name`) */
   unitAgentName?: string;
+  /** Coordonnées temps réel de l'unité (`units.location_lat/lng`) */
+  unitLat?: number;
+  unitLng?: number;
 
   // Hospital Assignment fields
   hospitalStatus?: HospitalStatus;

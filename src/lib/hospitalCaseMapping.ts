@@ -160,6 +160,8 @@ export function mapDispatchRowToEmergencyCase(
     unitVehicleType: typeof u.vehicle_type === 'string' ? u.vehicle_type : undefined,
     unitVehiclePlate: typeof u.vehicle_plate === 'string' ? u.vehicle_plate : undefined,
     unitAgentName: typeof u.agent_name === 'string' && u.agent_name.trim() ? u.agent_name.trim() : undefined,
+    unitLat: toNullableNumber(u.location_lat) ?? undefined,
+    unitLng: toNullableNumber(u.location_lng) ?? undefined,
     eta: '5 min',
     distance: '1.2 KM',
     status: resolveCaseStatusFromRow(d, hData),
