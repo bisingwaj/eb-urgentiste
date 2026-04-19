@@ -18,7 +18,7 @@
       "infoPlist": {
         "UIBackgroundModes": ["audio", "remote-notification"],
         "NSMicrophoneUsageDescription": "L'application utilise le micro pour les appels avec la centrale de régulation.",
-        "NSCameraUsageDescription": "La caméra est utilisée pour les appels vidéo avec la centrale.",
+        "NSCameraUsageDescription": "La caméra est utilisée pour les appels vidéo avec la centrale et pour photographier le terrain lors des interventions.",
         "NSFaceIDUsageDescription": "L'application utilise Face ID pour déverrouiller l'accès après connexion."
       }
     },
@@ -45,10 +45,26 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      [
+        "@config-plugins/react-native-webrtc",
+        {
+          "cameraPermission": "Nécessaire pour les appels vidéo d'urgence.",
+          "microphonePermission": "Nécessaire pour communiquer avec les victimes."
+        }
+      ],
       "expo-build-properties",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "L'application accède à la galerie pour joindre des photos au dossier d'intervention.",
+          "cameraPermission": "La caméra permet de photographier le terrain pour documenter l'intervention."
+        }
+      ],
+      "@react-native-community/datetimepicker",
       "@rnmapbox/maps",
       "expo-secure-store",
       "./plugins/with-notifee-repository",
+      "./plugins/with-ndk-config",
       [
         "expo-local-authentication",
         {

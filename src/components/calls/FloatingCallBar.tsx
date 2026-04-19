@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { navigationRef } from '../../navigation/navigationRef';
 import { colors } from '../../theme/colors';
 import { useCallSession } from '../../contexts/CallSessionContext';
+import { AppTouchableOpacity } from '../ui/AppTouchableOpacity';
+import { TAB_BAR_FLOAT_GAP, FLOATING_TAB_BAR_HEIGHT } from '../../navigation/tabBarLayout';
 
 export function FloatingCallBar() {
   const insets = useSafeAreaInsets();
@@ -20,26 +22,29 @@ export function FloatingCallBar() {
     }
   };
 
+  const bottomOffset = insets.bottom + TAB_BAR_FLOAT_GAP + FLOATING_TAB_BAR_HEIGHT + 2;
+
   return (
     <View
       style={[
         styles.wrap,
         {
-          paddingBottom: Math.max(insets.bottom, 10),
-          paddingTop: 8,
+          bottom: bottomOffset,
         },
       ]}
       pointerEvents="box-none"
     >
-      <TouchableOpacity style={styles.bar} onPress={openCall} activeOpacity={0.92} accessibilityLabel="Reprendre l’appel">
+      <AppTouchableOpacity style={styles.bar} onPress={openCall} activeOpacity={0.92} accessibilityLabel="Reprendre l’appel">
         <View style={styles.pulse} />
         <MaterialIcons name="phone-in-talk" size={22} color="#FFF" />
         <View style={styles.textCol}>
           <Text style={styles.title}>Appel en cours</Text>
-          <Text style={styles.sub}>Centrale · Touchez pour revenir</Text>
+          <Text style={styles.sub}>
+            {minimized.provider === 'pbx' ? (minimized.phoneNumber || 'PBX') : 'Centrale'} · Touchez pour revenir
+          </Text>
         </View>
         <MaterialIcons name="keyboard-arrow-up" size={26} color="rgba(255,255,255,0.85)" />
-      </TouchableOpacity>
+      </AppTouchableOpacity>
     </View>
   );
 }

@@ -1,10 +1,11 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import type { Mission, SosResponseItem } from '../../hooks/useActiveMission';
 import { formatIncidentType, formatDescriptionLines } from '../../utils/missionAddress';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
 function formatDateTime(iso?: string | null): string {
   if (!iso) return '—';
@@ -152,9 +153,9 @@ export function MissionDetailScreen({ navigation, route }: any) {
       <StatusBar barStyle="light-content" />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <Text style={styles.headerTitle}>Détail Mission</Text>
         <View style={{ width: 44 }} />
       </View>

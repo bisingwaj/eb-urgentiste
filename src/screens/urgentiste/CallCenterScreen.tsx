@@ -3,15 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  StatusBar,
+StatusBar,
   Alert,
   ActivityIndicator,
   PanResponder,
   Dimensions,
   BackHandler,
-  Platform,
-} from 'react-native';
+  Platform} from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useRoute } from '@react-navigation/native';
@@ -36,6 +35,8 @@ import {
   setSpeakerphoneOn,
   setVideoPublishingEnabled,
 } from '../../services/agoraRtc';
+import { startSipCall, endSipCall } from '../../lib/sipCall';
+import { SessionState } from 'sip.js';
 
 type CallState = 'connecting' | 'calling' | 'active';
 type CallType = 'audio' | 'video';
@@ -185,11 +186,16 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   }, [callState, callType]);
 
   const cleanupAndGoBack = useCallback(() => {
+    const isPbx = routeParams.target === 'pbx';
     setMinimized(null);
     cleanupSubscription();
     setAgoraRtcCallbacks({});
     setMediaReady(false);
-    leaveAgoraChannel();
+    if (isPbx) {
+      void endSipCall();
+    } else {
+      leaveAgoraChannel();
+    }
     setCallState('connecting');
     setCurrentCallId(null);
     setAnsweredAtIso(null);
@@ -202,9 +208,10 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     setPipOffset({ x: 0, y: 0 });
     incomingJoinCallIdRef.current = null;
     navigation.goBack();
-  }, [cleanupSubscription, navigation, setMinimized]);
+  }, [cleanupSubscription, navigation, setMinimized, routeParams.target]);
 
   const endCallLocal = useCallback(async () => {
+    const isPbx = routeParams.target === 'pbx' || minimizedSnapshot?.provider === 'pbx';
     let durationSec = callDuration;
     if (answeredAtIso) {
       durationSec = Math.max(
@@ -213,23 +220,27 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       );
     }
     try {
-      leaveAgoraChannel();
-      if (currentCallId) {
-        await supabase
-          .from('call_history')
-          .update({
-            status: 'completed',
-            ended_by: 'rescuer',
-            ended_at: new Date().toISOString(),
-            duration_seconds: durationSec,
-          })
-          .eq('id', currentCallId);
+      if (isPbx) {
+        await endSipCall();
+      } else {
+        leaveAgoraChannel();
+        if (currentCallId) {
+          await supabase
+            .from('call_history')
+            .update({
+              status: 'completed',
+              ended_by: 'rescuer',
+              ended_at: new Date().toISOString(),
+              duration_seconds: durationSec,
+            })
+            .eq('id', currentCallId);
+        }
       }
     } catch (e) {
       console.error('[Call] Erreur endCall:', e);
     }
     cleanupAndGoBack();
-  }, [currentCallId, callDuration, answeredAtIso, cleanupAndGoBack]);
+  }, [currentCallId, callDuration, answeredAtIso, cleanupAndGoBack, routeParams.target, minimizedSnapshot?.provider]);
 
   const endCallRemotely = useCallback(async () => {
     leaveAgoraChannel();
@@ -239,13 +250,16 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   endCallRemotelyRef.current = endCallRemotely;
 
   const minimizeCall = useCallback(() => {
-    if (!currentCallId) {
+    const isPbx = routeParams.target === 'pbx' || !!currentCallId === false; // SIP often misses ID
+    if (!currentCallId && !isPbx) {
       navigation.goBack();
       return;
     }
     setMinimized({
-      callId: currentCallId,
+      callId: currentCallId || 'pbx-active',
       callType,
+      provider: isPbx ? 'pbx' : 'agora',
+      phoneNumber: routeParams.phoneNumber,
       answeredAtIso,
       callState,
       isMuted,
@@ -272,6 +286,8 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     mediaReady,
     setMinimized,
     navigation,
+    routeParams.target,
+    routeParams.phoneNumber,
   ]);
 
   useLayoutEffect(() => {
@@ -370,6 +386,36 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
   }, []);
 
   const initiateCall = async (type: CallType) => {
+    const isPbx = routeParams.target === 'pbx';
+
+    if (isPbx) {
+      if (!routeParams.phoneNumber) {
+        Alert.alert('Erreur', 'Numéro de téléphone manquant.');
+        navigation.goBack();
+        return;
+      }
+      setCallType('audio');
+      setIsLocalCameraOff(true);
+      setCallState('calling');
+      try {
+        await startSipCall(
+          routeParams.phoneNumber,
+          () => cleanupAndGoBack(),
+          () => setCallState('calling'),
+          () => {
+            setCallState('active');
+            setAnsweredAtIso(new Date().toISOString());
+          }
+        );
+        setMediaReady(true);
+      } catch (err) {
+        console.error('[Call] SIP Error:', err);
+        Alert.alert('Erreur PBX', "Impossible de lancer l'appel via PBX.");
+        navigation.goBack();
+      }
+      return;
+    }
+
     const uid = session?.user?.id;
     if (!uid) {
       Alert.alert('Erreur', 'Session invalide.');
@@ -402,7 +448,7 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
 
       if (error) {
         console.error('[Call] ❌ Erreur INSERT:', error.message);
-        Alert.alert('Erreur', "Impossible de joindre la centrale. Réessayez.");
+        Alert.alert('Erreur', "Impossible de joindre la centrale. réessayez.");
         setCallState('connecting');
         navigation.goBack();
         return;
@@ -603,7 +649,10 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     if (callState === 'calling') {
       return 'Appel en cours…';
     }
-    return 'Appel en cours…';
+    if (routeParams.target === 'pbx') {
+      return routeParams.patientName ? `Appel ${routeParams.patientName}` : (routeParams.phoneNumber || 'PBX');
+    }
+    return routeParams.target === 'patient' ? `Appel ${routeParams.patientName || ''}` : 'Appel en cours…';
   };
 
   const st = headerStatus();
@@ -638,7 +687,9 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
     if (remoteUid == null) {
       return (
         <View style={styles.remotePlaceholder}>
-          <Text style={styles.placeholderText}>En attente de la centrale…</Text>
+          <Text style={styles.placeholderText}>
+            {routeParams.target === 'patient' ? 'En attente du patient…' : 'En attente de la centrale…'}
+          </Text>
         </View>
       );
     }
@@ -703,16 +754,22 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       <StatusBar barStyle="light-content" backgroundColor="#000" />
 
       <View style={styles.header}>
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={styles.headerIconBtn}
           onPress={minimizeCall}
           accessibilityLabel="Réduire l’appel sans raccrocher"
         >
           <MaterialIcons name="keyboard-arrow-down" size={28} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
 
         <View style={styles.headerCenter}>
-          <Text style={styles.headerBrand}>Centrale</Text>
+          <Text style={styles.headerBrand}>
+            {routeParams.target === 'pbx' 
+              ? (routeParams.patientName ? `Appel ${routeParams.patientName}` : (routeParams.phoneNumber || 'PBX')) 
+              : routeParams.target === 'patient' 
+                ? (routeParams.patientName || 'Patient') 
+                : 'Centrale'}
+          </Text>
           <View style={styles.headerStatus}>
             <View style={[styles.statusDot, { backgroundColor: st.dot }]} />
             <Text style={styles.headerStatusText}>{st.text}</Text>
@@ -759,13 +816,13 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
                   </View>
                 )}
 
-                <TouchableOpacity
+                <AppTouchableOpacity
                   style={styles.swapFab}
                   onPress={() => setSwapFeeds((v) => !v)}
                   accessibilityLabel="Inverser les vues"
                 >
                   <MaterialIcons name="swap-horiz" size={24} color="#FFF" />
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               </View>
               </View>
               <View style={styles.videoCenterOverlay} pointerEvents="none">
@@ -792,30 +849,32 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
       {(callState === 'calling' || callState === 'active') && (
         <View style={styles.bottomDock}>
           <View style={styles.bottomBar}>
-            <TouchableOpacity
+            <AppTouchableOpacity
               style={[styles.roundBtn, !isMuted ? styles.roundBtnLight : styles.roundBtnDark]}
               onPress={() => setIsMuted((v) => !v)}
               disabled={!mediaReady}
             >
               <MaterialIcons name={isMuted ? 'mic-off' : 'mic'} size={26} color={isMuted ? '#FFF' : '#111'} />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.roundBtn,
-                callType === 'video' ? styles.roundBtnLight : styles.roundBtnDim,
-              ]}
-              onPress={() => void toggleVideoMode()}
-              disabled={!mediaReady}
-            >
-              <MaterialIcons
-                name={callType === 'video' ? 'videocam' : 'videocam-off'}
-                size={26}
-                color="#FFF"
-              />
-            </TouchableOpacity>
+            {routeParams.target !== 'pbx' && (
+              <AppTouchableOpacity
+                style={[
+                  styles.roundBtn,
+                  callType === 'video' ? styles.roundBtnLight : styles.roundBtnDim,
+                ]}
+                onPress={() => void toggleVideoMode()}
+                disabled={!mediaReady}
+              >
+                <MaterialIcons
+                  name={callType === 'video' ? 'videocam' : 'videocam-off'}
+                  size={26}
+                  color="#FFF"
+                />
+              </AppTouchableOpacity>
+            )}
 
-            <TouchableOpacity
+            <AppTouchableOpacity
               style={[styles.roundBtn, isSpeakerOn ? styles.roundBtnLight : styles.roundBtnDark]}
               onPress={() => setIsSpeakerOn((v) => !v)}
               disabled={!mediaReady}
@@ -825,11 +884,11 @@ export function CallCenterScreen({ navigation }: { navigation: { goBack: () => v
                 size={26}
                 color={isSpeakerOn ? '#111' : '#FFF'}
               />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
 
-            <TouchableOpacity style={styles.roundBtnEnd} onPress={() => void endCallLocal()}>
+            <AppTouchableOpacity style={styles.roundBtnEnd} onPress={() => void endCallLocal()}>
               <MaterialIcons name="call-end" size={30} color="#FFF" />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
         </View>
       )}

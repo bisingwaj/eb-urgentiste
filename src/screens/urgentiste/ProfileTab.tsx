@@ -1,47 +1,43 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
-  ScrollView,
   StatusBar,
   Alert,
   Switch,
   Image,
+  ScrollView
 } from "react-native";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { useAuth } from "../../contexts/AuthContext";
+import { useActiveMission } from "../../hooks/useActiveMission";
 import { useAppLock } from "../../contexts/AppLockContext";
 import { useNotifications } from "../../hooks/useNotifications";
+import { useConnectivity } from "../../hooks/useConnectivity";
+import { useDialog } from "../../contexts/GlobalDialogContext";
 import { colors } from "../../theme/colors";
-import { MaterialIcons } from "@expo/vector-icons";
-
-function SectionLabel({ children }: { children: string }) {
-  return <Text style={styles.sectionLabel}>{children}</Text>;
-}
+import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { supabase } from "../../lib/supabase";
 
 function Card({ children }: { children: React.ReactNode }) {
   return <View style={styles.card}>{children}</View>;
 }
 
-type InfoRowProps = {
-  icon: keyof typeof MaterialIcons.glyphMap;
-  iconTint: string;
-  label: string;
-  value: string;
-  valueLines?: number;
-};
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return <Text style={styles.sectionLabel}>{children}</Text>;
+}
 
-function InfoRow({ icon, iconTint, label, value, valueLines = 3 }: InfoRowProps) {
+function InfoRow({ icon, label, value, iconTint, valueLines = 1 }: any) {
   return (
     <View style={styles.infoRow}>
       <View style={[styles.infoIconWrap, { backgroundColor: `${iconTint}14` }]}>
         <MaterialIcons name={icon} color={iconTint} size={18} />
       </View>
-      <View style={styles.infoRowBody}>
-        <Text style={styles.infoRowLabel}>{label}</Text>
-        <Text style={styles.infoRowValue} numberOfLines={valueLines}>
+      <View style={styles.infoBody}>
+        <Text style={styles.infoLabel}>{label}</Text>
+        <Text style={styles.infoValue} numberOfLines={valueLines}>
           {value}
         </Text>
       </View>
@@ -50,9 +46,54 @@ function InfoRow({ icon, iconTint, label, value, valueLines = 3 }: InfoRowProps)
 }
 
 export function ProfileTab({ navigation }: any) {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, refreshProfile } = useAuth();
+  const { activeMission } = useActiveMission();
   const { unreadCount } = useNotifications();
+  const { isConnected } = useConnectivity();
+  const { showDialog } = useDialog();
   const [avatarLoadError, setAvatarLoadError] = useState(false);
+  const [isDutyActive, setIsDutyActive] = useState(profile?.available ?? false);
+
+  useEffect(() => {
+    if (profile) setIsDutyActive(profile.available ?? false);
+  }, [profile?.available]);
+
+  const handleToggleDuty = useCallback(
+    async (val: boolean) => {
+      if (!isConnected) {
+        showDialog({
+          title: "Connexion requise",
+          message: "Veuillez activer votre connexion internet pour modifier votre statut de service.",
+          icon: "cloud-off-outline",
+          iconType: "community",
+          isError: true,
+          confirmText: "ENTENDU"
+        });
+        return;
+      }
+
+      setIsDutyActive(val);
+      if (!profile?.id) return;
+      const { error } = await supabase
+        .from("users_directory")
+        .update({ available: val, status: val ? "active" : "offline" })
+        .eq("id", profile.id);
+
+      if (error) {
+        console.error("[ProfileTab] duty status:", error.message);
+        showDialog({
+          title: "Erreur",
+          message: "Impossible de modifier le statut. Vérifiez votre connexion.",
+          icon: "wifi-off",
+          isError: true
+        });
+        setIsDutyActive(!val);
+      } else {
+        refreshProfile();
+      }
+    },
+    [profile?.id, refreshProfile, isConnected],
+  );
 
   useEffect(() => {
     setAvatarLoadError(false);
@@ -66,21 +107,22 @@ export function ProfileTab({ navigation }: any) {
   } = useAppLock();
 
   const handleLogout = () => {
-    Alert.alert("Déconnexion", "Voulez-vous vraiment vous déconnecter ?", [
-      { text: "Annuler", style: "cancel" },
-      {
-        text: "Déconnexion",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await signOut();
-            console.log("[Profile] Déconnexion réussie");
-          } catch (e) {
-            console.error(e);
-          }
-        },
-      },
-    ]);
+    showDialog({
+      title: "Déconnexion",
+      message: "Voulez-vous vraiment vous déconnecter de la plateforme Étoile Bleue ?",
+      icon: "logout",
+      confirmText: "DÉCONNEXION",
+      cancelText: "ANNULER",
+      isError: true,
+      onConfirm: async () => {
+        try {
+          await signOut();
+          console.log("[Profile] Déconnexion réussie");
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    });
   };
 
   const photoUri = profile?.photo_url?.trim();
@@ -89,15 +131,15 @@ export function ProfileTab({ navigation }: any) {
   const roleLabel =
     profile?.role === "secouriste" ? "Médecin urgentiste" : profile?.role || "—";
   const matricule = profile?.agent_login_id || profile?.matricule || "—";
-  const grade = profile?.grade?.trim() || "Non renseigné";
-  const zone = profile?.zone?.trim() || "Non renseignée";
-  const phone = profile?.phone?.trim() || "Non renseigné";
+  const grade = profile?.grade?.trim() || "—";
+  const zone = profile?.zone?.trim() || "—";
+  const phone = profile?.phone?.trim() || "—";
 
   const lockSubtitle = !nativeModuleLinked
-    ? "Recompilez l’app native pour activer la biométrie."
+    ? "Recompilez l’app pour la biométrie."
     : biometricAvailable
-      ? "Empreinte, Face ID ou code du téléphone."
-      : "Activez un verrouillage dans les réglages du téléphone.";
+      ? "Empreinte, Face ID ou code."
+      : "Verrouillage téléphone requis.";
 
   const statusDotColor =
     profile?.available === true ? colors.success : "rgba(255,255,255,0.28)";
@@ -106,120 +148,196 @@ export function ProfileTab({ navigation }: any) {
     <TabScreenSafeArea style={styles.container}>
       <StatusBar barStyle="light-content" />
 
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.hero}>
-          <View style={styles.avatarWrap}>
-            <View style={styles.avatarCircle}>
-              {showAvatarPhoto ? (
-                <Image
-                  source={{ uri: photoUri! }}
-                  style={styles.avatarImage}
-                  resizeMode="cover"
-                  onError={() => setAvatarLoadError(true)}
+      <ScrollView style={styles.root} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+        <View style={styles.main}>
+          <View style={styles.heroCard}>
+            <View style={styles.heroInner}>
+              <View style={styles.avatarStack}>
+                <View style={styles.avatarRing}>
+                  <View style={styles.avatarCircle}>
+                    {showAvatarPhoto ? (
+                      <Image
+                        source={{ uri: photoUri! }}
+                        style={styles.avatarImage}
+                        resizeMode="cover"
+                        onError={() => setAvatarLoadError(true)}
+                      />
+                    ) : (
+                      <MaterialIcons name="person" color={colors.secondary} size={40} />
+                    )}
+                  </View>
+                </View>
+                <View
+                  style={[
+                    styles.avatarStatusDot,
+                    { backgroundColor: statusDotColor },
+                  ]}
                 />
-              ) : (
-                <MaterialIcons name="person" color={colors.secondary} size={36} />
+              </View>
+
+              <Text style={styles.heroName} numberOfLines={2}>
+                {[profile?.first_name, profile?.last_name].filter(Boolean).join(" ") ||
+                  "—"}
+              </Text>
+
+              <Text style={styles.heroRole} numberOfLines={2}>
+                {roleLabel}
+              </Text>
+
+              {!isConnected && (
+                <View style={[styles.servicePill, styles.offlinePill]}>
+                  <MaterialCommunityIcons name="cloud-off-outline" size={14} color="#FFF" />
+                  <Text style={styles.offlinePillText}>HORS LIGNE</Text>
+                </View>
               )}
+
+              {isConnected && (
+                <View
+                  style={[
+                    styles.servicePill,
+                    isDutyActive ? styles.servicePillOn : styles.servicePillOff,
+                  ]}
+                >
+                  <View
+                    style={[
+                      styles.servicePillDot,
+                      {
+                        backgroundColor: isDutyActive
+                          ? colors.success
+                          : "rgba(255,255,255,0.35)",
+                      },
+                    ]}
+                  />
+                  <Text
+                    style={[
+                      styles.servicePillText,
+                      isDutyActive && styles.servicePillTextOn,
+                    ]}
+                  >
+                    {isDutyActive ? "Disponible pour missions" : "Hors service"}
+                  </Text>
+                </View>
+              )}
+
+              <View style={styles.matriculeChip}>
+                <MaterialIcons
+                  name="assignment-ind"
+                  size={16}
+                  color={colors.secondary}
+                />
+                <Text style={styles.matriculeChipText}>{matricule}</Text>
+              </View>
             </View>
-            <View style={[styles.statusDot, { backgroundColor: statusDotColor }]} />
           </View>
 
-          <View style={styles.heroText}>
-            <Text style={styles.name} numberOfLines={2}>
-              {profile?.first_name} {profile?.last_name}
-            </Text>
-            <Text style={styles.role} numberOfLines={1}>
-              {roleLabel}
-            </Text>
-            <View style={styles.matriculePill}>
-              <Text style={styles.matriculeText}>{matricule}</Text>
+          <SectionLabel>Général</SectionLabel>
+          <Card>
+            <AppTouchableOpacity
+              style={styles.navRow}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate("Notifications")}
+            >
+              <View style={[styles.infoIconWrap, { backgroundColor: `${colors.primary}18` }]}>
+                <MaterialIcons name="notifications" color={colors.primary} size={18} />
+                {unreadCount > 0 && (
+                  <View style={styles.badgeIndicator} />
+                )}
+              </View>
+              <View style={styles.infoBody}>
+                <Text style={styles.infoLabel}>Notifications</Text>
+                <Text style={styles.infoValue}>
+                  {unreadCount > 0 ? `${unreadCount} nouvelle(s)` : "À jour"}
+                </Text>
+              </View>
+              <MaterialIcons name="chevron-right" color={colors.textMuted} size={22} />
+            </AppTouchableOpacity>
+          </Card>
+
+          <SectionLabel>Identité</SectionLabel>
+          <Card>
+            <InfoRow icon="badge" iconTint="#90CAF9" label="Grade" value={grade} valueLines={2} />
+            <View style={styles.rowSep} />
+            <InfoRow
+              icon="my-location"
+              iconTint={colors.success}
+              label="Zone"
+              value={zone}
+              valueLines={4}
+            />
+            <View style={styles.rowSep} />
+            <InfoRow icon="phone" iconTint={colors.textMuted} label="Téléphone" value={phone} />
+          </Card>
+
+          <SectionLabel>Sécurité & Service</SectionLabel>
+          <Card>
+            <View style={styles.switchRow}>
+              <View style={[styles.infoIconWrap, { backgroundColor: !!activeMission ? 'rgba(255,255,255,0.05)' : `${colors.success}18` }]}>
+                <MaterialIcons 
+                  name="radio-button-checked" 
+                  color={!!activeMission ? "rgba(255,255,255,0.3)" : colors.success} 
+                  size={18} 
+                />
+              </View>
+              <View style={styles.switchBody}>
+                <Text style={styles.switchTitle}>Disponibilité</Text>
+                <Text style={[styles.switchSub, !!activeMission && { color: 'rgba(255, 82, 82, 0.65)', fontWeight: '600' }]}>
+                  {!!activeMission ? "Verrouillé pendant la mission" : (isDutyActive ? "En service" : "Hors service")}
+                </Text>
+              </View>
+              <Switch
+                value={isDutyActive}
+                disabled={!!activeMission}
+                onValueChange={(v) => void handleToggleDuty(v)}
+                trackColor={{ 
+                  false: "#2C2C2C", 
+                  true: !!activeMission ? "rgba(255,255,255,0.1)" : `${colors.success}88` 
+                }}
+                thumbColor={!!activeMission ? "#4A4A4A" : (isDutyActive ? colors.success : "#9E9E9E")}
+              />
             </View>
-          </View>
+            <View style={styles.rowSep} />
+            <View style={styles.switchRow}>
+              <View style={[styles.infoIconWrap, { backgroundColor: `${colors.secondary}18` }]}>
+                <MaterialIcons name="fingerprint" color={colors.secondary} size={18} />
+              </View>
+              <View style={styles.switchBody}>
+                <Text style={styles.switchTitle}>Verrou à l’ouverture</Text>
+                <Text style={styles.switchSub}>
+                  {lockSubtitle}
+                </Text>
+              </View>
+              <Switch
+                value={appLockEnabled}
+                disabled={!nativeModuleLinked}
+                onValueChange={(v) => void setAppLockEnabled(v)}
+                trackColor={{ false: "#2C2C2C", true: `${colors.secondary}88` }}
+                thumbColor={appLockEnabled ? colors.secondary : "#9E9E9E"}
+              />
+            </View>
+            <View style={styles.rowSep} />
+            <AppTouchableOpacity
+              style={styles.navRowNoBorder}
+              activeOpacity={0.7}
+              onPress={() => navigation.navigate("CallHistoryCalls")}
+            >
+              <View style={[styles.infoIconWrap, { backgroundColor: `${colors.secondary}18` }]}>
+                <MaterialIcons name="phone-callback" color={colors.secondary} size={18} />
+              </View>
+              <View style={styles.infoBody}>
+                <Text style={styles.infoLabel}>Historique des appels</Text>
+                <Text style={styles.infoValue}>Centrale</Text>
+              </View>
+              <MaterialIcons name="chevron-right" color={colors.textMuted} size={22} />
+            </AppTouchableOpacity>
+          </Card>
         </View>
 
-        <SectionLabel>Général</SectionLabel>
-        <Card>
-          <TouchableOpacity
-            style={styles.navRow}
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate("Notifications")}
-          >
-            <View style={[styles.infoIconWrap, { backgroundColor: `${colors.primary}18` }]}>
-              <MaterialIcons name="notifications" color={colors.primary} size={18} />
-              {unreadCount > 0 && (
-                <View style={styles.badgeIndicator} />
-              )}
-            </View>
-            <View style={styles.navRowBody}>
-              <Text style={styles.navRowTitle}>Notifications</Text>
-              <Text style={styles.navRowSub}>
-                {unreadCount > 0 ? `${unreadCount} nouvelle(s) notification(s)` : "Aucune nouvelle notification"}
-              </Text>
-            </View>
-            <MaterialIcons name="chevron-right" color={colors.textMuted} size={22} />
-          </TouchableOpacity>
-        </Card>
-
-        <SectionLabel>Identité</SectionLabel>
-        <Card>
-          <InfoRow icon="badge" iconTint="#90CAF9" label="Grade" value={grade} valueLines={2} />
-          <View style={styles.rowSep} />
-          <InfoRow
-            icon="my-location"
-            iconTint={colors.success}
-            label="Zone"
-            value={zone}
-            valueLines={4}
-          />
-          <View style={styles.rowSep} />
-          <InfoRow icon="phone" iconTint={colors.textMuted} label="Téléphone" value={phone} />
-        </Card>
-
-        <SectionLabel>Sécurité</SectionLabel>
-        <Card>
-          <View style={styles.lockRow}>
-            <View style={[styles.infoIconWrap, { backgroundColor: `${colors.secondary}18` }]}>
-              <MaterialIcons name="fingerprint" color={colors.secondary} size={18} />
-            </View>
-            <View style={styles.lockBody}>
-              <Text style={styles.lockTitle}>Verrouillage à l’ouverture</Text>
-              <Text style={styles.lockHint}>{lockSubtitle}</Text>
-            </View>
-            <Switch
-              value={appLockEnabled}
-              disabled={!nativeModuleLinked}
-              onValueChange={(v) => void setAppLockEnabled(v)}
-              trackColor={{ false: "#2C2C2C", true: `${colors.secondary}88` }}
-              thumbColor={appLockEnabled ? colors.secondary : "#9E9E9E"}
-            />
-          </View>
-        </Card>
-
-        <SectionLabel>Centrale</SectionLabel>
-        <Card>
-          <TouchableOpacity
-            style={styles.navRow}
-            activeOpacity={0.7}
-            onPress={() => navigation.navigate("CallHistoryCalls")}
-          >
-            <View style={[styles.infoIconWrap, { backgroundColor: `${colors.secondary}18` }]}>
-              <MaterialIcons name="phone-callback" color={colors.secondary} size={18} />
-            </View>
-            <View style={styles.navRowBody}>
-              <Text style={styles.navRowTitle}>Historique des appels</Text>
-              <Text style={styles.navRowSub}>Entrants et sortants</Text>
-            </View>
-            <MaterialIcons name="chevron-right" color={colors.textMuted} size={22} />
-          </TouchableOpacity>
-        </Card>
-
-        <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
-          <MaterialIcons name="logout" color={colors.primary} size={20} />
-          <Text style={styles.logoutText}>Se déconnecter</Text>
-        </TouchableOpacity>
+        <View style={styles.footer}>
+          <AppTouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.85}>
+            <MaterialIcons name="logout" color={colors.primary} size={20} />
+            <Text style={styles.logoutText}>Se déconnecter</Text>
+          </AppTouchableOpacity>
+        </View>
       </ScrollView>
     </TabScreenSafeArea>
   );
@@ -230,180 +348,183 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.mainBackground,
   },
-  scrollContent: {
+  root: {
+    flex: 1,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 28,
+    paddingTop: 8,
   },
-
-  hero: {
-    flexDirection: "row",
+  main: {
+    gap: 12,
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    color: colors.textMuted,
+    textTransform: "uppercase",
+    letterSpacing: 1.5,
+    marginTop: 16,
+    marginBottom: 4,
+    marginLeft: 4,
+  },
+  heroCard: {
+    borderRadius: 28,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceElevated,
+    borderWidth: 1,
+    borderColor: colors. glassBorder || "rgba(255,255,255,0.05)",
+    marginBottom: 8,
+  },
+  heroInner: {
     alignItems: "center",
-    marginBottom: 22,
-    gap: 16,
+    padding: 24,
   },
-  avatarWrap: {
+  avatarStack: {
     position: "relative",
+    marginBottom: 16,
+  },
+  avatarRing: {
+    padding: 3,
+    borderRadius: 100,
+    backgroundColor: "rgba(68, 138, 255, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(68, 138, 255, 0.35)",
   },
   avatarCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     overflow: "hidden",
-    backgroundColor: `${colors.secondary}18`,
+    backgroundColor: "rgba(255,255,255,0.05)",
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderHairline,
   },
   avatarImage: {
     width: "100%",
     height: "100%",
   },
-  statusDot: {
+  avatarStatusDot: {
     position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: colors.mainBackground,
-  },
-  heroText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  name: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: -0.3,
-  },
-  role: {
-    marginTop: 4,
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.textMuted,
-  },
-  matriculePill: {
-    alignSelf: "flex-start",
-    marginTop: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    bottom: 6,
+    right: 6,
+    width: 16,
+    height: 16,
     borderRadius: 8,
-    backgroundColor: colors.surface,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderHairline,
+    borderWidth: 3,
+    borderColor: colors.surfaceElevated,
   },
-  matriculeText: {
+  heroName: {
+    fontSize: 24,
+    fontWeight: "900",
+    color: "#FFF",
+    textAlign: "center",
+  },
+  heroRole: {
+    marginTop: 6,
     fontSize: 12,
     fontWeight: "700",
-    color: colors.textMuted,
-  },
-
-  sectionLabel: {
-    marginTop: 20,
-    marginBottom: 8,
-    marginLeft: 2,
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.textMuted,
-    letterSpacing: 0.6,
+    color: colors.secondary,
     textTransform: "uppercase",
-    opacity: 0.85,
+    letterSpacing: 1.5,
   },
-
+  servicePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  servicePillOn: {
+    backgroundColor: "rgba(105, 240, 174, 0.1)",
+    borderColor: "rgba(105, 240, 174, 0.3)",
+  },
+  servicePillOff: {
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  servicePillDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  servicePillText: {
+    fontSize: 11,
+    fontWeight: "800",
+    color: colors.textMuted,
+  },
+  servicePillTextOn: {
+    color: colors.success,
+  },
+  matriculeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  matriculeChipText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFF",
+    letterSpacing: 1,
+  },
   card: {
-    backgroundColor: colors.surface,
-    borderRadius: 16,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderHairline,
+    backgroundColor: colors.surfaceElevated,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
     overflow: "hidden",
   },
-  rowSep: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderHairline,
-    marginLeft: 56,
-  },
-
   infoRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    gap: 12,
+    alignItems: "center",
+    padding: 16,
+    gap: 14,
   },
   infoIconWrap: {
     width: 36,
     height: 36,
-    borderRadius: 10,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },
-  infoRowBody: {
+  infoBody: {
     flex: 1,
-    minWidth: 0,
-    paddingTop: 1,
   },
-  infoRowLabel: {
-    fontSize: 12,
+  infoLabel: {
+    fontSize: 11,
     fontWeight: "700",
     color: colors.textMuted,
-    marginBottom: 4,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
-  infoRowValue: {
+  infoValue: {
     fontSize: 15,
     fontWeight: "600",
-    color: colors.text,
-    lineHeight: 21,
+    color: "#FFF",
+    marginTop: 2,
   },
-
-  lockRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    gap: 12,
+  rowSep: {
+    height: 1,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    marginLeft: 66,
   },
-  lockBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  lockTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  lockHint: {
-    marginTop: 4,
-    fontSize: 12,
-    fontWeight: "500",
-    color: colors.textMuted,
-    lineHeight: 16,
-  },
-
   navRow: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 14,
-    gap: 12,
+    padding: 16,
+    gap: 14,
   },
-  navRowBody: {
-    flex: 1,
-    minWidth: 0,
-  },
-  navRowTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  navRowSub: {
-    marginTop: 3,
-    fontSize: 12,
-    fontWeight: "500",
-    color: colors.textMuted,
+  navRowNoBorder: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    gap: 14,
   },
   badgeIndicator: {
     position: "absolute",
@@ -412,26 +533,56 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: "#FF5252",
+    backgroundColor: colors.primary,
     borderWidth: 1.5,
-    borderColor: colors.surface,
+    borderColor: colors.surfaceElevated,
   },
-
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 16,
+    gap: 14,
+  },
+  switchBody: {
+    flex: 1,
+  },
+  switchTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#FFF",
+  },
+  switchSub: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginTop: 2,
+  },
+  footer: {
+    marginTop: 24,
+  },
   logoutBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 28,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: `${colors.primary}12`,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: `${colors.primary}35`,
-    gap: 8,
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: "rgba(255, 61, 0, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255, 61, 0, 0.2)",
+    gap: 10,
   },
   logoutText: {
     color: colors.primary,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "800",
+  },
+  offlinePill: {
+    backgroundColor: "#FB8C00",
+    borderColor: "rgba(255, 255, 255, 0.2)",
+  },
+  offlinePillText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#FFF",
+    letterSpacing: 1,
   },
 });

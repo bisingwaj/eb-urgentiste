@@ -1,58 +1,143 @@
-import React from "react";
+import React, { useMemo, useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  StatusBar,
-} from "react-native";
+StatusBar,
+  Modal,
+  TextInput,
+  Platform,
+  ActivityIndicator,
+  Keyboard} from "react-native";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import DateTimePicker, {
+  type DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { colors } from "../../theme/colors";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
-
-const HISTORY_DATA = [
-  {
-    id: "MSN-7842",
-    date: "Aujourd'hui, 14:24",
-    type: "Accident de la voie publique",
-    location: "Boulevard du 30 Juin",
-    outcome: "Transfert réussi",
-    outcomeType: "success",
-    destination: "Clinique Ngaliema",
-    duration: "42 min",
-    actions: ["Immobilisation", "Voie veineuse", "Bilan CRRA"],
-  },
-  {
-    id: "MSN-7840",
-    date: "Aujourd'hui, 10:15",
-    type: "Malaise vagal",
-    location: "Gare Centrale (Quai 2)",
-    outcome: "Refus de prise en charge",
-    outcomeType: "refused",
-    destination: "Aucune (Clôture sur site)",
-    duration: "18 min",
-    actions: ["Évaluation primaire", "Prise de constantes", "Décharge signée"],
-  },
-  {
-    id: "MSN-7831",
-    date: "Hier, 23:45",
-    type: "Hémorragie massive",
-    location: "Commune de Bandal",
-    outcome: "Transfert UA",
-    outcomeType: "critical",
-    destination: "CHU Kinshasa (Réa Choc)",
-    duration: "55 min",
-    actions: ["Garrot tourniquet", "Oxygène 15L/min", "Alerte Trauma Center"],
-  },
-];
-
 import { useMissionHistory } from "../../hooks/useMissionHistory";
 import { formatIncidentType } from "../../utils/missionAddress";
-import { ActivityIndicator } from "react-native";
+import {
+  filterMissionHistory,
+  getMissionSortTime,
+  startOfWeekMondayLocal,
+  endOfWeekSundayLocal,
+} from "../../utils/missionHistoryTime";
+
+type PickerKind =
+  | "none"
+  | "anchor"
+  | "rangeStart"
+  | "rangeEnd"
+  | "hourMin"
+  | "hourMax";
+
+const defaultRangeStart = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - 7);
+  d.setHours(12, 0, 0, 0);
+  return d;
+};
 
 export function HistoryTab({ navigation }: any) {
+  const insets = useSafeAreaInsets();
   const { history, isLoading } = useMissionHistory();
+
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+  const [nameQuery, setNameQuery] = useState("");
+  const [periodMode, setPeriodMode] = useState<
+    "all" | "day" | "week" | "range"
+  >("all");
+  const [anchorDate, setAnchorDate] = useState(() => new Date());
+  const [rangeStart, setRangeStart] = useState(() => defaultRangeStart());
+  const [rangeEnd, setRangeEnd] = useState(() => new Date());
+  const [useHourFilter, setUseHourFilter] = useState(false);
+  const [hourMin, setHourMin] = useState(8);
+  const [hourMax, setHourMax] = useState(18);
+  const [pickerKind, setPickerKind] = useState<PickerKind>("none");
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showEv =
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEv =
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const subShow = Keyboard.addListener(showEv, (e) => {
+      setKeyboardHeight(e.endCoordinates.height);
+    });
+    const subHide = Keyboard.addListener(hideEv, () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!filterModalVisible) {
+      setKeyboardHeight(0);
+      Keyboard.dismiss();
+    }
+  }, [filterModalVisible]);
+
+  const filterOpts = useMemo(
+    () => ({
+      nameQuery,
+      periodMode,
+      anchorDate,
+      rangeStart,
+      rangeEnd,
+      useHourFilter,
+      hourMin,
+      hourMax,
+    }),
+    [
+      nameQuery,
+      periodMode,
+      anchorDate,
+      rangeStart,
+      rangeEnd,
+      useHourFilter,
+      hourMin,
+      hourMax,
+    ]
+  );
+
+  const filteredHistory = useMemo(
+    () => filterMissionHistory(history, filterOpts),
+    [history, filterOpts]
+  );
+
+  const successCount = useMemo(
+    () =>
+      filteredHistory.filter((m) => m.dispatch_status === "completed").length,
+    [filteredHistory]
+  );
+
+  const hasActiveFilters = useMemo(() => {
+    return (
+      nameQuery.trim().length > 0 ||
+      periodMode !== "all" ||
+      useHourFilter
+    );
+  }, [nameQuery, periodMode, useHourFilter]);
+
+  const resetFilters = useCallback(() => {
+    setNameQuery("");
+    setPeriodMode("all");
+    setAnchorDate(new Date());
+    setRangeStart(defaultRangeStart());
+    setRangeEnd(new Date());
+    setUseHourFilter(false);
+    setHourMin(8);
+    setHourMax(18);
+  }, []);
 
   const getOutcomeSpecs = (type: string) => {
     switch (type) {
@@ -67,8 +152,69 @@ export function HistoryTab({ navigation }: any) {
     }
   };
 
-  const successCount = history.filter((m) => m.dispatch_status === "completed")
-    .length;
+  const pickerValue = useMemo(() => {
+    const d = new Date();
+    switch (pickerKind) {
+      case "anchor":
+      case "rangeStart":
+        return pickerKind === "anchor" ? anchorDate : rangeStart;
+      case "rangeEnd":
+        return rangeEnd;
+      case "hourMin":
+        d.setHours(hourMin, 0, 0, 0);
+        return d;
+      case "hourMax":
+        d.setHours(hourMax, 0, 0, 0);
+        return d;
+      default:
+        return new Date();
+    }
+  }, [
+    pickerKind,
+    anchorDate,
+    rangeStart,
+    rangeEnd,
+    hourMin,
+    hourMax,
+  ]);
+
+  const onPickerChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    if (Platform.OS === "android") {
+      setPickerKind("none");
+      if (event.type !== "set" || !selectedDate) return;
+    } else {
+      if (event.type === "dismissed") {
+        setPickerKind("none");
+        return;
+      }
+      if (!selectedDate) return;
+    }
+    switch (pickerKind) {
+      case "anchor":
+        setAnchorDate(selectedDate);
+        break;
+      case "rangeStart":
+        setRangeStart(selectedDate);
+        break;
+      case "rangeEnd":
+        setRangeEnd(selectedDate);
+        break;
+      case "hourMin":
+        setHourMin(selectedDate.getHours());
+        break;
+      case "hourMax":
+        setHourMax(selectedDate.getHours());
+        break;
+      default:
+        break;
+    }
+  };
+
+  const weekLabel = useMemo(() => {
+    const s = startOfWeekMondayLocal(anchorDate);
+    const e = endOfWeekSundayLocal(anchorDate);
+    return `${s.toLocaleDateString()} — ${e.toLocaleDateString()}`;
+  }, [anchorDate]);
 
   return (
     <TabScreenSafeArea style={styles.container}>
@@ -81,17 +227,21 @@ export function HistoryTab({ navigation }: any) {
             <Text style={styles.hospitalName}>Historique</Text>
           </View>
           <View style={styles.headerIconRow}>
-            <TouchableOpacity style={styles.headerAvatarBtn}>
+            <AppTouchableOpacity
+              style={styles.headerAvatarBtn}
+              onPress={() => setFilterModalVisible(true)}
+              accessibilityLabel="Filtres"
+            >
               <MaterialIcons
                 name="filter-list"
                 color={colors.secondary}
                 size={26}
               />
-            </TouchableOpacity>
+              {hasActiveFilters ? <View style={styles.filterBadgeDot} /> : null}
+            </AppTouchableOpacity>
           </View>
         </View>
 
-        {/* Summary stats */}
         <View style={styles.summaryContainer}>
           <View
             style={[
@@ -103,7 +253,9 @@ export function HistoryTab({ navigation }: any) {
               <MaterialCommunityIcons name="history" color="#FFF" size={20} />
               <Text style={styles.summaryLabel}>Total</Text>
             </View>
-            <Text style={styles.summaryNumber}>{history.length}</Text>
+            <Text style={styles.summaryNumber}>
+              {isLoading ? "—" : filteredHistory.length}
+            </Text>
           </View>
           <View
             style={[styles.mainSummaryCard, { backgroundColor: "#1A1A1A" }]}
@@ -116,7 +268,9 @@ export function HistoryTab({ navigation }: any) {
               />
               <Text style={styles.summaryLabel}>Succès</Text>
             </View>
-            <Text style={styles.summaryNumber}>{successCount}</Text>
+            <Text style={styles.summaryNumber}>
+              {isLoading ? "—" : successCount}
+            </Text>
           </View>
         </View>
       </View>
@@ -125,7 +279,7 @@ export function HistoryTab({ navigation }: any) {
         contentContainerStyle={styles.scrollPad}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={styles.callHistoryCard}
           onPress={() => navigation.navigate("CallHistoryCalls")}
           activeOpacity={0.88}
@@ -153,7 +307,7 @@ export function HistoryTab({ navigation }: any) {
             color="rgba(255,255,255,0.2)"
             size={24}
           />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
 
         <Text style={styles.sectionTitle}>Missions récentes</Text>
 
@@ -178,13 +332,38 @@ export function HistoryTab({ navigation }: any) {
               Aucune mission terminée
             </Text>
           </View>
+        ) : filteredHistory.length === 0 ? (
+          <View style={{ marginTop: 40, alignItems: "center", paddingHorizontal: 24 }}>
+            <MaterialCommunityIcons
+              name="filter-remove-outline"
+              size={60}
+              color="rgba(255,255,255,0.1)"
+            />
+            <Text
+              style={{
+                color: "rgba(255,255,255,0.45)",
+                marginTop: 15,
+                fontSize: 16,
+                textAlign: "center",
+              }}
+            >
+              Aucun résultat pour ces filtres
+            </Text>
+            <AppTouchableOpacity
+              style={styles.clearFiltersLink}
+              onPress={resetFilters}
+            >
+              <Text style={styles.clearFiltersLinkText}>Réinitialiser les filtres</Text>
+            </AppTouchableOpacity>
+          </View>
         ) : (
           <View style={styles.listContainer}>
-            {history.map((mission) => {
+            {filteredHistory.map((mission) => {
               const specs = getOutcomeSpecs(mission.dispatch_status);
+              const sortTime = getMissionSortTime(mission);
 
               return (
-                <TouchableOpacity
+                <AppTouchableOpacity
                   key={mission.id}
                   style={styles.alertCard}
                   activeOpacity={0.9}
@@ -201,10 +380,8 @@ export function HistoryTab({ navigation }: any) {
                           size={14}
                         />
                         <Text style={styles.timeText}>
-                          {new Date(mission.created_at).toLocaleDateString()}{" "}
-                          {new Date(mission.created_at)
-                            .toLocaleTimeString()
-                            .slice(0, 5)}
+                          {sortTime.toLocaleDateString()}{" "}
+                          {sortTime.toLocaleTimeString().slice(0, 5)}
                         </Text>
                       </View>
                     </View>
@@ -223,8 +400,8 @@ export function HistoryTab({ navigation }: any) {
                             mission.location?.province,
                           ]
                             .filter(Boolean)
-                            .join(' · ') ||
-                          '—'}
+                            .join(" · ") ||
+                          "—"}
                       </Text>
                     </View>
                     <View style={styles.cardDivider} />
@@ -250,7 +427,9 @@ export function HistoryTab({ navigation }: any) {
                         </Text>
                       </View>
                       <View style={styles.etaContainer}>
-                        <Text style={styles.etaValue}>{formatIncidentType(mission.type)}</Text>
+                        <Text style={styles.etaValue}>
+                          {formatIncidentType(mission.type)}
+                        </Text>
                       </View>
                     </View>
                   </View>
@@ -261,12 +440,218 @@ export function HistoryTab({ navigation }: any) {
                       size={24}
                     />
                   </View>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               );
             })}
           </View>
         )}
       </ScrollView>
+
+      <Modal
+        visible={filterModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setFilterModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <AppTouchableOpacity
+            style={StyleSheet.absoluteFill}
+            activeOpacity={1}
+            onPress={() => setFilterModalVisible(false)}
+          />
+          <View style={styles.modalSheetWrap}>
+            <View
+              style={[
+                styles.modalSheet,
+                {
+                  marginBottom: keyboardHeight,
+                  paddingBottom: Math.max(insets.bottom, 28),
+                },
+              ]}
+            >
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Filtrer les missions</Text>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="on-drag"
+              contentContainerStyle={[
+                styles.modalScroll,
+                keyboardHeight > 0 && { paddingBottom: 16 },
+              ]}
+            >
+              <Text style={styles.fieldLabel}>Recherche</Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="Nom appelant, référence, type…"
+                placeholderTextColor="rgba(255,255,255,0.35)"
+                value={nameQuery}
+                onChangeText={setNameQuery}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <Text style={[styles.fieldLabel, { marginTop: 18 }]}>
+                Période
+              </Text>
+              <View style={styles.chipRow}>
+                {(
+                  [
+                    ["all", "Tout"],
+                    ["day", "Jour"],
+                    ["week", "Semaine"],
+                    ["range", "Plage"],
+                  ] as const
+                ).map(([key, label]) => {
+                  const on = periodMode === key;
+                  return (
+                    <AppTouchableOpacity
+                      key={key}
+                      style={[styles.chip, on && styles.chipOn]}
+                      onPress={() => setPeriodMode(key)}
+                    >
+                      <Text style={[styles.chipText, on && styles.chipTextOn]}>
+                        {label}
+                      </Text>
+                    </AppTouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {periodMode === "day" || periodMode === "week" ? (
+                <View style={styles.dateBlock}>
+                  <Text style={styles.dateHint}>
+                    {periodMode === "day"
+                      ? anchorDate.toLocaleDateString()
+                      : weekLabel}
+                  </Text>
+                  <AppTouchableOpacity
+                    style={styles.dateBtn}
+                    onPress={() => setPickerKind("anchor")}
+                  >
+                    <MaterialIcons
+                      name="event"
+                      size={18}
+                      color={colors.secondary}
+                    />
+                    <Text style={styles.dateBtnText}>
+                      {periodMode === "day"
+                        ? "Choisir le jour"
+                        : "Choisir une date dans la semaine"}
+                    </Text>
+                  </AppTouchableOpacity>
+                </View>
+              ) : null}
+
+              {periodMode === "range" ? (
+                <View style={styles.dateBlock}>
+                  <AppTouchableOpacity
+                    style={styles.dateBtn}
+                    onPress={() => setPickerKind("rangeStart")}
+                  >
+                    <Text style={styles.dateBtnText}>
+                      Du {rangeStart.toLocaleDateString()}
+                    </Text>
+                  </AppTouchableOpacity>
+                  <AppTouchableOpacity
+                    style={styles.dateBtn}
+                    onPress={() => setPickerKind("rangeEnd")}
+                  >
+                    <Text style={styles.dateBtnText}>
+                      Au {rangeEnd.toLocaleDateString()}
+                    </Text>
+                  </AppTouchableOpacity>
+                </View>
+              ) : null}
+
+              <View style={styles.hourRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>Tranche horaire</Text>
+                  <Text style={styles.subHint}>
+                    Optionnel, sur l’heure de fin de mission
+                  </Text>
+                </View>
+                <AppTouchableOpacity
+                  style={[
+                    styles.toggle,
+                    useHourFilter && styles.toggleOn,
+                  ]}
+                  onPress={() => setUseHourFilter((v) => !v)}
+                >
+                  <View
+                    style={[
+                      styles.toggleKnob,
+                      useHourFilter && styles.toggleKnobOn,
+                    ]}
+                  />
+                </AppTouchableOpacity>
+              </View>
+
+              {useHourFilter ? (
+                <View style={styles.hourPickers}>
+                  <AppTouchableOpacity
+                    style={styles.dateBtn}
+                    onPress={() => setPickerKind("hourMin")}
+                  >
+                    <Text style={styles.dateBtnText}>
+                      De {String(hourMin).padStart(2, "0")} h
+                    </Text>
+                  </AppTouchableOpacity>
+                  <AppTouchableOpacity
+                    style={styles.dateBtn}
+                    onPress={() => setPickerKind("hourMax")}
+                  >
+                    <Text style={styles.dateBtnText}>
+                      À {String(hourMax).padStart(2, "0")} h
+                    </Text>
+                  </AppTouchableOpacity>
+                </View>
+              ) : null}
+
+              <View style={styles.modalActions}>
+                <AppTouchableOpacity
+                  style={styles.btnSecondary}
+                  onPress={resetFilters}
+                >
+                  <Text style={styles.btnSecondaryText}>Réinitialiser</Text>
+                </AppTouchableOpacity>
+                <AppTouchableOpacity
+                  style={styles.btnPrimary}
+                  onPress={() => setFilterModalVisible(false)}
+                >
+                  <Text style={styles.btnPrimaryText}>Fermer</Text>
+                </AppTouchableOpacity>
+              </View>
+            </ScrollView>
+
+            {pickerKind !== "none" ? (
+              <View style={styles.pickerWrap}>
+                {Platform.OS === "ios" ? (
+                  <AppTouchableOpacity
+                    style={styles.iosPickerDone}
+                    onPress={() => setPickerKind("none")}
+                  >
+                    <Text style={styles.iosPickerDoneText}>OK</Text>
+                  </AppTouchableOpacity>
+                ) : null}
+                <DateTimePicker
+                  value={pickerValue}
+                  mode={
+                    pickerKind === "hourMin" || pickerKind === "hourMax"
+                      ? "time"
+                      : "date"
+                  }
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  is24Hour
+                  onChange={onPickerChange}
+                />
+              </View>
+            ) : null}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </TabScreenSafeArea>
   );
 }
@@ -314,6 +699,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
     borderColor: "rgba(255,255,255,0.1)",
+  },
+  filterBadgeDot: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.primary,
+    borderWidth: 1,
+    borderColor: "#0A0A0A",
   },
   summaryContainer: { flexDirection: "row", gap: 12 },
   mainSummaryCard: {
@@ -438,4 +834,185 @@ const styles = StyleSheet.create({
   etaContainer: { flexDirection: "row", alignItems: "center" },
   etaValue: { color: "rgba(255,255,255,0.3)", fontSize: 13, fontWeight: "800" },
   arrowContainer: { marginLeft: 16 },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "flex-end",
+  },
+  modalSheetWrap: {
+    width: "100%",
+    flex: 1,
+    justifyContent: "flex-end",
+    maxHeight: "100%",
+  },
+  modalSheet: {
+    backgroundColor: "#121212",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 22,
+    maxHeight: "88%",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  modalHandle: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    marginTop: 10,
+    marginBottom: 8,
+  },
+  modalTitle: {
+    color: "#FFF",
+    fontSize: 20,
+    fontWeight: "800",
+    marginBottom: 16,
+  },
+  modalScroll: { paddingBottom: 12 },
+  fieldLabel: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginBottom: 8,
+  },
+  subHint: {
+    color: "rgba(255,255,255,0.35)",
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: "600",
+  },
+  textInput: {
+    backgroundColor: "#1A1A1A",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    color: "#FFF",
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  chipRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 14,
+    backgroundColor: "#1A1A1A",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  chipOn: {
+    borderColor: colors.secondary,
+    backgroundColor: colors.secondary + "18",
+  },
+  chipText: {
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  chipTextOn: { color: colors.secondary },
+  dateBlock: { marginTop: 12, gap: 8 },
+  dateHint: {
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+  dateBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#1A1A1A",
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+  },
+  dateBtnText: {
+    color: "#FFF",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  hourRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 20,
+    gap: 12,
+  },
+  hourPickers: { marginTop: 10, gap: 8 },
+  toggle: {
+    width: 48,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    padding: 2,
+    justifyContent: "center",
+  },
+  toggleOn: { backgroundColor: colors.secondary + "99" },
+  toggleKnob: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FFF",
+    alignSelf: "flex-start",
+  },
+  toggleKnobOn: { alignSelf: "flex-end" },
+  modalActions: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 24,
+  },
+  btnSecondary: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: "#1A1A1A",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  btnSecondaryText: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  btnPrimary: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 16,
+    backgroundColor: colors.secondary,
+    alignItems: "center",
+  },
+  btnPrimaryText: { color: "#FFF", fontSize: 16, fontWeight: "800" },
+  clearFiltersLink: { marginTop: 16, padding: 8 },
+  clearFiltersLinkText: {
+    color: colors.secondary,
+    fontSize: 15,
+    fontWeight: "800",
+  },
+  pickerWrap: {
+    borderTopWidth: 1,
+    borderTopColor: "rgba(255,255,255,0.08)",
+    paddingTop: 8,
+    paddingBottom: 4,
+    backgroundColor: "#121212",
+  },
+  iosPickerDone: {
+    alignSelf: "flex-end",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  iosPickerDoneText: {
+    color: colors.secondary,
+    fontSize: 17,
+    fontWeight: "800",
+  },
 });

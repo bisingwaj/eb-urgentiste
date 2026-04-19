@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  TextInput,
+TextInput,
   StatusBar,
   Dimensions,
   Platform,
-  KeyboardAvoidingView,
-} from 'react-native';
+  KeyboardAvoidingView} from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -77,7 +76,7 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
           />
         </View>
 
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={styles.historyLink}
           onPress={() => navigation.navigate('HospitalHistory')}
           activeOpacity={0.85}
@@ -85,7 +84,7 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
           <MaterialCommunityIcons name="history" color={colors.secondary} size={20} />
           <Text style={styles.historyLinkText}>Historique complet</Text>
           <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.35)" size={22} />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
       </View>
 
       <ScrollView
@@ -109,7 +108,7 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
             const sCfg = getStatusConfig(item.status);
 
             return (
-              <TouchableOpacity
+              <AppTouchableOpacity
                 key={item.id}
                 style={styles.alertCard}
                 onPress={() => {
@@ -153,7 +152,7 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
                     </View>
                   </View>
                 </View>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             );
           })
         )}
@@ -170,7 +169,7 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
           recentPastCases.map((item) => {
             const lCfg = getLevelConfig(item.level);
             return (
-              <TouchableOpacity
+              <AppTouchableOpacity
                 key={item.id}
                 style={styles.historyCard}
                 onPress={() =>
@@ -203,7 +202,7 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
                   </View>
                   <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={20} />
                 </View>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             );
           })
         )}

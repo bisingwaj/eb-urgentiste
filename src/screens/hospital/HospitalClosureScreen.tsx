@@ -4,12 +4,13 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
   TextInput,
   Platform,
   Alert,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -30,8 +31,10 @@ export function HospitalClosureScreen({ route, navigation }: any) {
   const [outcome, setOutcome] = useState('');
   const [finalDiagnosis, setFinalDiagnosis] = useState('');
   const [closureTime] = useState(new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }));
+  const [closing, setClosing] = useState(false);
 
   const handleClose = () => {
+    if (closing) return;
     if (!outcome || !finalDiagnosis) {
       Alert.alert('Champs requis', 'Veuillez sélectionner une issue et entrer le diagnostic final.');
       return;
@@ -45,6 +48,7 @@ export function HospitalClosureScreen({ route, navigation }: any) {
         {
           text: 'Clôturer',
           onPress: async () => {
+            setClosing(true);
             try {
               const dischargeType = outcomeKeyToDischargeType(outcome);
               const dischargedAt = new Date().toISOString();
@@ -84,6 +88,8 @@ export function HospitalClosureScreen({ route, navigation }: any) {
               });
             } catch {
               Alert.alert('Erreur', 'Impossible de clôturer le dossier sur le serveur.');
+            } finally {
+              setClosing(false);
             }
           },
         },
@@ -96,9 +102,9 @@ export function HospitalClosureScreen({ route, navigation }: any) {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
       {/* App bar */}
       <View style={styles.appBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <Text style={styles.appBarTitle}>Clôture du cas</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -116,7 +122,7 @@ export function HospitalClosureScreen({ route, navigation }: any) {
             {OUTCOME_OPTIONS.map((opt) => {
               const isSelected = outcome === opt.key;
               return (
-                <TouchableOpacity
+                <AppTouchableOpacity
                   key={opt.key}
                   style={[
                     styles.outcomeCard,
@@ -126,7 +132,7 @@ export function HospitalClosureScreen({ route, navigation }: any) {
                 >
                   <MaterialIcons name={opt.icon} color={isSelected ? opt.color : colors.textMuted} size={32} />
                   <Text style={[styles.outcomeLabel, isSelected && { color: opt.color }]}>{opt.label}</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               );
             })}
           </View>
@@ -159,13 +165,20 @@ export function HospitalClosureScreen({ route, navigation }: any) {
 
       {/* Primary Action */}
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <TouchableOpacity
-          style={[styles.closeBtn, (!outcome || !finalDiagnosis) && styles.disabledBtn]}
+        <AppTouchableOpacity
+          style={[styles.closeBtn, ((!outcome || !finalDiagnosis || closing) && styles.disabledBtn)]}
           onPress={handleClose}
+          disabled={closing || !outcome || !finalDiagnosis}
         >
-          <Text style={styles.closeBtnText}>Générer le Rapport Final</Text>
-          <MaterialIcons name="description" color="#FFF" size={24} />
-        </TouchableOpacity>
+          {closing ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <>
+              <Text style={styles.closeBtnText}>Générer le Rapport Final</Text>
+              <MaterialIcons name="description" color="#FFF" size={24} />
+            </>
+          )}
+        </AppTouchableOpacity>
       </View>
       </SafeAreaView>
     </KeyboardAvoidingView>

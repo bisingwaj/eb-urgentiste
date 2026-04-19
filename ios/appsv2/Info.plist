@@ -45,7 +45,7 @@
       <true/>
     </dict>
     <key>NSCameraUsageDescription</key>
-    <string>La caméra est utilisée pour les appels vidéo avec la centrale.</string>
+    <string>Nécessaire pour les appels vidéo d'urgence.</string>
     <key>NSFaceIDUsageDescription</key>
     <string>L'application utilise Face ID pour déverrouiller l'accès après connexion.</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
@@ -55,7 +55,11 @@
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your location</string>
     <key>NSMicrophoneUsageDescription</key>
-    <string>L'application utilise le micro pour les appels avec la centrale de régulation.</string>
+    <string>Nécessaire pour communiquer avec les victimes.</string>
+    <key>NSMotionUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your device motion</string>
+    <key>NSPhotoLibraryUsageDescription</key>
+    <string>L'application accède à la galerie pour joindre des photos au dossier d'intervention.</string>
     <key>RCTNewArchEnabled</key>
     <true/>
     <key>UIBackgroundModes</key>

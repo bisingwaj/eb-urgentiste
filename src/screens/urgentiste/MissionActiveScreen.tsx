@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView, StatusBar, Alert, Linking, ActivityIndicator } from 'react-native';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, StatusBar, Alert, Linking, ActivityIndicator, Dimensions, Platform, LayoutAnimation, UIManager, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -8,613 +8,618 @@ import { useActiveMission } from '../../hooks/useActiveMission';
 import * as Location from 'expo-location';
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from '../../lib/mapbox';
 import { MapboxMapView } from '../../components/map/MapboxMapView';
+import { MePuck, ProximityCluster } from '../../components/map/mapMarkers';
+import { useMapPuckHeading } from '../../hooks/useMapPuckHeading';
 import { openExternalDirections } from '../../utils/navigation';
-import { formatMissionAddress, formatDescriptionLines } from '../../utils/missionAddress';
-import { alertVoipError, startRescuerToCitizenVoipCall } from '../../lib/rescuerCallCitizen';
-import { canOfferVictimContactCalls } from '../../lib/missionVictimCall';
+import { formatMissionAddress } from '../../utils/missionAddress';
+import { useCallSession } from '../../contexts/CallSessionContext';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
+import { startRescuerToCitizenVoipCall, alertVoipError } from '../../lib/rescuerCallCitizen';
+import { startSipCall, endSipCall } from '../../lib/sipCall';
+
+// Enable LayoutAnimation
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const { width: SCREEN_W } = Dimensions.get('window');
 
 const STATUS_STEPS = [
-  { key: 'dispatched', label: 'Dispatché', icon: 'assignment', color: '#FF9500' },
-  { key: 'en_route', label: 'En route', icon: 'local-shipping', color: colors.secondary },
-  { key: 'on_scene', label: 'Sur zone', icon: 'place', color: '#FF3B30' },
-  { key: 'en_route_hospital', label: 'Vers hôpital', icon: 'local-hospital', color: '#FF9500' },
-  { key: 'arrived_hospital', label: 'À l\'hôpital', icon: 'domain', color: '#30D158' },
-  { key: 'mission_end', label: 'Relais', icon: 'swap-horiz', color: '#30D158' },
-  { key: 'completed', label: 'Terminé', icon: 'check-circle', color: '#30D158' },
+  { key: 'dispatched', label: 'Dispatché', icon: 'assignment' },
+  { key: 'en_route', label: 'En route', icon: 'local-shipping' },
+  { key: 'on_scene', label: 'Sur zone', icon: 'place' },
+  { key: 'completed', label: 'Terminé', icon: 'check-circle' },
 ] as const;
+
+// Helper to calculate distance between two points in meters
+function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371e3; // meters
+  const φ1 = lat1 * Math.PI / 180;
+  const φ2 = lat2 * Math.PI / 180;
+  const Δφ = (lat2 - lat1) * Math.PI / 180;
+  const Δλ = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+            Math.cos(φ1) * Math.cos(φ2) *
+            Math.sin(Δλ/2) * Math.sin(Δλ/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
 
 export function MissionActiveScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
   const { activeMission, updateDispatchStatus } = useActiveMission();
-  const [noteText, setNoteText] = useState('');
-  const [notes, setNotes] = useState<{ text: string; time: string }[]>([]);
-  const [myLocation, setMyLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const { minimized: activeCall } = useCallSession();
+  
+  const [myLocation, setMyLocation] = useState<Location.LocationObject | null>(null);
+  const myHeadingDeg = useMapPuckHeading(myLocation);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [voipLoading, setVoipLoading] = useState(false);
+  const [isCalling, setIsCalling] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [isAddressExpanded, setIsAddressExpanded] = useState(false);
+  const [mapMode, setMapMode] = useState<'2D' | '3D'>('2D');
+  const [zoomLevel, setZoomLevel] = useState(15);
+  
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
-  const lastRouteFetch = useRef<number>(0);
+  const [elapsedTime, setElapsedTime] = useState('00:00:00');
+  const [showCallModal, setShowCallModal] = useState(false);
+  
+  const lastRouteCoords = useRef<number[][]>([]);
+  const lastFetchPos = useRef<[number, number] | null>(null);
+  const initialFetchDone = useRef(false);
 
+  const isPhonePulseActive = isCalling || !!activeCall;
+
+  // Real-time Elapsed Time
+  useEffect(() => {
+    const startTimestamp = activeMission?.dispatched_at || activeMission?.created_at;
+    if (!startTimestamp) return;
+    const startTime = new Date(startTimestamp).getTime();
+    const interval = setInterval(() => {
+      const diff = Math.max(0, Date.now() - startTime);
+      const hrs = Math.floor(diff / 3600000);
+      const mins = Math.floor((diff % 3600000) / 60000);
+      const secs = Math.floor((diff % 60000) / 1000);
+      setElapsedTime(`${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [activeMission?.dispatched_at, activeMission?.created_at]);
+
+  // GPS Tracking
   useEffect(() => {
     let sub: Location.LocationSubscription | null = null;
     (async () => {
-      try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') return;
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-        setMyLocation({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-        sub = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, distanceInterval: 10 },
-          (newLoc) => {
-            setMyLocation({ latitude: newLoc.coords.latitude, longitude: newLoc.coords.longitude });
-          }
-        );
-      } catch (err) {
-        console.warn('[Location] Position indisponible sur cet appareil:', err);
-      }
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') return;
+      sub = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.High, distanceInterval: 10 },
+        (loc) => setMyLocation(loc)
+      );
     })();
-    return () => { if (sub) sub.remove(); };
+    return () => sub?.remove();
   }, []);
 
-  const missionLat = activeMission?.location?.lat;
-  const missionLng = activeMission?.location?.lng;
-
+  // Safety check: if mission is already on_scene, redirect to Signalement
   useEffect(() => {
-    if (!myLocation || !missionLat || !missionLng) return;
-    const now = Date.now();
-    if (now - lastRouteFetch.current < 15000 && routeGeoJSON) return;
-    lastRouteFetch.current = now;
-    getRoute(
-      [myLocation.longitude, myLocation.latitude],
-      [missionLng, missionLat],
-      { profile: 'driving-traffic' },
-    ).then((result) => {
+    if (activeMission?.dispatch_status === 'on_scene' || 
+        activeMission?.dispatch_status === 'en_route_hospital' || 
+        activeMission?.dispatch_status === 'arrived_hospital' ||
+        activeMission?.dispatch_status === 'completed') {
+      console.log('[MissionActive] Status is already', activeMission.dispatch_status, '-> Redirecting to Signalement');
+      navigation.replace('Signalement', { mission: activeMission });
+    }
+  }, [activeMission?.dispatch_status]);
+
+  const missionCoords = useMemo(() => {
+    if (activeMission?.location?.lat && activeMission?.location?.lng) {
+      return [activeMission.location.lng, activeMission.location.lat] as [number, number];
+    }
+    return null;
+  }, [activeMission]);
+
+  // Dynamic Routing Logic (Auto Re-route)
+  const fetchRoute = async (force = false) => {
+    if (!myLocation || !missionCoords) return;
+    const currentPos: [number, number] = [myLocation.coords.longitude, myLocation.coords.latitude];
+    
+    // Deviation check
+    if (!force && lastRouteCoords.current.length > 0) {
+      let minD = Infinity;
+      for (let i=0; i < lastRouteCoords.current.length; i+=5) { // Sample every 5 pts for perf
+        const d = getDistanceMeters(currentPos[1], currentPos[0], lastRouteCoords.current[i][1], lastRouteCoords.current[i][0]);
+        if (d < minD) minD = d;
+      }
+      if (minD < 40) return; // Still on track
+    }
+
+    try {
+      const result = await getRoute(currentPos, missionCoords, { profile: 'driving-traffic' });
       if (result) {
         setRouteGeoJSON(buildRouteFeature(result.geometry));
         setRouteDuration(result.duration);
         setRouteDistance(result.distance);
+        lastRouteCoords.current = result.geometry.coordinates;
+        lastFetchPos.current = currentPos;
       }
-    });
-  }, [myLocation?.latitude, myLocation?.longitude, missionLat, missionLng]);
+    } catch (e) { console.error('Route error', e); }
+  };
 
-  // Si pas de mission active, revenir en arrière
-  useEffect(() => {
-    if (!activeMission) {
-      const timer = setTimeout(() => navigation.goBack(), 500);
-      return () => clearTimeout(timer);
+  useEffect(() => { 
+    if (myLocation && !initialFetchDone.current) {
+      initialFetchDone.current = true;
+      fetchRoute(true);
+    } else if (myLocation) {
+      fetchRoute(); 
     }
-  }, [activeMission]);
+  }, [myLocation?.coords.latitude, missionCoords]);
 
-  const incidentCoords =
-    activeMission?.location?.lat != null && activeMission?.location?.lng != null
-      ? { latitude: activeMission.location.lat, longitude: activeMission.location.lng }
-      : null;
+  // Proximity Logic
+  const distanceToIncident = useMemo(() => {
+    if (!myLocation || !missionCoords) return Infinity;
+    return getDistanceMeters(myLocation.coords.latitude, myLocation.coords.longitude, missionCoords[1], missionCoords[0]);
+  }, [myLocation, missionCoords]);
 
-  const mapCenter = incidentCoords || myLocation || { latitude: -4.3224, longitude: 15.3070 };
+  const showProximityCluster = distanceToIncident < 25 && zoomLevel < 18;
 
-  const routeCameraBounds = useMemo(() => {
-    if (!routeGeoJSON?.features[0]?.geometry) return null;
-    return geometryToCameraBounds(routeGeoJSON.features[0].geometry as GeoJSON.LineString, 80);
-  }, [routeGeoJSON]);
+  const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === activeMission?.dispatch_status);
 
-  const cameraBounds = useMemo(() => {
-    if (!myLocation || !incidentCoords) return null;
-    const padding = 80;
-    return {
-      ne: [Math.max(myLocation.longitude, incidentCoords.longitude), Math.max(myLocation.latitude, incidentCoords.latitude)] as [number, number],
-      sw: [Math.min(myLocation.longitude, incidentCoords.longitude), Math.min(myLocation.latitude, incidentCoords.latitude)] as [number, number],
-      paddingTop: padding, paddingBottom: padding, paddingLeft: padding, paddingRight: padding,
-    };
-  }, [myLocation?.latitude, myLocation?.longitude, incidentCoords?.latitude, incidentCoords?.longitude]);
-
-  const mapCameraBounds = useMemo(() => routeCameraBounds ?? cameraBounds, [routeCameraBounds, cameraBounds]);
-
-  if (!activeMission) {
-    return (
-      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        <StatusBar barStyle="light-content" />
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <MaterialCommunityIcons name="check-circle-outline" color="#30D158" size={64} />
-          <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '700', marginTop: 20 }}>Aucune mission active</Text>
-          <Text style={{ color: 'rgba(255,255,255,0.4)', marginTop: 8 }}>Retour à l'accueil...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const currentStepIndex = STATUS_STEPS.findIndex(s => s.key === activeMission.dispatch_status);
-
-  const priorityConfig = {
-    critical: { label: 'URGENCE CRITIQUE', color: '#FF3B30', bg: '#FF3B3020' },
-    high: { label: 'URGENCE HAUTE', color: '#FF9500', bg: '#FF950020' },
-    medium: { label: 'URGENCE MOYENNE', color: '#FFCC00', bg: '#FFCC0020' },
-    low: { label: 'URGENCE BASSE', color: '#30D158', bg: '#30D15820' },
-  };
-
-  const priority = priorityConfig[activeMission.priority] || priorityConfig.medium;
-
-  // Calculer la distance approximative
-  const getDistance = () => {
-    if (!myLocation || !incidentCoords) return null;
-    const R = 6371;
-    const dLat = (incidentCoords.latitude - myLocation.latitude) * Math.PI / 180;
-    const dLon = (incidentCoords.longitude - myLocation.longitude) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(myLocation.latitude * Math.PI / 180) * Math.cos(incidentCoords.latitude * Math.PI / 180) *
-      Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return (R * c).toFixed(1);
-  };
-
-  const straightLineDistance = getDistance();
-  const distance = routeDistance != null ? (routeDistance / 1000).toFixed(1) : straightLineDistance;
-  const eta = routeDuration != null ? `${Math.ceil(routeDuration / 60)} min` : null;
-
-  const siteAddress = useMemo(
-    () => (activeMission ? formatMissionAddress(activeMission.location) : ''),
-    [activeMission]
-  );
-
-  const handleAddNote = () => {
-    if (noteText.trim() === '') return;
-    const now = new Date();
-    setNotes([...notes, { text: noteText, time: `${now.getHours()}:${now.getMinutes().toString().padStart(2, '0')}` }]);
-    setNoteText('');
+  const isLocalNumber = (phone: string | undefined): boolean => {
+    if (!phone) return false;
+    const clean = phone.replace(/\s/g, '').replace(/-/g, '');
+    // DRC prefixes: +243, 00243, or local operators 081, 082, 084, 085, 089, 09
+    return clean.startsWith('+243') || clean.startsWith('00243') || /^(081|082|084|085|089|09)/.test(clean);
   };
 
   const handleNextStatus = async () => {
-    const nextStatuses: Record<string, 'en_route' | 'on_scene' | 'en_route_hospital' | 'arrived_hospital' | 'mission_end' | 'completed'> = {
-      dispatched: 'en_route',
-      en_route: 'on_scene',
-      on_scene: 'completed',
-      en_route_hospital: 'arrived_hospital',
-      arrived_hospital: 'mission_end',
-      mission_end: 'completed',
-    };
-    const next = nextStatuses[activeMission.dispatch_status];
-    if (!next) return;
-
-    const labels: Record<string, string> = {
-      en_route: 'Confirmer le départ en route ?',
-      on_scene: "Confirmer l'arrivée sur zone ?",
-      completed: 'Marquer la mission comme terminée ?',
-      arrived_hospital: "Confirmer l'arrivée à l'hôpital ?",
-      mission_end: 'Confirmer la fin de mission (relais à l\'établissement) ?',
-    };
-
-    Alert.alert('Changement de statut', labels[next], [
-      { text: 'Annuler', style: 'cancel' },
-      {
-        text: 'Confirmer',
-        style: 'default',
-        onPress: async () => {
-          setIsUpdating(true);
-          try {
-            await updateDispatchStatus(next);
-            setNotes(prev => [...prev, { text: `Statut → ${next.toUpperCase()}`, time: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) }]);
-          } catch (err) {
-            Alert.alert('Erreur', 'Impossible de mettre à jour le statut.');
-          }
-          setIsUpdating(false);
-        },
-      },
-    ]);
-  };
-
-  const openNavigation = () => {
-    if (!incidentCoords) return;
-    openExternalDirections(incidentCoords.latitude, incidentCoords.longitude, activeMission?.title ?? undefined);
-  };
-
-  const callVictim = () => {
-    if (activeMission.caller?.phone && activeMission.caller.phone !== '-') {
-      Linking.openURL(`tel:${activeMission.caller.phone}`);
-    }
-  };
-
-  const callVictimVoip = async () => {
-    if (!activeMission.citizen_id || !activeMission.incident_id || voipLoading) {
-      return;
-    }
-    setVoipLoading(true);
+    const nextStatuses: Record<string, string> = { dispatched: 'en_route', en_route: 'on_scene', on_scene: 'completed' };
+    const next = nextStatuses[activeMission?.dispatch_status || ''];
+    // No more manual confirmation needed for on-scene transition
+    setIsUpdating(true);
     try {
-      await startRescuerToCitizenVoipCall({
-        incidentId: activeMission.incident_id,
-        citizenId: activeMission.citizen_id,
-        callType: 'audio',
-      });
-    } catch (e) {
-      alertVoipError(e);
+      await updateDispatchStatus(next as any);
+      
+      if (next === 'on_scene') {
+        // Step 1: Force Mapbox to unmount by setting transitioning state
+        setIsTransitioning(true);
+        // Step 2: Delay to allow Mapbox native engine to cleanup
+        await new Promise(r => setTimeout(r, 150));
+        // Step 3: Navigate - pass the updated status so it doesn't use stale context
+        navigation.replace('Signalement', { mission: { ...activeMission, dispatch_status: 'on_scene' } });
+      }
+    } catch (err) {
+      Alert.alert('Erreur', 'Mise à jour échouée.');
+      setIsTransitioning(false);
     } finally {
-      setVoipLoading(false);
+      setIsUpdating(false);
     }
   };
 
-  const canCallVictim = canOfferVictimContactCalls(activeMission?.dispatch_status);
-
-  const nextStatusLabel: Record<string, string> = {
-    dispatched: '🚗  DÉPART EN ROUTE',
-    en_route: '📍  ARRIVÉ SUR ZONE',
-    on_scene: '✅  MISSION TERMINÉE',
-    en_route_hospital: '🏥  ARRIVÉ À L\'HÔPITAL',
-    arrived_hospital: '🔁  RELAIS / FIN DE MISSION',
-    mission_end: '✅  CLÔTURER LA MISSION',
+  const toggleMapMode = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setMapMode(prev => prev === '2D' ? '3D' : '2D');
   };
+
+  const formatDistanceValue = (m: number | null) => {
+    if (m === null) return '--';
+    return m < 1000 ? `${Math.round(m)} M` : `${(m/1000).toFixed(1)} KM`;
+  };
+
+  const formatTimeValue = (seconds: number | null) => {
+    if (seconds === null) return '--';
+    return `${Math.ceil(seconds / 60)}'`;
+  };
+
+  if (!activeMission) return null;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-      <View style={{ flex: 1 }}>
-        {/* MAP */}
-        <View style={styles.mapContainer}>
-          <TouchableOpacity
-            onPress={() => navigation.goBack()}
-            style={[styles.floatingBack, { top: insets.top + 8 }]}
-            accessibilityRole="button"
-            accessibilityLabel="Retour"
-          >
-            <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-          </TouchableOpacity>
-          <View style={[styles.floatingPriorityChip, { top: insets.top + 8 }]}>
-            <View style={[styles.priorityDot, { backgroundColor: priority.color }]} />
-            <Text style={[styles.priorityChipText, { color: priority.color }]} numberOfLines={1}>
-              {priority.label}
-            </Text>
-          </View>
-          <MapboxMapView style={styles.map} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
-            {mapCameraBounds ? (
-              <Mapbox.Camera
-                bounds={mapCameraBounds}
-                animationMode="flyTo"
-                animationDuration={1000}
+      {/* MAP BOX PRO */}
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]}>
+        {!isTransitioning && (
+          <MapboxMapView 
+          style={styles.map} 
+          styleURL={Mapbox.StyleURL.Dark} 
+          compassEnabled={false}
+          scaleBarEnabled={true}
+          scaleBarPosition={{ top: 120, left: 16 }}
+          onCameraChanged={(e) => {
+            if (!isTransitioning) {
+              setZoomLevel(e.properties.zoom);
+            }
+          }}
+        >
+          <Mapbox.Camera
+            followUserLocation={mapMode === '3D'}
+            followUserMode={Mapbox.UserTrackingMode.FollowWithCourse}
+            pitch={mapMode === '3D' ? 62 : 0}
+            heading={mapMode === '3D' ? myHeadingDeg : 0}
+            zoomLevel={mapMode === '3D' ? 16.5 : zoomLevel}
+            animationMode="flyTo"
+            animationDuration={isTransitioning ? 0 : 600}
+            defaultSettings={{
+              centerCoordinate: missionCoords || undefined,
+              zoomLevel: 15,
+            }}
+            centerCoordinate={
+              mapMode === '3D' 
+                ? undefined 
+                : (distanceToIncident < 400 && myLocation)
+                  ? [myLocation.coords.longitude, myLocation.coords.latitude] 
+                  : (missionCoords || undefined)
+            }
+            padding={{ paddingLeft: 40, paddingRight: 40, paddingTop: 180, paddingBottom: 120 }}
+            bounds={
+              mapMode === '2D' && distanceToIncident > 400 && myLocation && missionCoords
+                ? {
+                    ne: [
+                      Math.max(myLocation.coords.longitude, missionCoords[0]),
+                      Math.max(myLocation.coords.latitude, missionCoords[1]),
+                    ],
+                    sw: [
+                      Math.min(myLocation.coords.longitude, missionCoords[0]),
+                      Math.min(myLocation.coords.latitude, missionCoords[1]),
+                    ],
+                  }
+                : undefined
+            }
+          />
+
+          {/* 3D BUILDINGS & SKY */}
+          {mapMode === '3D' && (
+            <>
+              <Mapbox.FillExtrusionLayer
+                id="3d-buildings"
+                sourceID="composite"
+                sourceLayerID="building"
+                minZoomLevel={15}
+                maxZoomLevel={22}
+                filter={['>', 'height', 0]}
+                style={{
+                  fillExtrusionHeight: ['get', 'height'],
+                  fillExtrusionBase: ['get', 'min_height'],
+                  fillExtrusionColor: '#333',
+                  fillExtrusionOpacity: 0.8,
+                }}
               />
-            ) : (
-              <Mapbox.Camera
-                centerCoordinate={[mapCenter.longitude, mapCenter.latitude]}
-                zoomLevel={14}
+              <Mapbox.SkyLayer 
+                id="sky" 
+                style={{
+                  skyType: 'atmosphere',
+                  skyAtmosphereColor: '#111',
+                }} 
               />
-            )}
-
-            {incidentCoords && (
-              <Mapbox.PointAnnotation id="incident" coordinate={[incidentCoords.longitude, incidentCoords.latitude]}>
-                <View style={styles.incidentMarker}>
-                  <View style={styles.incidentMarkerDot} />
-                </View>
-              </Mapbox.PointAnnotation>
-            )}
-
-            {myLocation && (
-              <Mapbox.PointAnnotation id="my-location" coordinate={[myLocation.longitude, myLocation.latitude]}>
-                <View style={styles.myMarker}>
-                  <View style={styles.myMarkerDot} />
-                </View>
-              </Mapbox.PointAnnotation>
-            )}
-
-            {routeGeoJSON && (
-              <Mapbox.ShapeSource id="route-mission" shape={routeGeoJSON}>
-                <Mapbox.LineLayer id="route-mission-line" style={{ lineColor: '#4A90D9', lineWidth: 4, lineOpacity: 0.85 }} />
-              </Mapbox.ShapeSource>
-            )}
-          </MapboxMapView>
-
-          {/* HUD Overlay — high-tech floating panel */}
-          <View style={[styles.hudOverlay, { top: insets.top + 64 }]}>
-            <View style={styles.hudLeft}>
-               <View style={styles.hudStatusBadge}>
-                 <View style={[styles.priorityDot, { backgroundColor: priority.color }]} />
-                 <Text style={[styles.hudStatusText, { color: priority.color }]}>{priority.label}</Text>
-               </View>
-               <Text style={styles.victimName}>{activeMission.caller?.name || 'Inconnu'}</Text>
-               <Text style={styles.victimLabel}>{activeMission.caller?.name !== 'Anonyme' ? 'VICTIME IDENTIFIÉE' : 'VICTIME ANONYME'}</Text>
-            </View>
-            <View style={styles.hudRight}>
-               <View style={styles.distanceContainer}>
-                 <Text style={styles.hudDistanceText}>{distance || '—'}</Text>
-                 <Text style={styles.hudDistanceLabel}>KM</Text>
-               </View>
-               {eta && (
-                 <View style={styles.etaBadge}>
-                   <MaterialIcons name="access-time" color={colors.secondary} size={10} />
-                   <Text style={styles.etaText}>{eta}</Text>
-                 </View>
-               )}
-            </View>
-          </View>
-        </View>
-
-        {/* BOTTOM PANEL */}
-        <View style={styles.bottomControls}>
-          <View style={styles.dragHandle} />
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ paddingBottom: 30 }}
-          >
-          {/* Status Progress */}
-          <View style={styles.statusProgress}>
-            {STATUS_STEPS.map((step, idx) => (
-              <View key={step.key} style={styles.stepItem}>
-                <View style={[
-                  styles.stepDot,
-                  { backgroundColor: idx <= currentStepIndex ? step.color : '#333' }
-                ]}>
-                  <MaterialIcons name={step.icon} color={idx <= currentStepIndex ? '#FFF' : '#666'} size={14} />
-                </View>
-                <Text style={[
-                  styles.stepLabel,
-                  { color: idx <= currentStepIndex ? '#FFF' : '#555' }
-                ]}>{step.label}</Text>
-                {idx < STATUS_STEPS.length - 1 && (
-                  <View style={[styles.stepLine, { backgroundColor: idx < currentStepIndex ? step.color : '#333' }]} />
-                )}
-              </View>
-            ))}
-          </View>
-
-          {/* Description Section (Always visible but compact) */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-               <MaterialIcons name="info-outline" size={14} color={colors.textMuted} />
-               <Text style={styles.sectionTitle}>MOTIF ET DÉTAILS</Text>
-            </View>
-            <View style={styles.descriptionBox}>
-              <Text style={styles.missionTitle}>{activeMission.title}</Text>
-              {activeMission.description && formatDescriptionLines(activeMission.description).map((line, i) => (
-                <Text key={i} style={styles.descriptionText}>{"\u2022  "}{line}</Text>
-              ))}
-            </View>
-          </View>
-
-          {/* Location Section */}
-          <View style={styles.sectionContainer}>
-            <View style={styles.sectionHeader}>
-               <MaterialIcons name="place" size={14} color={colors.textMuted} />
-               <Text style={styles.sectionTitle}>SITE D'INTERVENTION</Text>
-            </View>
-            <View style={styles.locationCard}>
-              <Text style={styles.locationText}>{siteAddress || 'Adresse non disponible'}</Text>
-              <TouchableOpacity style={styles.gpsSmallBtn} onPress={openNavigation}>
-                <MaterialIcons name="navigation" color={colors.secondary} size={20} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Journal */}
-          {notes.length > 0 && (
-            <View style={styles.journalContainer}>
-              <Text style={styles.journalHeader}>JOURNAL</Text>
-              <ScrollView style={{ maxHeight: 80 }}>
-                {notes.map((n, i) => (
-                  <View key={i} style={styles.noteItem}>
-                    <Text style={styles.noteTime}>{n.time}</Text>
-                    <Text style={styles.noteBody}>{n.text}</Text>
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
+            </>
           )}
 
-          {/* Note input */}
-          <View style={styles.inputBox}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Note d'intervention..."
-              placeholderTextColor="rgba(255,255,255,0.25)"
-              value={noteText}
-              onChangeText={setNoteText}
-            />
-            <TouchableOpacity style={styles.sendBtn} onPress={handleAddNote}>
-              <MaterialIcons name="send" color="#FFF" size={18} />
-            </TouchableOpacity>
-          </View>
+          {/* TRAFFIC LAYER */}
+          <Mapbox.VectorSource id="traffic" url="mapbox://mapbox.mapbox-traffic-v1" />
 
-          {/* Contextual Actions Bar */}
-          <View style={styles.unifiedActionBar}>
-            <View style={styles.auxActions}>
-              {canCallVictim && (
-                <TouchableOpacity style={styles.auxBtn} onPress={callVictim}>
-                  <MaterialIcons name="phone" color={colors.success} size={22} />
-                </TouchableOpacity>
+          {/* MARKERS */}
+          {showProximityCluster && missionCoords ? (
+             <Mapbox.PointAnnotation id="proximity" coordinate={missionCoords}>
+               <ProximityCluster priority={activeMission.priority || 'medium'} />
+             </Mapbox.PointAnnotation>
+          ) : (
+            <>
+              {missionCoords && (
+                <Mapbox.PointAnnotation id="incident" coordinate={missionCoords}>
+                   <View style={styles.incidentMarkerPulse} />
+                </Mapbox.PointAnnotation>
               )}
-              {activeMission.citizen_id && canCallVictim && (
-                <TouchableOpacity style={styles.auxBtn} onPress={callVictimVoip} disabled={voipLoading}>
-                  {voipLoading ? (
-                    <ActivityIndicator size="small" color={colors.secondary} />
-                  ) : (
-                    <MaterialIcons name="phone-in-talk" color={colors.secondary} size={22} />
-                  )}
-                </TouchableOpacity>
+              {myLocation && (
+                <Mapbox.PointAnnotation id="me" coordinate={[myLocation.coords.longitude, myLocation.coords.latitude]}>
+                  <MePuck headingDeg={myHeadingDeg} size={36} />
+                </Mapbox.PointAnnotation>
               )}
-              <TouchableOpacity style={styles.auxBtn} onPress={openNavigation}>
-                <MaterialIcons name="navigation" color="#FFF" size={22} />
-              </TouchableOpacity>
+            </>
+          )}
+
+          {routeGeoJSON && (
+            <Mapbox.ShapeSource id="route-line" shape={routeGeoJSON}>
+              <Mapbox.LineLayer id="route-layer" style={{ lineColor: colors.secondary, lineWidth: 6, lineOpacity: 0.9, lineCap: 'round' }} />
+            </Mapbox.ShapeSource>
+          )}
+          </MapboxMapView>
+        )}
+      </View>
+
+      {/* TOP CONTROLS */}
+      <View style={[styles.topControls, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.glassStepBar}>
+          {STATUS_STEPS.map((step, idx) => (
+            <View key={step.key} style={styles.stepCell}>
+              <View style={[styles.stepIcon, idx <= currentStepIndex ? { backgroundColor: colors.secondary } : { backgroundColor: '#333' }]}>
+                <MaterialIcons name={step.icon} size={13} color="#FFF" />
+              </View>
+              <Text style={[styles.stepLabel, idx <= currentStepIndex && { color: '#FFF', opacity: 1 }]} numberOfLines={1}>
+                {step.label}
+              </Text>
+              {idx < STATUS_STEPS.length - 1 && <View style={[styles.stepLink, idx < currentStepIndex && { backgroundColor: colors.secondary }]} />}
+            </View>
+          ))}
+        </View>
+
+        {/* ONE ROW INFO PILL: Address | Time | Distance */}
+        <AppTouchableOpacity 
+          style={styles.unifiedPill} 
+          activeOpacity={0.9}
+          onPress={() => {
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setIsAddressExpanded(!isAddressExpanded);
+          }}
+        >
+          <View style={styles.pillRow}>
+            {/* Address Part */}
+            <View style={styles.addrSection}>
+              <MaterialIcons name="map" size={16} color={colors.secondary} />
+              <Text style={styles.pillAddr} numberOfLines={isAddressExpanded ? 0 : 1}>
+                {formatMissionAddress(activeMission.location)}
+              </Text>
+            </View>
+            
+            <View style={styles.pillSep} />
+
+            {/* Time Part */}
+            <View style={styles.statSection}>
+              <MaterialIcons name="schedule" size={15} color="#FFF" style={{ opacity: 0.8 }} />
+              <Text style={styles.statVal}>{formatTimeValue(routeDuration)}</Text>
             </View>
 
-            {activeMission.dispatch_status !== 'completed' && (
-              <TouchableOpacity
-                style={[styles.primaryActionBtn, isUpdating && { opacity: 0.6 }]}
-                onPress={handleNextStatus}
-                disabled={isUpdating}
-              >
-                {isUpdating ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.primaryActionText}>
-                    {nextStatusLabel[activeMission.dispatch_status] || 'TERMINER'}
-                  </Text>
-                )}
-                <MaterialIcons name="chevron-right" size={24} color="#FFF" />
-              </TouchableOpacity>
-            )}
-          </View>
+            <View style={styles.pillSep} />
 
-          {canCallVictim && activeMission.citizen_id ? (
-            <View style={styles.voipBlock}>
-              <Text style={styles.voipTitle}>Appel vers l’app victime (audio — vidéo depuis l’écran d’appel)</Text>
-              <TouchableOpacity
-                style={[styles.voipBtnFull, voipLoading && { opacity: 0.6 }]}
-                onPress={() => void callVictimVoip()}
-                disabled={voipLoading}
-              >
-                {voipLoading ? (
-                  <ActivityIndicator color={colors.secondary} size="small" />
-                ) : (
-                  <>
-                    <MaterialIcons name="phone-in-talk" color={colors.secondary} size={22} />
-                    <Text style={styles.voipBtnText}>App audio</Text>
-                  </>
-                )}
-              </TouchableOpacity>
+            {/* Distance Part */}
+            <View style={styles.statSection}>
+              <MaterialIcons name="straighten" size={15} color="#FFF" style={{ opacity: 0.8 }} />
+              <Text style={styles.statVal}>{formatDistanceValue(routeDistance)}</Text>
             </View>
-          ) : null}
+          </View>
+        </AppTouchableOpacity>
 
-          </ScrollView>
+        {/* ACTION BUTTONS: X above 2D/3D - ALIGNED RIGHT */}
+        <View style={styles.actionStack}>
+          <AppTouchableOpacity style={styles.sqBtn} onPress={() => navigation.goBack()}>
+            <MaterialIcons name="close" size={22} color="#FFF" />
+          </AppTouchableOpacity>
+          <AppTouchableOpacity style={[styles.sqBtn, mapMode === '3D' && { backgroundColor: colors.secondary }]} onPress={toggleMapMode}>
+            <MaterialIcons name={mapMode === '3D' ? 'view-in-ar' : 'map'} size={22} color="#FFF" />
+          </AppTouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+
+      {/* BOTTOM ACTION PANEL */}
+      <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+        <View style={styles.mainRow}>
+          <View style={styles.timeBlock}>
+            <Text style={styles.tLabel}>TEMPS ÉCOULÉ</Text>
+            <Text style={styles.tValue}>{elapsedTime}</Text>
+          </View>
+          <AppTouchableOpacity 
+            style={[styles.bigBtn, isUpdating && { opacity: 0.6 }]} 
+            onPress={handleNextStatus} 
+            disabled={isUpdating}
+          >
+            <Text style={styles.bigBtnText}>
+              {activeMission.dispatch_status === 'dispatched' ? 'DÉPART ROUTE' : 
+               activeMission.dispatch_status === 'en_route' ? 'ARRIVÉ SUR SITE' : 'TERMINER'}
+            </Text>
+            <MaterialIcons name="chevron-right" size={24} color="#000" />
+          </AppTouchableOpacity>
+        </View>
+
+        <View style={styles.callRow}>
+          <AppTouchableOpacity style={[styles.callBtn, isPhonePulseActive && { opacity: 0.4 }]} onPress={() => {
+             if (isPhonePulseActive) return;
+             setIsCalling(true);
+             setTimeout(() => setIsCalling(false), 3000);
+             navigation.navigate('CallCenter', { target: 'central' });
+          }} disabled={isPhonePulseActive}>
+            <MaterialIcons name="headset-mic" size={20} color={colors.secondary} />
+            <Text style={styles.callBtnText}>CENTRALE</Text>
+          </AppTouchableOpacity>
+          <AppTouchableOpacity style={[styles.callBtn, isPhonePulseActive && { opacity: 0.4 }]} onPress={async () => {
+            if (isPhonePulseActive || !activeMission.caller?.phone || !activeMission.citizen_id) return;
+            if (isLocalNumber(activeMission.caller.phone)) {
+              setShowCallModal(true);
+            } else {
+              // High performance direct App Call via Edge Function
+              setIsCalling(true);
+              try {
+                await startRescuerToCitizenVoipCall({
+                  incidentId: activeMission.incident_id,
+                  citizenId: activeMission.citizen_id,
+                  callType: 'audio',
+                  patientName: activeMission.caller?.name || 'Patient'
+                });
+              } catch (err) {
+                alertVoipError(err);
+              } finally {
+                setIsCalling(false);
+              }
+            }
+          }} disabled={isPhonePulseActive}>
+            <MaterialIcons name="person" size={20} color={colors.success} />
+            <Text style={styles.callBtnText}>PATIENT</Text>
+          </AppTouchableOpacity>
+        </View>
+      </View>
+
+      {/* CALL SELECTION MODAL */}
+      <Modal
+        visible={showCallModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowCallModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <MaterialIcons name="contact-phone" size={32} color={colors.secondary} />
+              <Text style={styles.modalTitle}>Appeler le patient</Text>
+              <Text style={styles.patientNum}>{activeMission.caller?.phone}</Text>
+            </View>
+
+            <View style={styles.modalBody}>
+              <AppTouchableOpacity 
+                style={[styles.modalBtn, styles.primaryBtn]} 
+                onPress={async () => {
+                  setShowCallModal(false);
+                  if (!activeMission.caller?.phone) {
+                    Alert.alert('Erreur', 'Numéro de téléphone non disponible.');
+                    return;
+                  }
+                  navigation.navigate('CallCenter', { 
+                    target: 'pbx', 
+                    phoneNumber: activeMission.caller.phone,
+                    patientName: activeMission.caller.name
+                  });
+                }}
+              >
+                <MaterialIcons name="phone" size={24} color="#000" />
+                <View style={styles.btnTextSet}>
+                  <Text style={[styles.btnTitle, { color: '#000' }]}>Appel Normal</Text>
+                  <Text style={[styles.btnSub, { color: 'rgba(0,0,0,0.6)' }]}>Passer par le réseau GSM</Text>
+                </View>
+              </AppTouchableOpacity>
+
+              <AppTouchableOpacity 
+                style={[styles.modalBtn, styles.secondaryBtn]} 
+                onPress={async () => {
+                  setShowCallModal(false);
+                  setIsCalling(true);
+                  try {
+                    if (!activeMission.citizen_id) {
+                      Alert.alert('Erreur', 'Impossible d\'identifier le patient pour l\'appel VoIP.');
+                      return;
+                    }
+                    await startRescuerToCitizenVoipCall({
+                      incidentId: activeMission.incident_id,
+                      citizenId: activeMission.citizen_id,
+                      callType: 'audio',
+                      patientName: activeMission.caller?.name || 'Patient'
+                    });
+                  } catch (err) {
+                    alertVoipError(err);
+                  } finally {
+                    setIsCalling(false);
+                  }
+                }}
+              >
+                <MaterialIcons name="headset-mic" size={24} color={colors.secondary} />
+                <View style={styles.btnTextSet}>
+                  <Text style={[styles.btnTitle, { color: '#FFF' }]}>Appel via App</Text>
+                  <Text style={[styles.btnSub, { color: 'rgba(255,255,255,0.6)' }]}>Passer par la VoIP</Text>
+                </View>
+              </AppTouchableOpacity>
+
+              <AppTouchableOpacity 
+                style={styles.cancelBtn} 
+                onPress={() => setShowCallModal(false)}
+              >
+                <Text style={styles.cancelText}>ANNULER L'APPEL</Text>
+              </AppTouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.mainBackground },
-  floatingBack: {
-    position: 'absolute',
-    left: 16,
-    zIndex: 30,
-    width: 44,
-    height: 44,
-    borderRadius: 16,
-    backgroundColor: 'rgba(10,10,10,0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-  },
-  floatingPriorityChip: {
-    position: 'absolute',
-    right: 16,
-    zIndex: 30,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 14,
-    gap: 8,
-    backgroundColor: 'rgba(10,10,10,0.8)',
-    borderWidth: 1,
-    borderColor: colors.glassBorder,
-  },
-  priorityDot: { width: 8, height: 8, borderRadius: 4 },
-  priorityChipText: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
-
-  mapContainer: { flex: 1, minHeight: 250 },
-  map: { width: '100%', height: '100%' },
-  myMarker: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(68,138,255,0.2)',
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2, borderColor: colors.secondary,
-  },
-  myMarkerDot: {
-    width: 12, height: 12, borderRadius: 6, backgroundColor: colors.secondary,
-  },
-  incidentMarker: {
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(255,82,82,0.2)',
-    justifyContent: 'center', alignItems: 'center',
-    borderWidth: 2, borderColor: colors.primary,
-  },
-  incidentMarkerDot: {
-    width: 12, height: 12, borderRadius: 6, backgroundColor: colors.primary,
-  },
-
-  hudOverlay: { 
-    position: 'absolute', left: 16, right: 16, 
-    backgroundColor: colors.glassBackground, padding: 16, borderRadius: 24,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    borderWidth: 1, borderColor: colors.glassBorder,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 15,
-    zIndex: 20,
-  },
-  hudLeft: { flex: 1 },
-  hudStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
-  hudStatusText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-  victimName: { color: '#FFF', fontWeight: '900', fontSize: 20, marginBottom: 2 },
-  victimLabel: { color: colors.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  container: { flex: 1, backgroundColor: '#000' },
+  map: { flex: 1 },
+  topControls: { position: 'absolute', top: 0, left: 16, right: 16, zIndex: 10 },
   
-  hudRight: { alignItems: 'flex-end' },
-  distanceContainer: { flexDirection: 'row', alignItems: 'baseline', gap: 2 },
-  hudDistanceText: { color: colors.secondary, fontSize: 28, fontWeight: '900' },
-  hudDistanceLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '800' },
-  etaBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.secondary + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginTop: 4 },
-  etaText: { color: colors.secondary, fontSize: 11, fontWeight: '800' },
-
-  bottomControls: { 
-    flexShrink: 0,
-    maxHeight: '48%',
-    backgroundColor: '#0D0D0D', 
-    borderTopLeftRadius: 36, borderTopRightRadius: 36,
-    borderWidth: 1, borderColor: colors.glassBorder,
-    paddingHorizontal: 20,
+  // Step Bar
+  glassStepBar: { 
+    flexDirection: 'row', backgroundColor: 'rgba(20,20,20,0.85)', 
+    paddingVertical: 12, paddingHorizontal: 8, borderRadius: 18, marginBottom: 16, 
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
+    shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 10, elevation: 5
   },
-  dragHandle: { width: 40, height: 4, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 2, alignSelf: 'center', marginTop: 12, marginBottom: 16 },
-
-  // Status progress
-  statusProgress: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, paddingHorizontal: 10 },
-  stepItem: { alignItems: 'center', flex: 1, position: 'relative' },
-  stepDot: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 6, zIndex: 2 },
-  stepLabel: { fontSize: 9, fontWeight: '800', letterSpacing: 0.2, textTransform: 'uppercase' },
-  stepLine: { position: 'absolute', top: 12, left: '50%', right: '-50%', height: 2, zIndex: 1 },
-
-  sectionContainer: { marginBottom: 20 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
-  sectionTitle: { color: colors.textMuted, fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
+  stepCell: { flex: 1, alignItems: 'center', position: 'relative' },
+  stepIcon: { width: 22, height: 22, borderRadius: 7, justifyContent: 'center', alignItems: 'center', zIndex: 2, marginBottom: 4 },
+  stepLabel: { color: '#888', fontSize: 9, fontWeight: '700', opacity: 0.7 },
+  stepLink: { position: 'absolute', top: 11, left: '50%', right: '-50%', height: 2, backgroundColor: '#333', zIndex: 1 },
   
-  descriptionBox: { backgroundColor: colors.surface, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.borderHairline },
-  missionTitle: { color: '#FFF', fontSize: 17, fontWeight: '900', marginBottom: 10 },
-  descriptionText: { color: 'rgba(255,255,255,0.6)', fontSize: 13, fontWeight: '500', lineHeight: 20, marginBottom: 4 },
-
-  locationCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: colors.surface, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: colors.borderHairline },
-  locationText: { flex: 1, color: '#FFF', fontSize: 14, fontWeight: '700', lineHeight: 20 },
-  gpsSmallBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: colors.secondary + '15', justifyContent: 'center', alignItems: 'center' },
-
-  unifiedActionBar: { 
-    flexDirection: 'row', gap: 12, alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.borderHairline, paddingTop: 20,
+  // ONE ROW INFO PILL
+  unifiedPill: { 
+    width: '100%', backgroundColor: 'rgba(15,15,15,0.95)', 
+    borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 15, elevation: 8,
+    minHeight: 52, justifyContent: 'center'
   },
-  auxActions: { flexDirection: 'row', gap: 8 },
-  auxBtn: { width: 52, height: 52, borderRadius: 18, backgroundColor: colors.surface, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: colors.borderHairline },
-  primaryActionBtn: {
-    flex: 1, height: 56, borderRadius: 18, backgroundColor: colors.secondary,
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20,
-    shadowColor: colors.secondary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10,
+  pillRow: { 
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12 
   },
-  primaryActionText: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
-
-  inputBox: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  textInput: { flex: 1, backgroundColor: colors.surface, borderRadius: 16, paddingHorizontal: 16, height: 44, color: '#FFF', fontSize: 13, fontWeight: '600', borderWidth: 1, borderColor: colors.borderHairline },
-  sendBtn: { width: 44, height: 44, borderRadius: 16, backgroundColor: colors.surfaceElevated, justifyContent: 'center', alignItems: 'center' },
-
-  journalContainer: { marginBottom: 16 },
-  journalHeader: { color: colors.textMuted, fontSize: 11, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
-  noteItem: { marginBottom: 8 },
-  noteTime: { color: colors.secondary, fontSize: 11, fontWeight: '800' },
-  noteBody: { color: 'rgba(255,255,255,0.75)', fontSize: 13, marginTop: 2 },
-
-  voipBlock: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: colors.borderHairline },
-  voipTitle: { color: colors.textMuted, fontSize: 12, fontWeight: '700', marginBottom: 10 },
-  voipBtnFull: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 48,
-    borderRadius: 16,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.borderHairline,
+  addrSection: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  pillAddr: { color: '#FFF', fontSize: 13, fontWeight: '700', flex: 1 },
+  statSection: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  statVal: { color: colors.secondary, fontSize: 12, fontWeight: '900' },
+  pillSep: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 12 },
+  
+  // Vertical Button Stack
+  actionStack: { alignItems: 'flex-end', gap: 10, marginTop: 12 },
+  sqBtn: { 
+    width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(30,30,30,0.95)', 
+    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10, elevation: 6
   },
-  voipBtnText: { color: '#FFF', fontSize: 14, fontWeight: '800' },
+
+  bottomPanel: { 
+    position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#0A0A0A', 
+    padding: 20, borderTopLeftRadius: 30, borderTopRightRadius: 30, borderTopWidth: 1, borderTopColor: '#222' 
+  },
+  mainRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, gap: 15 },
+  timeBlock: { flex: 0.8 },
+  tLabel: { color: '#666', fontSize: 10, fontWeight: '900' },
+  tValue: { color: '#FFF', fontSize: 24, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  bigBtn: { 
+    flex: 1.2, height: 56, backgroundColor: colors.success, borderRadius: 16, 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15 
+  },
+  bigBtnText: { fontWeight: '900', fontSize: 13 },
+  callRow: { flexDirection: 'row', gap: 10 },
+  callBtn: { 
+    flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: '#333', 
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 
+  },
+  callBtnText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
+
+  incidentMarkerPulse: {
+    width: 14, height: 14, borderRadius: 7, backgroundColor: colors.primary,
+    borderWidth: 2, borderColor: '#FFF',
+    shadowColor: colors.primary, shadowOpacity: 0.8, shadowRadius: 10, elevation: 10
+  },
+
+  // Modal Styles
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', 
+    justifyContent: 'center', alignItems: 'center', padding: 20 
+  },
+  modalContent: {
+    width: '100%', maxWidth: 340, backgroundColor: '#1A1A1A', 
+    borderRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    padding: 24, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 30, elevation: 15
+  },
+  modalHeader: { alignItems: 'center', marginBottom: 24, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.08)', paddingBottom: 20 },
+  modalTitle: { color: '#FFF', fontSize: 22, fontWeight: '900', marginTop: 12 },
+  patientNum: { color: colors.secondary, fontSize: 18, fontWeight: '900', marginTop: 4, letterSpacing: 1 },
+  modalBody: { gap: 14 },
+  modalBtn: { 
+    flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, gap: 16 
+  },
+  primaryBtn: { backgroundColor: colors.success },
+  secondaryBtn: { backgroundColor: 'rgba(68, 138, 255, 0.15)', borderWidth: 1, borderColor: 'rgba(68, 138, 255, 0.3)' },
+  btnTextSet: { flex: 1 },
+  btnTitle: { fontSize: 16, fontWeight: '900', color: '#000' },
+  btnSub: { fontSize: 12, color: 'rgba(0,0,0,0.7)', fontWeight: '700', marginTop: 1 },
+  cancelBtn: { 
+    paddingVertical: 14, alignItems: 'center', marginTop: 8, 
+    borderRadius: 16, backgroundColor: 'rgba(211, 47, 47, 0.12)', borderWidth: 1, borderColor: 'rgba(211, 47, 47, 0.3)' 
+  },
+  cancelText: { color: '#FF5252', fontSize: 13, fontWeight: '900', letterSpacing: 2, opacity: 0.9 },
 });

@@ -4,13 +4,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  TextInput,
+TextInput,
   Platform,
   Alert,
   ActivityIndicator,
-  KeyboardAvoidingView,
-} from 'react-native';
+  KeyboardAvoidingView} from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -154,9 +153,9 @@ export function HospitalIssuesScreen({ navigation }: any) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.appBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <Text style={styles.appBarTitle}>Problèmes & Contraintes</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -189,9 +188,9 @@ export function HospitalIssuesScreen({ navigation }: any) {
                       {c.description || '—'}
                     </Text>
                   </View>
-                  <TouchableOpacity style={styles.resolveBtn} onPress={() => resolveConstraint(c.id)}>
+                  <AppTouchableOpacity style={styles.resolveBtn} onPress={() => resolveConstraint(c.id)}>
                     <Text style={styles.resolveBtnText}>Résoudre</Text>
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 </View>
               ))
             )}
@@ -204,13 +203,13 @@ export function HospitalIssuesScreen({ navigation }: any) {
             {SEVERITY_OPTIONS.map((s) => {
               const on = severity === s.key;
               return (
-                <TouchableOpacity
+                <AppTouchableOpacity
                   key={s.key}
                   style={[styles.severityChip, on && styles.severityChipOn]}
                   onPress={() => setSeverity(s.key)}
                 >
                   <Text style={[styles.severityChipText, on && styles.severityChipTextOn]}>{s.label}</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               );
             })}
           </View>
@@ -222,7 +221,7 @@ export function HospitalIssuesScreen({ navigation }: any) {
             {ISSUE_TYPES.map((issue) => {
               const isSelected = selectedIssues.includes(issue.key);
               return (
-                <TouchableOpacity
+                <AppTouchableOpacity
                   key={issue.key}
                   style={[
                     styles.issueCard,
@@ -234,7 +233,7 @@ export function HospitalIssuesScreen({ navigation }: any) {
                     <MaterialIcons name={issue.icon} color={isSelected ? colors.primary : colors.textMuted} size={28} />
                   </View>
                   <Text style={[styles.issueLabel, isSelected && { color: '#FFF' }]}>{issue.label}</Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               );
             })}
           </View>
@@ -258,7 +257,7 @@ export function HospitalIssuesScreen({ navigation }: any) {
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <TouchableOpacity
+        <AppTouchableOpacity
           style={[styles.submitBtn, (selectedIssues.length === 0 || submitting) && styles.disabledBtn]}
           onPress={handleSubmit}
           disabled={selectedIssues.length === 0 || submitting}
@@ -271,7 +270,7 @@ export function HospitalIssuesScreen({ navigation }: any) {
               <MaterialIcons name="priority-high" color="#FFF" size={24} />
             </>
           )}
-        </TouchableOpacity>
+        </AppTouchableOpacity>
       </View>
       </SafeAreaView>
     </KeyboardAvoidingView>

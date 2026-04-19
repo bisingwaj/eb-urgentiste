@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native';
 import { Navigation2, TriangleAlert, Hospital, Ambulance } from 'lucide-react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { radius } from '../../theme/spacing';
 
@@ -93,9 +94,12 @@ export const HospitalMarker = memo(function HospitalMarker({
 export const UnitMarker = memo(function UnitMarker({
   status,
   onPress,
+  /** Si défini (nombre fini), flèche de cap type Google ; sinon icône ambulance seule. */
+  headingDeg,
 }: {
   status: string;
   onPress?: () => void;
+  headingDeg?: number | null;
 }) {
   const bg =
     status === 'en_route'
@@ -103,10 +107,42 @@ export const UnitMarker = memo(function UnitMarker({
       : status === 'on_scene' || status === 'en_intervention'
         ? colors.markerUnitBusy
         : colors.markerUnit;
+  const showDirection = headingDeg != null && Number.isFinite(headingDeg);
+  const iconSize = 19;
   return (
     <MarkerHost>
       <Pressable onPress={onPress} style={[styles.unit, { backgroundColor: bg, shadowColor: bg }]}>
-        <Ambulance size={19} color="#FFFFFF" strokeWidth={2.5} />
+        {showDirection ? (
+          <View style={{ transform: [{ rotate: `${headingDeg}deg` }] }}>
+            <Navigation2 size={iconSize} color="#FFFFFF" strokeWidth={2.5} />
+          </View>
+        ) : (
+          <Ambulance size={iconSize} color="#FFFFFF" strokeWidth={2.5} />
+        )}
+      </Pressable>
+    </MarkerHost>
+  );
+});
+
+export const ProximityCluster = memo(function ProximityCluster({
+  priority,
+  onPress,
+}: {
+  priority: Priority;
+  onPress?: () => void;
+}) {
+  const bg = priorityColor(priority);
+  return (
+    <MarkerHost>
+      <Pressable onPress={onPress} style={styles.proximityContainer}>
+        <View style={[styles.proximityRing, { borderColor: bg }]}>
+          <View style={[styles.proximityInner, { backgroundColor: bg }]}>
+            <MaterialCommunityIcons name="account-check" size={20} color="#FFFFFF" />
+          </View>
+        </View>
+        <View style={styles.proximityLabel}>
+          <Text style={styles.proximityLabelText}>SUR SITE</Text>
+        </View>
       </Pressable>
     </MarkerHost>
   );
@@ -177,5 +213,41 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 2 },
     elevation: 6,
+  },
+  proximityContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  proximityRing: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 3,
+    backgroundColor: 'rgba(255,255,255,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  proximityInner: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  proximityLabel: {
+    marginTop: 4,
+    backgroundColor: colors.markerIncident,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  proximityLabelText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '900',
   },
 });

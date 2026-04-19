@@ -1,9 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, UIManager, LayoutAnimation } from 'react-native';
+import { View, Text, StyleSheet, Platform, UIManager } from 'react-native';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../theme/colors';
 import { TAB_BAR_FLOAT_GAP } from './tabBarLayout';
+import { AppTouchableOpacity } from '../components/ui/AppTouchableOpacity';
 import { useNotifications } from '../hooks/useNotifications';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -41,13 +42,6 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             });
 
             if (!isFocused && !event.defaultPrevented) {
-              const config = {
-                duration: 250,
-                update: { type: 'spring', springDamping: 0.7, property: 'scaleXY' },
-                create: { type: 'linear', property: 'opacity' },
-                delete: { type: 'linear', property: 'opacity' },
-              } as const;
-              LayoutAnimation.configureNext(config);
               navigation.navigate(route.name);
             }
           };
@@ -64,7 +58,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
           const activeBg = 'rgba(255, 255, 255, 0.12)';
 
           return (
-            <TouchableOpacity
+            <AppTouchableOpacity
               key={route.key}
               accessibilityRole="button"
               accessibilityState={isFocused ? { selected: true } : {}}
@@ -76,7 +70,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                 styles.tabItem,
                 isFocused && [styles.tabItemFocused, { backgroundColor: activeBg }]
               ]}
-              activeOpacity={0.8}
+              activeOpacity={1}
             >
               <View style={styles.iconContainer}>
                 {options.tabBarIcon && options.tabBarIcon({
@@ -99,7 +93,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
                   {label as string}
                 </Text>
               )}
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           );
         })}
       </View>

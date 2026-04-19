@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, View, Text, TouchableOpacity, StyleSheet, Alert as NativeAlert, DeviceEventEmitter } from 'react-native';
+import { Modal, View, Text, StyleSheet, Alert as NativeAlert, DeviceEventEmitter } from 'react-native';
 import { NotificationIcon } from '../icons/TabIcons';
+import { AppTouchableOpacity } from '../ui/AppTouchableOpacity';
 
 // Subvert React Native's default Alert.alert to use our Global Custom Modal instead!
 const originalAlert = NativeAlert.alert;
@@ -59,7 +60,7 @@ export const GlobalAlert = () => {
               const isDestructive = btn.style === 'destructive' || btn.style === 'cancel' && !isSecondary;
 
               return (
-                <TouchableOpacity 
+                <AppTouchableOpacity 
                   key={idx}
                   style={[
                     styles.modalButton, 
@@ -80,7 +81,7 @@ export const GlobalAlert = () => {
                   ]}>
                     {btn.text || 'OK'}
                   </Text>
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               );
             })}
           </View>

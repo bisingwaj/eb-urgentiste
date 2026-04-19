@@ -1,37 +1,15 @@
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import type { Session } from '@supabase/supabase-js';
+import type { UserProfile } from '../types/userProfile';
+import {
+  clearLocalAppCacheForSession,
+  readUserProfileCache,
+  writeUserProfileCache,
+} from '../lib/localAppCache';
+import { runSessionBootstrap } from '../lib/sessionBootstrap';
 
-// Profil urgentiste depuis users_directory
-export interface UserProfile {
-  id: string;
-  auth_user_id: string;
-  role: string;
-  first_name: string;
-  last_name: string;
-  email: string | null;
-  phone: string | null;
-  photo_url: string | null;
-  status: string | null;
-  available: boolean;
-  grade: string | null;
-  matricule: string | null;
-  specialization: string | null;
-  zone: string | null;
-  address: string | null;
-  assigned_unit_id: string | null;
-  health_structure_id: string | null;
-  must_change_password: boolean;
-  agent_login_id: string | null;
-  /** Fiche structure Supabase (role `hopital`) — à jour via `refreshProfile` / rechargement session. */
-  linkedStructure?: {
-    id: string;
-    name: string;
-    short_name: string | null;
-    address: string | null;
-    phone: string | null;
-  } | null;
-}
+export type { UserProfile };
 
 interface AuthState {
   session: Session | null;
@@ -53,6 +31,7 @@ interface AuthContextType extends AuthState {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const sessionBootstrapKeyRef = useRef<string | null>(null);
   const [state, setState] = useState<AuthState>({
     session: null,
     profile: null,
@@ -99,13 +78,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .from('users_directory')
         .select('id, auth_user_id, role, first_name, last_name, email, phone, photo_url, status, available, grade, matricule, specialization, zone, address, assigned_unit_id, must_change_password, agent_login_id')
         .eq('auth_user_id', authUserId)
-        .not('agent_login_id', 'is', null)  // Préférer l'entrée avec agent_login_id
+        .not('agent_login_id', 'is', null)
         .limit(1)
         .maybeSingle();
 
-      if (error) {
-        console.error('[Auth] Erreur chargement profil:', error.message);
-        // Fallback: essayer sans le filtre agent_login_id
+      // Fallback si pas de résultat ou erreur (ex: hôpitaux sans agent_login_id)
+      if (error || !data) {
+        if (error) console.warn('[Auth] Erreur ou profil non trouvé avec agent_login_id, tentative fallback:', error.message);
+        
         const { data: fallbackData, error: fallbackError } = await supabase
           .from('users_directory')
           .select('id, auth_user_id, role, first_name, last_name, email, phone, photo_url, status, available, grade, matricule, specialization, zone, address, assigned_unit_id, must_change_password, agent_login_id')
@@ -113,18 +93,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .limit(1)
           .maybeSingle();
 
-        if (fallbackError) {
-          console.error('[Auth] Erreur fallback profil:', fallbackError.message);
+        if (fallbackError || !fallbackData) {
+          if (fallbackError) console.error('[Auth] Erreur fallback profil:', fallbackError.message);
           return null;
         }
 
         const profile = fallbackData as UserProfile;
         await attachHospitalStructure(profile);
+        await writeUserProfileCache(authUserId, profile);
         return profile;
       }
 
       const profile = data as UserProfile;
       await attachHospitalStructure(profile);
+      await writeUserProfileCache(authUserId, profile);
       return profile;
     } catch (err) {
       console.error('[Auth] Exception chargement profil:', err);
@@ -143,11 +125,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(async ({ data: { session } }) => {
       console.log('[Auth] getSession:', session ? `User ${session.user.id}` : 'Pas de session');
       if (session?.user) {
+        const cached = await readUserProfileCache(session.user.id);
+        if (cached) {
+          setState({
+            session,
+            profile: cached,
+            isLoading: false,
+            isAuthenticated: true,
+          });
+        }
         const profile = await fetchProfile(session.user.id);
         console.log('[Auth] Profil chargé:', profile ? `${profile.first_name} ${profile.last_name} (${profile.role})` : 'NULL');
         setState({
           session,
-          profile,
+          profile: profile ?? cached ?? null,
           isLoading: false,
           isAuthenticated: true,
         });
@@ -177,25 +168,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           console.log('[Auth] onAuthStateChange: evt', event, '- user exists, fetching profile...');
           
           if (event === 'INITIAL_SESSION') {
-            // Au démarrage, on peut attendre sans risque de deadlock
+            const cached = await readUserProfileCache(session.user.id);
+            if (cached) {
+              setState({
+                session,
+                profile: cached,
+                isLoading: false,
+                isAuthenticated: true,
+              });
+            }
             const profile = await fetchProfile(session.user.id);
             console.log('[Auth] onAuthStateChange Profil chargé:', profile ? `${profile.first_name} ${profile.last_name}` : 'NULL');
             setState({
               session,
-              profile,
+              profile: profile ?? cached ?? null,
               isLoading: false,
               isAuthenticated: true,
             });
           } else {
             // Pour SIGNED_IN et les autres, on NE DOIT PAS utiliser "await" sinon supabase-js bloque (deadlock)
-            // On valide la session instantanément
-            setState(prev => ({ ...prev, session, isLoading: false, isAuthenticated: true }));
-            
-            // Puis on charge le profil sans bloquer le thread de Supabase
-            fetchProfile(session.user.id).then(profile => {
-              console.log('[Auth] Profil asynchrone chargé:', profile ? `${profile.first_name} ${profile.last_name}` : 'NULL');
-              setState(prev => ({ ...prev, profile }));
-            }).catch(console.error);
+            setState((prev) => ({
+              ...prev,
+              session,
+              isLoading: false,
+              isAuthenticated: true,
+            }));
+            readUserProfileCache(session.user.id).then((cached) => {
+              if (cached) {
+                setState((prev) => ({ ...prev, profile: cached }));
+              }
+            });
+            fetchProfile(session.user.id)
+              .then((profile) => {
+                console.log(
+                  '[Auth] Profil asynchrone chargé:',
+                  profile ? `${profile.first_name} ${profile.last_name}` : 'NULL',
+                );
+                setState((prev) => ({ ...prev, profile }));
+              })
+              .catch(console.error);
           }
         }
       }
@@ -203,6 +214,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
+
+  /** Préchargement cache historique (urgentiste) — une fois par couple user + unité. */
+  useEffect(() => {
+    const p = state.profile;
+    if (!p?.assigned_unit_id || p.role === 'hopital') return;
+    const key = `${p.auth_user_id}:${p.assigned_unit_id}`;
+    if (sessionBootstrapKeyRef.current === key) return;
+    sessionBootstrapKeyRef.current = key;
+    void runSessionBootstrap(p);
+  }, [state.profile]);
 
   // Login via agent_login_id + pin_code (Edge Function)
   const signInWithAgent = useCallback(async (
@@ -223,7 +244,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (error) {
         // Extraire le message d'erreur détaillé
-        let errorDetail = 'Erreur de connexion. Réessayez.';
+        let errorDetail = 'Erreur de connexion. réessayez.';
         try {
           if (error.context && typeof error.context.json === 'function') {
             const errorBody = await error.context.json();
@@ -267,15 +288,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (portal: AuthPortal): Promise<{ ok: boolean; error?: string }> => {
       const { data: userData, error: userError } = await supabase.auth.getUser();
       if (userError || !userData.user) {
-        return { ok: false, error: 'Session introuvable. Réessayez.' };
+        return { ok: false, error: 'Session introuvable. réessayez.' };
       }
       const loaded = await fetchProfile(userData.user.id);
       if (!loaded) {
         return {
           ok: false,
-          error: 'Profil introuvable. Vérifiez vos droits ou contactez l’administrateur.',
+          error: "utilisateur n'existe pas",
         };
       }
+
+      // 1. Vérification stricte des rôles autorisés (uniquement hôpital et secouriste)
+      if (loaded.role !== 'hopital' && loaded.role !== 'secouriste') {
+        return {
+          ok: false,
+          error: "utilisateur n'existe pas",
+        };
+      }
+
+      // 2. Vérification de la correspondance avec le portail choisi
       if (portal === 'hopital') {
         if (loaded.role !== 'hopital') {
           return {
@@ -284,10 +315,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           };
         }
       } else {
-        if (loaded.role === 'hopital') {
+        // Pour le portail urgentiste, on n'autorise QUE le rôle 'secouriste'
+        if (loaded.role !== 'secouriste') {
           return {
             ok: false,
-            error: 'Ce compte est réservé au portail hôpital. Choisissez « Hôpital » sur l’écran d’accueil.',
+            error: 'Ce compte est réservé au portail urgentiste. Choisissez « Urgentiste » sur l’écran d’accueil.',
           };
         }
       }
@@ -298,7 +330,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   // Déconnexion propre
   const signOut = useCallback(async () => {
+    sessionBootstrapKeyRef.current = null;
     try {
+      if (state.profile?.auth_user_id) {
+        await clearLocalAppCacheForSession({
+          authUserId: state.profile.auth_user_id,
+          unitId: state.profile.assigned_unit_id,
+          structureId: state.profile.health_structure_id,
+        });
+      }
       // Mettre le statut à offline avant de déconnecter
       if (state.profile?.auth_user_id) {
         await supabase.from('users_directory')

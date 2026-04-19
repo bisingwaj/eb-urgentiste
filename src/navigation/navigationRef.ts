@@ -12,6 +12,11 @@ export type CallCenterRouteParams = {
   prefetchedAppId?: string;
   /** UID Agora côté secouriste si le serveur le fixe (sinon 0). */
   prefetchedRtcUid?: number;
+  /** Cible de l'appel : 'central' par défaut, 'patient' ou 'pbx'. */
+  target?: 'central' | 'patient' | 'pbx';
+  phoneNumber?: string;
+  patientId?: string;
+  patientName?: string;
 };
 
 export type RootStackParamList = ParamListBase & {

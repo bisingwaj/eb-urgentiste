@@ -4,11 +4,10 @@ import {
   Text,
   StyleSheet,
   Modal,
-  TouchableOpacity,
-  Vibration,
+Vibration,
   Platform,
-  AppState,
-} from 'react-native';
+  AppState} from 'react-native';
+import { AppTouchableOpacity } from '../ui/AppTouchableOpacity';
 import { Audio } from 'expo-av';
 import { MaterialIcons } from '@expo/vector-icons';
 import { supabase } from '../../lib/supabase';
@@ -231,14 +230,14 @@ export function IncomingCallSubscriber() {
           <Text style={styles.title}>Appel entrant</Text>
           <Text style={styles.subtitle}>{label}</Text>
           <View style={styles.row}>
-            <TouchableOpacity style={[styles.btn, styles.btnDecline]} onPress={() => void decline()}>
+            <AppTouchableOpacity style={[styles.btn, styles.btnDecline]} onPress={() => void decline()}>
               <MaterialIcons name="call-end" size={28} color="#FFF" />
               <Text style={styles.btnText}>Refuser</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.btn, styles.btnAccept]} onPress={accept}>
+            </AppTouchableOpacity>
+            <AppTouchableOpacity style={[styles.btn, styles.btnAccept]} onPress={accept}>
               <MaterialIcons name="call" size={28} color="#FFF" />
               <Text style={styles.btnText}>Accepter</Text>
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
         </View>
       </View>

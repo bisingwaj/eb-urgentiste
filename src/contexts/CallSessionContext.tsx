@@ -1,8 +1,13 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useMemo, useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
+import { leaveAgoraChannel } from '../services/agoraRtc';
+import { endSipCall } from '../lib/sipCall';
 
 export type MinimizedCallSnapshot = {
   callId: string;
   callType: 'audio' | 'video';
+  provider: 'agora' | 'pbx';
+  phoneNumber?: string;
   answeredAtIso: string | null;
   callState: 'connecting' | 'calling' | 'active';
   isMuted: boolean;
@@ -23,6 +28,40 @@ const CallSessionContext = createContext<CallSessionContextValue | null>(null);
 
 export function CallSessionProvider({ children }: { children: React.ReactNode }) {
   const [minimized, setMinimized] = useState<MinimizedCallSnapshot | null>(null);
+
+  useEffect(() => {
+    if (!minimized?.callId) return;
+
+    const currentId = minimized.callId;
+    const channel = supabase
+      .channel(`call-sync-${currentId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'call_history',
+          filter: `id=eq.${currentId}`,
+        },
+        (payload) => {
+          const status = payload.new?.status as string | undefined;
+          if (status && ['completed', 'failed', 'missed'].includes(status)) {
+            // Call ended remotely while minimized
+            if (minimized?.provider === 'pbx') {
+              void endSipCall();
+            } else {
+              leaveAgoraChannel();
+            }
+            setMinimized(null);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [minimized?.callId]);
 
   const value = useMemo(
     () => ({

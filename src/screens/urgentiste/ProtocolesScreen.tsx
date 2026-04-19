@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, TextInput, StatusBar, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, StatusBar, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
 const PROTOCOLS = [
   { id: 'RDC-P01', title: 'Traumatologie sévère et hémorragie', type: 'Intervention Choc', updated: '12 Mars 2026' },
@@ -25,9 +26,9 @@ export function ProtocolesScreen({ navigation }: any) {
         <StatusBar barStyle="light-content" />
         <View style={styles.topHeader}>
           <View style={styles.headerRow}>
-            <TouchableOpacity onPress={() => setViewing(null)} style={styles.backBtn}>
+            <AppTouchableOpacity onPress={() => setViewing(null)} style={styles.backBtn}>
               <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
             <View>
               <Text style={styles.greetingText}>PROTOCOLE LÉGAL</Text>
               <Text style={[styles.hospitalName, { fontSize: 18 }]}>{doc?.id}</Text>
@@ -58,9 +59,9 @@ export function ProtocolesScreen({ navigation }: any) {
       
       <View style={styles.topHeader}>
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" color="#FFF" size={24} />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
           <View>
              <Text style={styles.greetingText}>BASE DOCUMENTAIRE</Text>
              <Text style={styles.hospitalName}>Protocoles RDC</Text>
@@ -86,7 +87,7 @@ export function ProtocolesScreen({ navigation }: any) {
         <Text style={styles.sectionTitle}>BIBLIOTHÈQUE MÉDICALE</Text>
         <View style={styles.listCard}>
           {filteredProtocols.map((p, i) => (
-             <TouchableOpacity key={p.id} style={[styles.protocolItem, i === filteredProtocols.length - 1 && { borderBottomWidth: 0 }]} onPress={() => setViewing(p.id)} activeOpacity={0.7}>
+             <AppTouchableOpacity key={p.id} style={[styles.protocolItem, i === filteredProtocols.length - 1 && { borderBottomWidth: 0 }]} onPress={() => setViewing(p.id)} activeOpacity={0.7}>
                <View style={styles.iconCircle}>
                   <MaterialIcons name="description" color={colors.secondary} size={24} />
                </View>
@@ -95,7 +96,7 @@ export function ProtocolesScreen({ navigation }: any) {
                  <Text style={styles.cardType}>{p.type.toUpperCase()} • {p.id}</Text>
                </View>
                <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.1)" size={24} />
-             </TouchableOpacity>
+             </AppTouchableOpacity>
           ))}
         </View>
         {filteredProtocols.length === 0 && (

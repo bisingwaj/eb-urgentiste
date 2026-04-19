@@ -1,11 +1,10 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Platform,
+Platform,
   Alert,
   Linking,
   Animated,
@@ -14,11 +13,15 @@ import {
   Modal,
   TextInput,
   KeyboardAvoidingView,
+  ActivityIndicator,
 } from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MapboxMapView } from '../../components/map/MapboxMapView';
+import { FullscreenMapModal } from '../../components/map/FullscreenMapModal';
 import { HospitalMarker, UnitMarker } from '../../components/map/mapMarkers';
+import { useResolveHeadingFromRemotePosition } from '../../hooks/useResolveHeadingFromLocation';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { supabase } from '../../lib/supabase';
@@ -109,30 +112,18 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const [showRefusalModal, setShowRefusalModal] = useState(false);
   const [selectedReason, setSelectedReason] = useState("");
   const [otherReason, setOtherReason] = useState("");
+  const [accepting, setAccepting] = useState(false);
+  const [refusing, setRefusing] = useState(false);
+  const acceptingRef = useRef(false);
+  const refusingRef = useRef(false);
 
   // Swipe Animation
   const pan = useRef(new Animated.Value(0)).current;
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onPanResponderMove: Animated.event([null, { dx: pan }], { useNativeDriver: false }),
-      onPanResponderRelease: (e, gestureState) => {
-        if (gestureState.dx > SWIPE_WIDTH * 0.7) {
-          Animated.spring(pan, {
-            toValue: SWIPE_WIDTH - BUTTON_SIZE,
-            useNativeDriver: false,
-          }).start(() => handleAcceptCase());
-        } else {
-          Animated.spring(pan, {
-            toValue: 0,
-            useNativeDriver: false,
-          }).start();
-        }
-      },
-    })
-  ).current;
 
-  const handleAcceptCase = async () => {
+  const handleAcceptCase = useCallback(async () => {
+    if (acceptingRef.current) return;
+    acceptingRef.current = true;
+    setAccepting(true);
     try {
       await updateCaseStatus(caseData.id, { hospitalStatus: 'accepted' });
       setCaseData(prev => ({
@@ -142,16 +133,50 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
       }));
     } catch (err) {
       Alert.alert('Erreur', 'Impossible d\'accepter le cas actuellement.');
+      Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
+    } finally {
+      acceptingRef.current = false;
+      setAccepting(false);
     }
-  };
+  }, [caseData.id, updateCaseStatus, pan]);
 
-  const handleRefuseCase = async () => {
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => !acceptingRef.current,
+        onPanResponderMove: Animated.event([null, { dx: pan }], { useNativeDriver: false }),
+        onPanResponderRelease: (e, gestureState) => {
+          if (acceptingRef.current) {
+            Animated.spring(pan, { toValue: 0, useNativeDriver: false }).start();
+            return;
+          }
+          if (gestureState.dx > SWIPE_WIDTH * 0.7) {
+            Animated.spring(pan, {
+              toValue: SWIPE_WIDTH - BUTTON_SIZE,
+              useNativeDriver: false,
+            }).start(() => {
+              void handleAcceptCase();
+            });
+          } else {
+            Animated.spring(pan, {
+              toValue: 0,
+              useNativeDriver: false,
+            }).start();
+          }
+        },
+      }),
+    [handleAcceptCase, pan]
+  );
+
+  const handleRefuseCase = useCallback(async () => {
     const finalReason = selectedReason === "Autre raison" ? otherReason : selectedReason;
     if (!finalReason) {
       Alert.alert("Action requise", "Veuillez sélectionner ou saisir une raison.");
       return;
     }
-
+    if (refusingRef.current) return;
+    refusingRef.current = true;
+    setRefusing(true);
     try {
       await updateCaseStatus(caseData.id, {
         hospitalStatus: 'refused',
@@ -162,8 +187,11 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
       Alert.alert("Cas refusé", "Le signalement a été refusé. L'unité mobile est notifiée.");
     } catch (err) {
       Alert.alert('Erreur', 'Impossible de refuser ce cas.');
+    } finally {
+      refusingRef.current = false;
+      setRefusing(false);
     }
-  };
+  }, [selectedReason, otherReason, caseData.id, updateCaseStatus, navigation]);
 
   const unitDialNumber =
     caseData.urgentistePhone && caseData.urgentistePhone !== '-' ? caseData.urgentistePhone : '';
@@ -206,6 +234,8 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
   const [ambulanceLat, setAmbulanceLat] = useState<number | null>(null);
   const [ambulanceLng, setAmbulanceLng] = useState<number | null>(null);
   const [ambulanceSpeed, setAmbulanceSpeed] = useState<number | null>(null);
+  /** Cap brut depuis `active_rescuers.heading` (degrés), si disponible. */
+  const [ambulanceHeadingRaw, setAmbulanceHeadingRaw] = useState<number | null>(null);
   const [ambulanceBattery, setAmbulanceBattery] = useState<number | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [rescuerName, setRescuerName] = useState<string>('Unité');
@@ -300,6 +330,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
         lng?: unknown;
         speed?: unknown;
         battery?: unknown;
+        heading?: unknown;
         updated_at?: string;
       }) => {
         if (!isMounted) return;
@@ -307,6 +338,10 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
         if (data.lng != null) setAmbulanceLng(Number(data.lng));
         setAmbulanceSpeed(data.speed != null ? Number(data.speed) : null);
         setAmbulanceBattery(data.battery != null ? Number(data.battery) : null);
+        if (data.heading != null && Number.isFinite(Number(data.heading))) {
+          const hd = Number(data.heading);
+          setAmbulanceHeadingRaw(hd >= 0 ? hd : null);
+        }
         if (data.updated_at) setLastUpdate(new Date(data.updated_at));
       };
 
@@ -414,13 +449,101 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     [caseData.dispatchStatus],
   );
 
+  const ambulanceDirectionDeg = useResolveHeadingFromRemotePosition({
+    lat: ambulanceLat,
+    lng: ambulanceLng,
+    headingFromServer: ambulanceHeadingRaw,
+    speedMps: ambulanceSpeed,
+  });
+
+  const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false);
+
+  const hospitalFullscreenMapChildren = useMemo(() => {
+    if (!showAmbulanceTracking) return null;
+    return (
+      <>
+        {mapCameraBounds ? (
+          <Mapbox.Camera bounds={mapCameraBounds} animationMode="flyTo" animationDuration={1000} />
+        ) : (
+          <Mapbox.Camera
+            centerCoordinate={mapFallbackCenter}
+            zoomLevel={14}
+            animationMode="flyTo"
+            animationDuration={800}
+          />
+        )}
+        {hospitalCoord && (
+          <Mapbox.MarkerView id="hospital-structure-mv-fs" coordinate={hospitalCoord}>
+            <HospitalMarker
+              label={structureMapLabel}
+              beds={0}
+              onPress={() => Alert.alert('Structure', structureMapLabel, [{ text: 'OK' }])}
+            />
+          </Mapbox.MarkerView>
+        )}
+        {hasAmbulancePosition && (
+          <Mapbox.MarkerView id="ambulance-unit-mv-fs" coordinate={[ambulanceLng!, ambulanceLat!]}>
+            <UnitMarker
+              status={unitMarkerStatus}
+              headingDeg={ambulanceDirectionDeg}
+              onPress={() => Alert.alert('Unité', caseData.urgentisteName, [{ text: 'OK' }])}
+            />
+          </Mapbox.MarkerView>
+        )}
+        {routeGeoJSON && (
+          <Mapbox.ShapeSource id="hospital-route-fs" shape={routeGeoJSON}>
+            <Mapbox.LineLayer
+              id="hospital-route-line-fs"
+              style={{
+                lineColor: colors.routePrimary,
+                lineWidth: 4,
+                lineOpacity: 0.85,
+              }}
+            />
+          </Mapbox.ShapeSource>
+        )}
+      </>
+    );
+  }, [
+    showAmbulanceTracking,
+    mapCameraBounds,
+    mapFallbackCenter,
+    hospitalCoord,
+    hasAmbulancePosition,
+    ambulanceLng,
+    ambulanceLat,
+    routeGeoJSON,
+    structureMapLabel,
+    unitMarkerStatus,
+    caseData.urgentisteName,
+    ambulanceDirectionDeg,
+  ]);
+
+  const hospitalFullscreenTopOverlay = useMemo(() => {
+    if (!showAmbulanceTracking) return null;
+    return (
+      <View style={{ gap: 10 }}>
+        {!hospitalCoord && (
+          <View style={styles.fullscreenBannerRow}>
+            <MaterialIcons name="info-outline" size={16} color="#FFF" />
+            <Text style={styles.coordsMissingText}>Coordonnées de la structure indisponibles</Text>
+          </View>
+        )}
+        <View style={styles.fullscreenGpsBadge}>
+          <View style={[styles.liveDot, isSignalLost ? { backgroundColor: '#FFF' } : {}]} />
+          <Text style={styles.liveText}>{isSignalLost ? 'SIGNAL PERDU' : 'GPS EN DIRECT'}</Text>
+        </View>
+      </View>
+    );
+  }, [showAmbulanceTracking, hospitalCoord, isSignalLost]);
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <Text style={styles.headerTitle}>
             {showAmbulanceTracking ? "Suivi de l'ambulance" : 'Détails du cas'}
@@ -470,6 +593,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                   <Mapbox.MarkerView id="ambulance-unit-mv" coordinate={[ambulanceLng!, ambulanceLat!]}>
                     <UnitMarker
                       status={unitMarkerStatus}
+                      headingDeg={ambulanceDirectionDeg}
                       onPress={() =>
                         Alert.alert('Unité', caseData.urgentisteName, [{ text: 'OK' }])
                       }
@@ -499,6 +623,14 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 <View style={[styles.liveDot, isSignalLost ? { backgroundColor: '#FFF' } : {}]} />
                 <Text style={styles.liveText}>{isSignalLost ? 'SIGNAL PERDU' : 'GPS EN DIRECT'}</Text>
               </View>
+              <AppTouchableOpacity
+                style={styles.mapFullscreenEntryBtn}
+                onPress={() => setMapFullscreenOpen(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Carte plein écran"
+              >
+                <MaterialIcons name="fullscreen" color="#FFF" size={22} />
+              </AppTouchableOpacity>
             </View>
 
             <View style={styles.trackingInfoLite}>
@@ -635,8 +767,8 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                     <Text style={styles.unitHint}>Appeler ou SMS l’équipe terrain (numéro unité)</Text>
                   </View>
                   <View style={styles.unitActions}>
-                    <TouchableOpacity style={styles.unitBtn} onPress={handleCall}><MaterialIcons name="phone" color={colors.success} size={20} /></TouchableOpacity>
-                    <TouchableOpacity style={[styles.unitBtn, { backgroundColor: 'rgba(68,138,255,0.1)' }]} onPress={handleMessage}><MaterialIcons name="chat" color={colors.secondary} size={20} /></TouchableOpacity>
+                    <AppTouchableOpacity style={styles.unitBtn} onPress={handleCall}><MaterialIcons name="phone" color={colors.success} size={20} /></AppTouchableOpacity>
+                    <AppTouchableOpacity style={[styles.unitBtn, { backgroundColor: 'rgba(68,138,255,0.1)' }]} onPress={handleMessage}><MaterialIcons name="chat" color={colors.secondary} size={20} /></AppTouchableOpacity>
                   </View>
                 </View>
               </View>
@@ -707,57 +839,69 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
       {needsHospitalSwipe ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <View style={styles.swipeContainer}>
-            <View style={styles.swipeBackground}><Text style={styles.swipeText}>Glisser pour accepter</Text><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.3)" size={24} /></View>
-            <Animated.View style={[styles.swipeThumb, { transform: [{ translateX: pan }] }]} {...panResponder.panHandlers}><MaterialIcons name="keyboard-double-arrow-right" color="#000" size={24} /></Animated.View>
+            {accepting ? (
+              <View style={styles.swipeLoading}>
+                <ActivityIndicator color="#FFF" />
+              </View>
+            ) : (
+              <>
+                <View style={styles.swipeBackground}><Text style={styles.swipeText}>Glisser pour accepter</Text><MaterialIcons name="chevron-right" color="rgba(255,255,255,0.3)" size={24} /></View>
+                <Animated.View style={[styles.swipeThumb, { transform: [{ translateX: pan }] }]} {...panResponder.panHandlers}><MaterialIcons name="keyboard-double-arrow-right" color="#000" size={24} /></Animated.View>
+              </>
+            )}
           </View>
-          <TouchableOpacity style={styles.refuseBtn} onPress={() => setShowRefusalModal(true)}>
+          <AppTouchableOpacity
+            style={[styles.refuseBtn, (accepting || refusing) && { opacity: 0.5 }]}
+            disabled={accepting || refusing}
+            onPress={() => setShowRefusalModal(true)}
+          >
             <Text style={styles.refuseText}>Refuser le cas</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
       ) : caseData.status === 'admis' ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <Text style={styles.postAcceptHint}>
             Admission administrative enregistrée. Passez au triage clinique pour la suite du dossier.
           </Text>
-          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToTriage}>
+          <AppTouchableOpacity style={styles.admissionBtn} onPress={handleGoToTriage}>
             <MaterialIcons name="assignment" color="#000" size={24} />
             <Text style={styles.admissionBtnText}>Continuer vers le triage</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
       ) : caseData.status === 'triage' ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <Text style={styles.postAcceptHint}>
             Triage clinique enregistré. Poursuivez avec la prise en charge médicale.
           </Text>
-          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToPriseEnCharge}>
+          <AppTouchableOpacity style={styles.admissionBtn} onPress={handleGoToPriseEnCharge}>
             <MaterialIcons name="medical-services" color="#000" size={24} />
             <Text style={styles.admissionBtnText}>Continuer vers la prise en charge</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
       ) : caseData.status === 'prise_en_charge' ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <Text style={styles.postAcceptHint}>
             Prise en charge active. Ouvrez la surveillance pour le suivi du patient.
           </Text>
-          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToMonitoring}>
+          <AppTouchableOpacity style={styles.admissionBtn} onPress={handleGoToMonitoring}>
             <MaterialIcons name="monitor-heart" color="#000" size={24} />
             <Text style={styles.admissionBtnText}>Ouvrir la surveillance</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
       ) : caseData.status === 'monitoring' ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
           <Text style={styles.postAcceptHint}>Surveillance en cours pour ce dossier.</Text>
-          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToMonitoring}>
+          <AppTouchableOpacity style={styles.admissionBtn} onPress={handleGoToMonitoring}>
             <MaterialIcons name="visibility" color="#000" size={24} />
             <Text style={styles.admissionBtnText}>Voir la surveillance</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
       ) : isEnRoute ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToAdmission}>
+          <AppTouchableOpacity style={styles.admissionBtn} onPress={handleGoToAdmission}>
             <MaterialIcons name="local-hospital" color="#000" size={24} />
             <Text style={styles.admissionBtnText}>Patient arrivé - Admettre</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
       ) : hasHospitalAccepted ? (
         <View style={[styles.stickyFooter, { paddingBottom: Math.max(insets.bottom, 20) }]}>
@@ -766,10 +910,10 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
               ? 'Cas accepté. Le suivi ambulance et l’itinéraire vers votre structure sont affichés ci-dessus. Vous pourrez admettre le patient à l’arrivée.'
               : 'Cas accepté. Le suivi GPS s’affichera lorsqu’une unité sera assignée au dispatch.'}
           </Text>
-          <TouchableOpacity style={styles.admissionBtn} onPress={handleGoToAdmission}>
+          <AppTouchableOpacity style={styles.admissionBtn} onPress={handleGoToAdmission}>
             <MaterialIcons name="arrow-forward" color="#000" size={24} />
             <Text style={styles.admissionBtnText}>Continuer vers l’admission</Text>
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
       ) : null}
 
@@ -793,9 +937,9 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
             >
               <View style={styles.modalHeader}>
                 <Text style={styles.modalTitle}>Raison du refus</Text>
-                <TouchableOpacity onPress={() => setShowRefusalModal(false)}>
+                <AppTouchableOpacity disabled={refusing} onPress={() => setShowRefusalModal(false)}>
                   <MaterialIcons name="close" color="rgba(255,255,255,0.4)" size={24} />
-                </TouchableOpacity>
+                </AppTouchableOpacity>
               </View>
               <Text style={styles.modalSub}>Veuillez indiquer pourquoi vous ne pouvez pas recevoir ce patient.</Text>
 
@@ -810,10 +954,10 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 nestedScrollEnabled
               >
                 {REFUSAL_REASONS.map((r, i) => (
-                  <TouchableOpacity key={i} style={[styles.reasonItem, selectedReason === r && styles.reasonItemActive]} onPress={() => setSelectedReason(r)}>
+                  <AppTouchableOpacity key={i} style={[styles.reasonItem, selectedReason === r && styles.reasonItemActive]} onPress={() => setSelectedReason(r)}>
                     <Text style={[styles.reasonText, selectedReason === r && styles.reasonTextActive]}>{r}</Text>
                     {selectedReason === r && <MaterialIcons name="check-circle" color={colors.primary} size={20} />}
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 ))}
 
                 {selectedReason === 'Autre raison' && (
@@ -829,13 +973,29 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
                 )}
               </ScrollView>
 
-              <TouchableOpacity style={styles.confirmRefusalBtn} onPress={handleRefuseCase}>
-                <Text style={styles.confirmRefusalText}>CONFIRMER LE REFUS</Text>
-              </TouchableOpacity>
+              <AppTouchableOpacity
+                style={[styles.confirmRefusalBtn, refusing && { opacity: 0.65 }]}
+                disabled={refusing}
+                onPress={handleRefuseCase}
+              >
+                {refusing ? (
+                  <ActivityIndicator color="#FFF" />
+                ) : (
+                  <Text style={styles.confirmRefusalText}>CONFIRMER LE REFUS</Text>
+                )}
+              </AppTouchableOpacity>
             </View>
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      <FullscreenMapModal
+        visible={mapFullscreenOpen && hospitalFullscreenMapChildren != null}
+        onClose={() => setMapFullscreenOpen(false)}
+        topOverlay={hospitalFullscreenTopOverlay ?? undefined}
+      >
+        {hospitalFullscreenMapChildren}
+      </FullscreenMapModal>
     </SafeAreaView>
   );
 }
@@ -875,6 +1035,40 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     overflow: 'hidden',
     backgroundColor: '#111',
+    position: 'relative',
+  },
+  mapFullscreenEntryBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  fullscreenBannerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+  },
+  fullscreenGpsBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 8,
   },
   liveMap: { flex: 1 },
   /** Bloc sous la carte : infos légères, pas de « carte » UI */
@@ -943,6 +1137,7 @@ const styles = StyleSheet.create({
   liveText: { color: '#FFF', fontSize: 13, fontWeight: '900' },
   stickyFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 16, backgroundColor: colors.mainBackground },
   swipeContainer: { height: 64, width: SWIPE_WIDTH, backgroundColor: '#1A1A1A', borderRadius: 32, padding: 4, justifyContent: 'center', overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  swipeLoading: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   swipeBackground: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
   swipeText: { color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '700' },
   swipeThumb: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.success, justifyContent: 'center', alignItems: 'center' },

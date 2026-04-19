@@ -1,8 +1,11 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { Alert, Vibration, DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { uploadIncidentTerrainPhotoToStorage } from '../lib/incidentTerrainPhotos';
 import { useAuth } from './AuthContext';
-import { Mission, normalizeHospitalStatus } from '../hooks/useActiveMission';
+import { Mission, normalizeHospitalStatus } from '../types/mission';
+import { readMissionCache, writeMissionCache } from '../lib/localAppCache';
+import { APP_FOREGROUND_SYNC } from '../lib/syncEvents';
 
 /** PostgREST / JSON peuvent renvoyer des nombres en string */
 function toNullableNumber(v: unknown): number | null {
@@ -31,6 +34,8 @@ interface SupabaseIncident {
   commune: string | null;
   recommended_facility: string | null;
   created_at: string;
+  /** URLs Storage / HTTPS — photos terrain ajoutées par l’urgentiste */
+  media_urls?: string[] | null;
 }
 
 interface SupabaseDispatch {
@@ -115,6 +120,12 @@ interface MissionContextType {
     status: 'en_route' | 'on_scene' | 'en_route_hospital' | 'arrived_hospital' | 'mission_end' | 'completed',
   ) => Promise<void>;
   updateMissionDetails: (details: Partial<Mission> & { assessment?: any }) => Promise<void>;
+  /** Photo terrain : upload Storage + append `incidents.media_urls`. Passer `meta` si `activeMission` peut être absent (ex. état restauré). */
+  appendIncidentTerrainPhoto: (
+    localUri: string,
+    mimeType: string,
+    meta?: { incidentId: string; previousUrls?: string[] | null },
+  ) => Promise<void>;
   /** Désactivé pour l’urgentiste (affectation via `dispatches.assigned_structure_*` uniquement). */
   fetchHospitals: () => Promise<Hospital[]>;
 }
@@ -124,20 +135,28 @@ const MissionContext = createContext<MissionContextType | undefined>(undefined);
 export function MissionProvider({ children }: { children: ReactNode }) {
   const { profile } = useAuth();
   const [activeMission, setActiveMission] = useState<Mission | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeMissionRef = useRef<Mission | null>(null);
+  /** Un seul « chargement » visible par unité : premier fetch sans cache, pas les refetch Realtime. */
+  const firstSilentFetchForUnitRef = useRef(true);
+  useEffect(() => {
+    activeMissionRef.current = activeMission;
+  }, [activeMission]);
 
   const fetchActiveMission = useCallback(async (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
-    if (!profile?.assigned_unit_id) {
-      if (!silent) setIsLoading(false);
+    const unitId = profile?.assigned_unit_id;
+    if (!unitId) {
+      setIsLoading(false);
       setActiveMission(null);
       return;
     }
 
     try {
       if (!silent) setIsLoading(true);
+      else if (firstSilentFetchForUnitRef.current && !activeMissionRef.current) setIsLoading(true);
       /** `incidents!inner` = jointure stricte dispatch → incident ; `citizen_id` et champs UI viennent d’ici. */
       const { data, error: dispatchError } = await supabase
         .from('dispatches')
@@ -163,11 +182,12 @@ export function MissionProvider({ children }: { children: ReactNode }) {
             caller_realtime_updated_at,
             commune,
             recommended_facility,
-            created_at
+            created_at,
+            media_urls
           )
         `.trim()
         )
-        .eq('unit_id', profile.assigned_unit_id)
+        .eq('unit_id', unitId)
         .in('status', ['dispatched', 'en_route', 'on_scene', 'en_route_hospital', 'arrived_hospital', 'mission_end'])
         .order('created_at', { ascending: false })
         .limit(1)
@@ -214,7 +234,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           logStructureGps('fetchActiveMission', dispatch as unknown as Record<string, unknown>);
         }
 
-        setActiveMission({
+        const mission: Mission = {
           id: dispatch.id,
           incident_id: incident.id,
           citizen_id: incident.citizen_id != null ? String(incident.citizen_id) : null,
@@ -241,15 +261,19 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           hospital_status,
           hospital_notes,
           hospital_data,
-        });
+        };
+        setActiveMission(mission);
+        void writeMissionCache(unitId, mission);
       } else {
         setActiveMission(null);
+        void writeMissionCache(unitId, null);
       }
     } catch (err: any) {
       console.error('[MissionProvider] Fetch error:', err.message);
       setError(err.message);
     } finally {
-      if (!silent) setIsLoading(false);
+      setIsLoading(false);
+      firstSilentFetchForUnitRef.current = false;
     }
   }, [profile?.assigned_unit_id]);
 
@@ -296,9 +320,27 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(() => fetchActiveMission({ silent: true }), [fetchActiveMission]);
 
-  /** Chargement initial + changement d’unité */
+  /** Hydratation cache locale puis sync silencieuse (pas de spinner bloquant). */
   useEffect(() => {
-    fetchActiveMission({ silent: false });
+    let cancelled = false;
+    firstSilentFetchForUnitRef.current = true;
+    (async () => {
+      if (!profile?.assigned_unit_id) {
+        setActiveMission(null);
+        return;
+      }
+      const uid = profile.assigned_unit_id;
+      const cached = await readMissionCache(uid);
+      if (cancelled) return;
+      if (cached) {
+        activeMissionRef.current = cached;
+        setActiveMission(cached);
+      }
+      await fetchActiveMission({ silent: true });
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [profile?.assigned_unit_id, fetchActiveMission]);
 
   /** Dispatches : INSERT / UPDATE par unité (temps réel) */
@@ -320,14 +362,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           console.log('[Mission] 🚨 NOUVELLE MISSION REÇUE !', payload.new?.id);
           // Déclencher l'alarme sonore continue (gérée par AlertAlarmManager)
           DeviceEventEmitter.emit('NEW_MISSION_ALERT');
-          fetchActiveMission({ silent: true }).then(() => {
-            Alert.alert(
-              '🚨 NOUVELLE MISSION',
-              'La centrale vous a assigné une intervention urgente.',
-              [{ text: 'VOIR LA MISSION', style: 'default' }],
-              { cancelable: false }
-            );
-          });
+          void fetchActiveMission({ silent: true });
         }
       )
       .on(
@@ -412,22 +447,35 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           const newData = payload.new;
           const newLat = toNullableNumber(newData.caller_realtime_lat ?? newData.location_lat);
           const newLng = toNullableNumber(newData.caller_realtime_lng ?? newData.location_lng);
-          if (newLat == null || newLng == null) return;
-          console.log(`📡 [MAJ POSITION VICTIME TEMPS RÉEL] : ${newLat}, ${newLng}`);
-          setActiveMission((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  location: {
-                     ...prev.location,
-                     lat: newLat,
-                     lng: newLng,
-                     address: newData.location_address ?? prev.location.address,
-                     commune: newData.commune ?? prev.location.commune,
-                  },
-                }
-              : null
-          );
+          const hasGeo = newLat != null && newLng != null;
+          const mediaPatch =
+            newData.media_urls !== undefined && Array.isArray(newData.media_urls)
+              ? (newData.media_urls as string[]).filter((u) => typeof u === 'string' && u.length > 0)
+              : null;
+
+          if (hasGeo) {
+            console.log(`📡 [MAJ POSITION VICTIME TEMPS RÉEL] : ${newLat}, ${newLng}`);
+          }
+          if (!hasGeo && !mediaPatch) return;
+
+          setActiveMission((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              ...(hasGeo
+                ? {
+                    location: {
+                      ...prev.location,
+                      lat: newLat!,
+                      lng: newLng!,
+                      address: newData.location_address ?? prev.location.address,
+                      commune: newData.commune ?? prev.location.commune,
+                    },
+                  }
+                : {}),
+              ...(mediaPatch ? { media_urls: mediaPatch } : {}),
+            };
+          });
         }
       );
 
@@ -457,20 +505,23 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       if (status === 'arrived_hospital') updateData.arrived_at = new Date().toISOString();
       if (status === 'completed') updateData.completed_at = new Date().toISOString();
 
-      // 1. Update active dispatch
-      console.log(`[Mission] 🔄 Updating dispatch ${activeMission.id} → ${status}`);
-      const { error: dispatchError } = await supabase
-        .from('dispatches')
-        .update(updateData)
-        .eq('id', activeMission.id);
+      // Prepare promises for parallel execution
+      const promises = [];
 
-      if (dispatchError) {
-        console.error('[Mission] ❌ STEP 1 FAILED — dispatches UPDATE:', dispatchError.message, dispatchError.details);
-        throw dispatchError;
-      }
-      console.log('[Mission] ✅ Step 1 — dispatch updated');
-      
-      // 2. incidents.status — aligné PROMPT_CURSOR_URGENTISTE_WORKFLOW §8 + NOTE_LOVABLE (ex. mission_end → ended).
+      // 1. Update active dispatch
+      console.log(`[Mission] 🔄 Parallelizing update: dispatch ${activeMission.id} → ${status}`);
+      promises.push(
+        supabase
+          .from('dispatches')
+          .update(updateData)
+          .eq('id', activeMission.id)
+          .then(({ error }) => {
+            if (error) console.error('[Mission] ❌ Dispatch update failed:', error.message);
+            return { type: 'dispatch', error };
+          })
+      );
+
+      // 2. incidents.status
       const incidentStatusMap: Record<string, string> = {
         en_route: 'en_route',
         on_scene: 'arrived',
@@ -480,19 +531,21 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         completed: 'resolved',
       };
       const incidentStatus = incidentStatusMap[status] || status;
-      
-      const { error: incidentError } = await supabase
-        .from('incidents')
-        .update({
-          status: incidentStatus,
-          ...(incidentStatus === 'resolved' ? { resolved_at: new Date().toISOString() } : {}),
-        })
-        .eq('id', activeMission.incident_id);
+      promises.push(
+        supabase
+          .from('incidents')
+          .update({
+            status: incidentStatus,
+            ...(incidentStatus === 'resolved' ? { resolved_at: new Date().toISOString() } : {}),
+          })
+          .eq('id', activeMission.incident_id)
+          .then(({ error }) => {
+            if (error) console.error('[Mission] ⚠️ Incident update failed:', error.message);
+            return { type: 'incident', error };
+          })
+      );
 
-      if (incidentError) console.error('[Mission] ⚠️ Step 2 — incident update failed:', incidentError.message);
-      else console.log(`[Mission] ✅ Step 2 — incident → ${incidentStatus}`);
-
-      // 3. Sync active_rescuers.status → trigger → units.status (tableau workflow PROMPT_CURSOR_URGENTISTE)
+      // 3. Sync active_rescuers.status
       const rescuerStatusMap: Record<string, string> = {
         en_route: 'en_route',
         on_scene: 'on_scene',
@@ -503,16 +556,30 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       };
       const rescuerStatus = rescuerStatusMap[status] || 'active';
 
-      const userId = (await supabase.auth.getUser()).data.user?.id;
-      if (userId) {
-        const { error: rescuerError } = await supabase
-          .from('active_rescuers')
-          .update({ status: rescuerStatus, updated_at: new Date().toISOString() })
-          .eq('user_id', userId);
-        
-        if (rescuerError) console.error('[MissionProvider] Error syncing rescuer status:', rescuerError.message);
-        else console.log(`[Mission] ✅ Rescuer status → ${rescuerStatus}`);
+      promises.push(
+        (async () => {
+          const uData = await supabase.auth.getUser();
+          const userId = uData.data.user?.id;
+          if (userId) {
+            const { error } = await supabase
+              .from('active_rescuers')
+              .update({ status: rescuerStatus, updated_at: new Date().toISOString() })
+              .eq('user_id', userId);
+            if (error) console.error('[Mission] ⚠️ Rescuer status sync failed:', error.message);
+            return { type: 'rescuer', error };
+          }
+          return { type: 'rescuer', error: null };
+        })()
+      );
+
+      // Execute all updates in parallel
+      const results = await Promise.all(promises);
+      const criticalError = results.find(r => r.type === 'dispatch' && r.error);
+      if (criticalError?.error) {
+        throw criticalError.error;
       }
+
+      console.log('[Mission] ✅ All parallel updates triggered');
       // Update local state immediately
       if (status === 'completed') {
         // Mission terminée → vider immédiatement pour que le HomeTab affiche "Standby"
@@ -530,18 +597,40 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     if (!activeMission) return;
 
     try {
-      // Pour l'instant, on sauvegarde l'évaluation dans la description de l'incident
+      // SAUVEGARDE DU BILAN MÉDICAL
       if (details.assessment) {
-        const assessmentText = ` [ÉVALUATION] Conscience: ${details.assessment.conscious ? 'Oui' : 'Non'}, Respiration: ${details.assessment.breathing ? 'Oui' : 'Non'}, Gravité: ${details.assessment.severity}`;
+        // 1. Version texte pour compatibilité héritée (Incidents.description)
+        const assessmentFields = Object.entries(details.assessment)
+          .filter(([key]) => key !== 'assessment_completed_at')
+          .map(([key, val]) => `${key}: ${val === true ? 'Oui' : val === false ? 'Non' : val}`);
         
-        const { error } = await supabase
+        const assessmentText = ` [ÉVALUATION] ${assessmentFields.join(', ')}`;
+        
+        // Exécution en parallèle pour performance
+        const p1 = supabase
           .from('incidents')
           .update({ 
             description: (activeMission.description || '') + assessmentText 
           })
           .eq('id', activeMission.incident_id);
 
-        if (error) throw error;
+        // 2. Version structurée pour le futur (Dispatches.medical_assessment)
+        const p2 = supabase
+          .from('dispatches')
+          .update({ 
+            medical_assessment: {
+              ...details.assessment,
+              assessment_completed_at: new Date().toISOString()
+            } 
+          })
+          .eq('id', activeMission.id);
+
+        const [r1, r2] = await Promise.all([p1, p2]);
+        if (r1.error) console.error('[MissionContext] Legacy description update error:', r1.error.message);
+        if (r2.error) {
+          console.warn('[MissionContext] Medical assessment JSONB update error (column might not exist yet):', r2.error.message);
+          // On ne bloque pas si la colonne n'est pas encore là
+        }
       }
       
       setActiveMission(prev => prev ? { ...prev, ...details } : null);
@@ -551,10 +640,54 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const appendIncidentTerrainPhoto = async (
+    localUri: string,
+    mimeType: string,
+    meta?: { incidentId: string; previousUrls?: string[] | null },
+  ) => {
+    const incidentId = meta?.incidentId ?? activeMission?.incident_id;
+    if (!incidentId) {
+      throw new Error('Aucun incident lié à cette mission.');
+    }
+
+    try {
+      const publicUrl = await uploadIncidentTerrainPhotoToStorage(incidentId, localUri, mimeType);
+      const prevUrls =
+        meta?.previousUrls != null
+          ? meta.previousUrls.filter((u) => typeof u === 'string' && u.length > 0)
+          : activeMission?.incident_id === incidentId
+            ? activeMission.media_urls ?? []
+            : [];
+      const nextUrls = [...prevUrls, publicUrl];
+
+      const { error } = await supabase
+        .from('incidents')
+        .update({ media_urls: nextUrls })
+        .eq('id', incidentId);
+
+      if (error) throw error;
+
+      setActiveMission((p) =>
+        p && p.incident_id === incidentId ? { ...p, media_urls: nextUrls } : p,
+      );
+      await fetchActiveMission({ silent: true });
+    } catch (err: any) {
+      console.error('[MissionProvider] appendIncidentTerrainPhoto:', err.message);
+      throw err;
+    }
+  };
+
   const fetchHospitals = async (): Promise<Hospital[]> => {
     /** L’urgentiste n’utilise pas `health_structures` pour l’affectation (voir workflow Lovable). */
     return [];
   };
+
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener(APP_FOREGROUND_SYNC, () => {
+      void fetchActiveMission({ silent: true });
+    });
+    return () => sub.remove();
+  }, [fetchActiveMission]);
 
   return (
     <MissionContext.Provider value={{ 
@@ -564,6 +697,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       refresh, 
       updateDispatchStatus,
       updateMissionDetails,
+      appendIncidentTerrainPhoto,
       fetchHospitals
     }}>
       {children}

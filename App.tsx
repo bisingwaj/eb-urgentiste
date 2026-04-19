@@ -25,6 +25,9 @@ import { GlobalAlert } from './src/components/shared/GlobalAlert';
 import { AlertAlarmManager } from './src/components/alerts/AlertAlarmManager';
 import { HospitalAlertManager } from './src/components/alerts/HospitalAlertManager';
 import { BrandedSplashScreen } from './src/components/splash/BrandedSplashScreen';
+import { GlobalDialogProvider } from './src/contexts/GlobalDialogContext';
+import { ForegroundSync } from './src/components/sync/ForegroundSync';
+import { LocationGatekeeper } from './src/components/shared/LocationGatekeeper';
 
 // Shared entry screens
 import { LoginPage } from './src/screens/LoginPage';
@@ -60,6 +63,9 @@ import { SignalerProblemeScreen } from './src/screens/urgentiste/SignalerProblem
 import { MissionActiveScreen } from './src/screens/urgentiste/MissionActiveScreen';
 import { MissionDetailScreen } from './src/screens/urgentiste/MissionDetailScreen';
 import { NotificationsScreen } from './src/screens/urgentiste/NotificationsScreen';
+import { SignalementHubScreen } from './src/screens/urgentiste/SignalementHubScreen';
+import { SuiviSignalementsScreen } from './src/screens/urgentiste/SuiviSignalementsScreen';
+import { SignalementDetailScreen } from './src/screens/urgentiste/SignalementDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -178,6 +184,9 @@ function RootNavigator() {
           <Stack.Screen name="Signalement" component={SignalementScreen} />
           <Stack.Screen name="Protocoles" component={ProtocolesScreen} />
           <Stack.Screen name="SignalerProbleme" component={SignalerProblemeScreen} />
+          <Stack.Screen name="SignalementHub" component={SignalementHubScreen} />
+          <Stack.Screen name="SuiviSignalements" component={SuiviSignalementsScreen} />
+          <Stack.Screen name="SignalementDetail" component={SignalementDetailScreen} />
           <Stack.Screen name="MissionActive" component={MissionActiveScreen} />
           <Stack.Screen name="MissionDetail" component={MissionDetailScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />
@@ -227,27 +236,32 @@ export default function App() {
 
   return (
     <AuthProvider>
-      <MissionProvider>
-        <HospitalProvider>
-          <AppLockProvider>
-            <SafeAreaProvider>
-              <StatusBar barStyle="light-content" backgroundColor="#000000" />
-              <NavigationContainer ref={navigationRef} theme={navTheme}>
-                <CallSessionProvider>
-                  <PushTokenRegistration />
-                  <RootNavigator />
-                  <FloatingCallBar />
-                  <IncomingCallSubscriber />
-                  <IncomingCallNotificationHandler />
-                  <GlobalAlert />
-                  <AlertAlarmManager />
-                  <HospitalAlertManager />
-                </CallSessionProvider>
-              </NavigationContainer>
-            </SafeAreaProvider>
-          </AppLockProvider>
-        </HospitalProvider>
-      </MissionProvider>
+      <GlobalDialogProvider>
+        <MissionProvider>
+          <HospitalProvider>
+            <AppLockProvider>
+              <SafeAreaProvider>
+                <StatusBar barStyle="light-content" backgroundColor="#000000" />
+                <LocationGatekeeper>
+                  <NavigationContainer ref={navigationRef} theme={navTheme}>
+                    <CallSessionProvider>
+                      <PushTokenRegistration />
+                      <ForegroundSync />
+                      <RootNavigator />
+                      <FloatingCallBar />
+                      <IncomingCallSubscriber />
+                      <IncomingCallNotificationHandler />
+                      <GlobalAlert />
+                      <AlertAlarmManager />
+                      <HospitalAlertManager />
+                    </CallSessionProvider>
+                  </NavigationContainer>
+                </LocationGatekeeper>
+              </SafeAreaProvider>
+            </AppLockProvider>
+          </HospitalProvider>
+        </MissionProvider>
+      </GlobalDialogProvider>
     </AuthProvider>
   );
 }

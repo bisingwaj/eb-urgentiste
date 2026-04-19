@@ -3,13 +3,14 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   TextInput,
   Platform,
   Alert,
   KeyboardAvoidingView,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import {
   SafeAreaView,
   useSafeAreaInsets,
@@ -89,10 +90,12 @@ export function HospitalTriageScreen({ route, navigation }: any) {
     caseData.provisionalDiagnosis || "",
   );
   const [triageNotes, setTriageNotes] = useState(caseData.triageNotes || "");
+  const [submitting, setSubmitting] = useState(false);
 
   const totalSteps = 3;
 
   const handleNext = () => {
+    if (submitting) return;
     if (step < totalSteps) {
       setStep(step + 1);
     } else {
@@ -130,6 +133,7 @@ export function HospitalTriageScreen({ route, navigation }: any) {
         {
           text: "Valider",
           onPress: async () => {
+            setSubmitting(true);
             try {
               const triageRecordedAt = new Date().toISOString();
               const vitalsForDb = {
@@ -174,6 +178,8 @@ export function HospitalTriageScreen({ route, navigation }: any) {
               });
             } catch (err) {
               Alert.alert("Erreur", "Impossible de sauvegarder le triage.");
+            } finally {
+              setSubmitting(false);
             }
           },
         },
@@ -194,7 +200,7 @@ export function HospitalTriageScreen({ route, navigation }: any) {
               {TRIAGE_LEVELS.map((level) => {
                 const isSelected = triageLevel === level.key;
                 return (
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     key={level.key}
                     style={[
                       styles.triageCard,
@@ -239,7 +245,7 @@ export function HospitalTriageScreen({ route, navigation }: any) {
                         <MaterialIcons name="check" color="#FFF" size={14} />
                       </View>
                     )}
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 );
               })}
             </View>
@@ -486,9 +492,9 @@ export function HospitalTriageScreen({ route, navigation }: any) {
         keyboardVerticalOffset={Platform.OS === "ios" ? 56 : 0}
       >
         <View style={styles.header}>
-          <TouchableOpacity onPress={handlePrev} style={styles.iconBtn}>
+          <AppTouchableOpacity onPress={handlePrev} style={styles.iconBtn}>
             <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
           <View style={styles.progressContainer}>
             <View style={styles.progressBarBg}>
               <View
@@ -502,14 +508,14 @@ export function HospitalTriageScreen({ route, navigation }: any) {
               Évaluation de triage · {step}/{totalSteps}
             </Text>
           </View>
-          <TouchableOpacity
+          <AppTouchableOpacity
             onPress={handleOpenCaseDetail}
             style={styles.headerLinkBtn}
             accessibilityRole="button"
             accessibilityLabel="Voir le suivi et la carte"
           >
             <MaterialIcons name="map" size={22} color={colors.secondary} />
-          </TouchableOpacity>
+          </AppTouchableOpacity>
         </View>
 
         <View style={styles.content}>{renderStepContent()}</View>
@@ -520,36 +526,44 @@ export function HospitalTriageScreen({ route, navigation }: any) {
             { paddingBottom: Math.max(insets.bottom, 14) },
           ]}
         >
-          <TouchableOpacity style={styles.backStepBtn} onPress={handlePrev}>
+          <AppTouchableOpacity style={styles.backStepBtn} onPress={handlePrev}>
             <Text style={styles.backStepText}>
               {step === 1 ? "Annuler" : "Précédent"}
             </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
+          </AppTouchableOpacity>
+          <AppTouchableOpacity
             style={[
               styles.nextBtn,
               step === 1 && !triageLevel && styles.btnDisabled,
               step === 2 &&
                 (!vitals.tension || !vitals.heartRate) &&
                 styles.btnDisabled,
+              submitting && styles.btnDisabled,
             ]}
             onPress={handleNext}
             disabled={
+              submitting ||
               (step === 1 && !triageLevel) ||
               (step === 2 && (!vitals.tension || !vitals.heartRate))
             }
           >
-            <Text style={styles.nextBtnText}>
-              {step === totalSteps ? "Confirmer le triage" : "Suivant"}
-            </Text>
-            <MaterialIcons
-              name={
-                step === totalSteps ? "assignment-turned-in" : "chevron-right"
-              }
-              color="#FFF"
-              size={22}
-            />
-          </TouchableOpacity>
+            {submitting && step === totalSteps ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <>
+                <Text style={styles.nextBtnText}>
+                  {step === totalSteps ? "Confirmer le triage" : "Suivant"}
+                </Text>
+                <MaterialIcons
+                  name={
+                    step === totalSteps ? "assignment-turned-in" : "chevron-right"
+                  }
+                  color="#FFF"
+                  size={22}
+                />
+              </>
+            )}
+          </AppTouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>

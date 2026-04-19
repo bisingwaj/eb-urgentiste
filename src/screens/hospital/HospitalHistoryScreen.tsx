@@ -4,11 +4,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  TouchableOpacity,
-  Platform,
+Platform,
   ActivityIndicator,
-  RefreshControl,
-} from 'react-native';
+  RefreshControl} from 'react-native';
+import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
@@ -97,9 +96,9 @@ export function HospitalHistoryScreen({ navigation }: any) {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
       <View style={styles.appBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+        <AppTouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <MaterialIcons name="arrow-back" size={24} color="#FFF" />
-        </TouchableOpacity>
+        </AppTouchableOpacity>
         <Text style={styles.appBarTitle}>Historique & Analyses</Text>
         <View style={{ width: 40 }} />
       </View>
@@ -168,7 +167,7 @@ export function HospitalHistoryScreen({ navigation }: any) {
                 </View>
               ) : (
                 pastCases.map((item) => (
-                  <TouchableOpacity
+                  <AppTouchableOpacity
                     key={item.id}
                     style={styles.historyCard}
                     onPress={() =>
@@ -226,7 +225,7 @@ export function HospitalHistoryScreen({ navigation }: any) {
                       </Text>
                       <MaterialIcons name="chevron-right" color="rgba(255,255,255,0.2)" size={20} />
                     </View>
-                  </TouchableOpacity>
+                  </AppTouchableOpacity>
                 ))
               )}
             </View>

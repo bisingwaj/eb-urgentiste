@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Dimensions, ActivityIndicator, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ActivityIndicator, LayoutAnimation, Platform, UIManager, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
 import { useAuth } from '../contexts/AuthContext';
+import { AppTouchableOpacity } from '../components/ui/AppTouchableOpacity';
 
 const { height } = Dimensions.get('window');
 
@@ -22,6 +23,15 @@ export function LoginPage({ navigation }: any) {
   const [pin, setPin] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const pinValueAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.timing(pinValueAnim, {
+      toValue: activeInput === 'PIN' ? 1 : 0,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
+  }, [activeInput]);
 
   const onNumpadTap = (number: string) => {
     setErrorMessage(null);
@@ -94,7 +104,7 @@ export function LoginPage({ navigation }: any) {
 
     } catch (err) {
       console.error('[Login] Exception:', err);
-      setErrorMessage('Erreur réseau. Vérifiez votre connexion.');
+      setErrorMessage('Erreur réseau. vérifiez votre connexion.');
       setPin('');
       setIsLoading(false);
     }
@@ -113,7 +123,7 @@ export function LoginPage({ navigation }: any) {
         <View style={styles.middleSection}>
           <View style={styles.stepContainer}>
             {/* IDENTIFIER FIELD */}
-            <TouchableOpacity onPress={resetToId} activeOpacity={0.8}>
+            <AppTouchableOpacity onPress={resetToId} activeOpacity={0.8}>
               <Text style={[styles.stepTitle, activeInput === 'PIN' && styles.stepTitleInactive]}>IDENTIFIANT</Text>
               <View style={[styles.boxRow, activeInput === 'PIN' && styles.boxRowInactive]}>
                 {[0, 1, 2, 3, 4, 5].map((index) => {
@@ -138,36 +148,46 @@ export function LoginPage({ navigation }: any) {
                   );
                 })}
               </View>
-            </TouchableOpacity>
+            </AppTouchableOpacity>
 
             {/* PIN FIELD */}
-            {identifier.length === 6 && (
-              <View style={styles.pinSection}>
-                <Text style={styles.stepTitle}>CODE PIN SECRET</Text>
-                <View style={styles.boxRow}>
-                  {[0, 1, 2, 3, 4, 5].map((index) => {
-                    const isFilled = index < pin.length;
-                    const isCurrent = activeInput === 'PIN' && index === pin.length;
+            <Animated.View 
+              style={[
+                styles.pinSection,
+                {
+                  opacity: pinValueAnim,
+                  transform: [
+                    { translateY: pinValueAnim.interpolate({ inputRange: [0, 1], outputRange: [20, 0] }) },
+                    { scale: pinValueAnim.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }
+                  ]
+                }
+              ]}
+              pointerEvents={activeInput === 'PIN' ? 'auto' : 'none'}
+            >
+              <Text style={styles.stepTitle}>CODE PIN SECRET</Text>
+              <View style={styles.boxRow}>
+                {[0, 1, 2, 3, 4, 5].map((index) => {
+                  const isFilled = index < pin.length;
+                  const isCurrent = activeInput === 'PIN' && index === pin.length;
 
-                    return (
-                      <View
-                        key={`pin-${index}`}
-                        style={[
-                          styles.box,
-                          {
-                            backgroundColor: isFilled ? 'rgba(255,255,255,0.1)' : 'transparent',
-                            borderColor: isCurrent ? colors.secondary : (isFilled ? 'rgba(255,255,255,0.54)' : 'rgba(255,255,255,0.24)'),
-                            borderWidth: isCurrent ? 2 : 1,
-                          }
-                        ]}
-                      >
-                        {isFilled && <View style={styles.dot} />}
-                      </View>
-                    );
-                  })}
-                </View>
+                  return (
+                    <View
+                      key={`pin-${index}`}
+                      style={[
+                        styles.box,
+                        {
+                          backgroundColor: isFilled ? 'rgba(255,255,255,0.1)' : 'transparent',
+                          borderColor: isCurrent ? colors.secondary : (isFilled ? 'rgba(255,255,255,0.54)' : 'rgba(255,255,255,0.24)'),
+                          borderWidth: isCurrent ? 2 : 1,
+                        }
+                      ]}
+                    >
+                      {isFilled && <View style={styles.dot} />}
+                    </View>
+                  );
+                })}
               </View>
-            )}
+            </Animated.View>
           </View>
 
           <View style={styles.actionArea}>
@@ -179,33 +199,33 @@ export function LoginPage({ navigation }: any) {
         <View style={styles.numpad}>
           <View style={styles.numpadRow}>
             {['1', '2', '3'].map((num) => (
-              <TouchableOpacity key={num} style={styles.numpadKey} onPress={() => onNumpadTap(num)}>
+              <AppTouchableOpacity key={num} style={styles.numpadKey} onPress={() => onNumpadTap(num)}>
                 <Text style={styles.numpadText}>{num}</Text>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             ))}
           </View>
           <View style={styles.numpadRow}>
             {['4', '5', '6'].map((num) => (
-              <TouchableOpacity key={num} style={styles.numpadKey} onPress={() => onNumpadTap(num)}>
+              <AppTouchableOpacity key={num} style={styles.numpadKey} onPress={() => onNumpadTap(num)}>
                 <Text style={styles.numpadText}>{num}</Text>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             ))}
           </View>
           <View style={styles.numpadRow}>
             {['7', '8', '9'].map((num) => (
-              <TouchableOpacity key={num} style={styles.numpadKey} onPress={() => onNumpadTap(num)}>
+              <AppTouchableOpacity key={num} style={styles.numpadKey} onPress={() => onNumpadTap(num)}>
                 <Text style={styles.numpadText}>{num}</Text>
-              </TouchableOpacity>
+              </AppTouchableOpacity>
             ))}
           </View>
           <View style={styles.numpadRow}>
             <View style={{ width: 70 }} />
-            <TouchableOpacity key={'0'} style={styles.numpadKey} onPress={() => onNumpadTap('0')}>
+            <AppTouchableOpacity key={'0'} style={styles.numpadKey} onPress={() => onNumpadTap('0')}>
               <Text style={styles.numpadText}>0</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.numpadKey} onPress={onBackspace}>
+            </AppTouchableOpacity>
+            <AppTouchableOpacity style={styles.numpadKey} onPress={onBackspace}>
               <MaterialIcons name="backspace" color="rgba(255,255,255,0.54)" size={28} />
-            </TouchableOpacity>
+            </AppTouchableOpacity>
           </View>
         </View>
 
