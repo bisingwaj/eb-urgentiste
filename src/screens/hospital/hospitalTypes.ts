@@ -161,20 +161,19 @@ export interface HealthStructure {
   id: string;
   name: string;
   short_name: string | null;
-  official_name?: string | null;
   type?: string;
   address: string | null;
   phone: string | null;
   email?: string | null;
-  operating_hours?: string | null;
-  contact_person?: string | null;
+  opening_hours?: string | null;
+  primary_contact?: string | null;
   capacity?: number;
   available_beds?: number;
   is_open?: boolean;
-  lat?: number;
-  lng?: number;
+  latitude?: number;
+  longitude?: number;
   specialties?: string[];
-  equipment?: string[];
+  equipments?: string[];
   capacity_status?: string;
   metadata?: Record<string, any>;
 }

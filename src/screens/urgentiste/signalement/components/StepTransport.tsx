@@ -1,13 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Hospital as HospitalIcon } from "lucide-react-native";
-import Mapbox from "@rnmapbox/maps";
 import { colors } from '../../../../theme/colors';
 import { styles } from '../styles';
 import { AppTouchableOpacity } from '../../../../components/ui/AppTouchableOpacity';
-import { MapboxMapView } from '../../../../components/map/MapboxMapView';
-import { MePuck } from '../../../../components/map/mapMarkers';
+import { formatDurationSeconds, formatDistanceMeters } from '../../../../lib/mapbox';
+import { EBMap } from '../../../../components/map/EBMap';
 
 interface StepTransportProps {
    targetHospital: any;
@@ -31,13 +29,40 @@ export const StepTransport: React.FC<StepTransportProps> = ({
    hospitalRouteGeoJSON,
    hospitalRouteDuration,
    hospitalRouteDistance,
-   hospitalRouteCameraBounds,
    transportMode,
    insets,
    onBack,
    onOpenFullscreenMap,
    onArrivedAtHospital
 }) => {
+   const routeData = useMemo(() => {
+      if (!hospitalRouteGeoJSON || hospitalRouteDuration == null || hospitalRouteDistance == null) return undefined;
+      return {
+         routes: [{
+            geometry: hospitalRouteGeoJSON.features[0].geometry,
+            duration: hospitalRouteDuration,
+            distance: hospitalRouteDistance,
+            steps: [], // Satisfy RouteResult interface
+         }],
+         selectedIndex: 0,
+      };
+   }, [hospitalRouteGeoJSON, hospitalRouteDuration, hospitalRouteDistance]);
+
+   const markers = useMemo(() => {
+      if (!targetHospital?.coords) return [];
+      return [{
+         id: 'target-hospital',
+         type: 'hospital' as const,
+         coordinate: [targetHospital.coords.longitude, targetHospital.coords.latitude] as [number, number],
+         label: targetHospital.name,
+      }];
+   }, [targetHospital]);
+
+   const myLocation = useMemo((): [number, number] | undefined => {
+      if (!urgentisteLoc?.coords) return undefined;
+      return [urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude];
+   }, [urgentisteLoc]);
+
    return (
       <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
          <View style={{ flex: 1, borderRadius: 0, overflow: "hidden" }}>
@@ -49,62 +74,51 @@ export const StepTransport: React.FC<StepTransportProps> = ({
             >
                <MaterialIcons name="arrow-back" color="#FFF" size={24} />
             </AppTouchableOpacity>
-            <MapboxMapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Dark} compassEnabled={false} scaleBarEnabled={false}>
-               {urgentisteLoc ? (
-                  <Mapbox.Camera
-                     bounds={
-                        hospitalRouteCameraBounds ?? {
-                           ne: [
-                              Math.max(targetHospital.coords.longitude, urgentisteLoc.coords.longitude),
-                              Math.max(targetHospital.coords.latitude, urgentisteLoc.coords.latitude),
-                           ],
-                           sw: [
-                              Math.min(targetHospital.coords.longitude, urgentisteLoc.coords.longitude),
-                              Math.min(targetHospital.coords.latitude, urgentisteLoc.coords.latitude),
-                           ],
-                           paddingTop: 80,
-                           paddingBottom: 180,
-                           paddingLeft: 60,
-                           paddingRight: 60,
-                        }
-                     }
-                     animationMode="flyTo"
-                     animationDuration={1000}
-                  />
-               ) : (
-                  <Mapbox.Camera
-                     centerCoordinate={[targetHospital.coords.longitude, targetHospital.coords.latitude]}
-                     zoomLevel={13}
-                  />
-               )}
-
-               <Mapbox.PointAnnotation id="hospital-dest" coordinate={[targetHospital.coords.longitude, targetHospital.coords.latitude]}>
-                  <View style={styles.hospitalMarker}>
-                     <HospitalIcon size={16} color="#FFF" strokeWidth={2.5} />
-                  </View>
-               </Mapbox.PointAnnotation>
-
-               {urgentisteLoc && (
-                  <Mapbox.PointAnnotation id="my-unit-transport" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
-                     <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
-                  </Mapbox.PointAnnotation>
-               )}
-
-               {hospitalRouteGeoJSON && (
-                  <Mapbox.ShapeSource id="route-hospital-transport" shape={hospitalRouteGeoJSON}>
-                     <Mapbox.LineLayer id="route-hospital-transport-line" style={{ lineColor: '#34C759', lineWidth: 4, lineOpacity: 0.85 }} />
-                  </Mapbox.ShapeSource>
-               )}
-            </MapboxMapView>
+            
+            <EBMap 
+               mode="NAVIGATION"
+               markers={markers}
+               myLocation={myLocation}
+               myHeading={urgentisteHeadingDeg}
+               routeData={routeData}
+               showControls={true}
+            />
 
             {hospitalRouteDistance != null && hospitalRouteDuration != null && (
-               <View style={styles.mapDistOverlay}>
-                  <MaterialIcons name="navigation" size={14} color="#FFF" />
-                  <Text style={styles.mapDistText}>
-                     {hospitalRouteDistance < 1000 ? `${Math.round(hospitalRouteDistance)} m` : `${(hospitalRouteDistance / 1000).toFixed(1)} km`} • {Math.ceil(hospitalRouteDuration / 60)} min
-                  </Text>
+               <View style={styles.floatingInfoContainer}>
+                  <View style={styles.tacticalCard}>
+                     <View style={styles.cardHeader}>
+                        <View style={[styles.statusDot, { backgroundColor: colors.secondary }]} />
+                        <View style={{ flex: 1 }}>
+                           <Text style={styles.unitName} numberOfLines={1}>{targetHospital.name}</Text>
+                           <Text style={styles.caseRef} numberOfLines={1}>NAVIGATION ACTIVE</Text>
+                        </View>
+                        <MaterialIcons name="navigation" size={20} color="rgba(255,255,255,0.4)" />
+                     </View>
+
+                     <View style={styles.statsRow}>
+                        <View style={styles.statItem}>
+                           <MaterialIcons name="timer" size={20} color={colors.secondary} />
+                           <View>
+                              <Text style={styles.statLabel}>TEMPS ESTIMÉ</Text>
+                              <Text style={styles.statValue}>{formatDurationSeconds(hospitalRouteDuration)}</Text>
+                           </View>
+                        </View>
+
+                        <View style={styles.statDivider} />
+
+                        <View style={styles.statItem}>
+                           <MaterialIcons name="straighten" size={20} color="#34C759" />
+                           <View>
+                              <Text style={styles.statLabel}>DISTANCE</Text>
+                              <Text style={styles.statValue}>{formatDistanceMeters(hospitalRouteDistance)}</Text>
+                           </View>
+                        </View>
+                     </View>
+                  </View>
                </View>
             )}
+
             <AppTouchableOpacity
                style={[styles.mapFullscreenEntryBtn, { top: insets.top + 10 }]}
                onPress={onOpenFullscreenMap}

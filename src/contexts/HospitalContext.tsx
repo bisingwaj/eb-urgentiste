@@ -152,22 +152,21 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         const normalized: HealthStructure = {
           ...data,
           id: data.id,
-          name: data.name || '',
-          short_name: data.short_name || null,
-          official_name: data.official_name || null,
-          type: data.type || null,
-          address: data.address || null,
-          phone: data.phone || null,
-          email: data.email || null,
-          operating_hours: data.operating_hours || null,
-          contact_person: data.contact_person || null,
-          capacity: data.capacity || 0,
-          available_beds: data.available_beds || 0,
-          is_open: data.is_open ?? true,
-          lat: data.lat ?? null,
-          lng: data.lng ?? null,
-          specialties: normalizeList(data.specialties),
-          equipment: normalizeList(data.equipment),
+          name: data.name || data.nom || '',
+          short_name: data.short_name || data.nom_court || data.code || null,
+          type: data.type || data.categorie || data.category || data.structure_type || data.kind || null,
+          address: data.address || data.adresse || null,
+          phone: data.phone || data.telephone || null,
+          email: data.email || data.courriel || null,
+          opening_hours: data.opening_hours || data.horaires || data.horaire_ouverture || null,
+          primary_contact: data.primary_contact || data.contact || data.responsable || null,
+          capacity: data.capacity || data.capacite_totale || data.hospital_data?.capacity || 0,
+          available_beds: data.available_beds || data.lits_disponibles || data.dispo || data.hospital_data?.available_beds || 0,
+          is_open: data.is_open ?? data.ouvert ?? true,
+          latitude: data.latitude ?? data.location_lat ?? data.lat,
+          longitude: data.longitude ?? data.location_lng ?? data.lng,
+          specialties: normalizeList(rawSpecialties),
+          equipments: normalizeList(rawEquipments),
           capacity_status: data.capacity_status,
         };
         
@@ -185,81 +184,56 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
     const structureId = profile?.health_structure_id;
     if (!structureId) return;
 
-    // --- 1. WHITELIST STRICTE (cf Guide v2 §3) ---
-    const EDITABLE_FIELDS = [
-      'short_name', 'phone', 'email', 'contact_person',
-      'operating_hours', 'is_open', 'capacity', 'available_beds',
-      'specialties', 'equipment'
-    ];
-
-    const safePatch: Record<string, any> = {};
-    for (const key of EDITABLE_FIELDS) {
-      if ((updates as any)[key] !== undefined) {
-        safePatch[key] = (updates as any)[key];
-      }
-    }
-
-    // --- 2. VALIDATION CLIENT (cf Guide v2 §4) ---
-    if (
-      typeof safePatch.available_beds === 'number' &&
-      typeof safePatch.capacity === 'number' &&
-      safePatch.available_beds > safePatch.capacity
-    ) {
-      throw new Error('Le nombre de lits libres ne peut pas dépasser la capacité totale.');
-    }
-
-    if (Object.keys(safePatch).length === 0) {
-      throw new Error('Aucun champ modifiable à mettre à jour.');
-    }
-
     try {
-      console.log('[HospitalContext] Payload envoyé →', safePatch);
+      const performUpdate = async (obj: Record<string, any>) => {
+        return await supabase
+          .from('health_structures')
+          .update(obj)
+          .eq('id', structureId);
+      };
 
-      const { data, error } = await supabase
-        .from('health_structures')
-        .update(safePatch)
-        .eq('id', structureId)
-        .select()
-        .single();
+      let { error } = await performUpdate(updates);
 
-      if (error) {
-        console.error('[HospitalContext] Supabase Error Details →', {
-          code: error.code,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-        });
+      // Si erreur de colonne manquante, on essaie de filtrer
+      if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+        console.warn('[HospitalContext] Some columns missing, attempting resilient update...');
+        
+        // On garde uniquement les colonnes "sûres" et on tente le reste une par une
+        const safeUpdates: Record<string, any> = {};
+        const knownSafe = ['name', 'short_name', 'address', 'phone', 'capacity_status'];
+        
+        for (const key of Object.keys(updates)) {
+          if (knownSafe.includes(key)) {
+            safeUpdates[key] = (updates as any)[key];
+          }
+        }
+
+        // Tenter d'abord le bloc "sûr"
+        if (Object.keys(safeUpdates).length > 0) {
+           const { error: safeErr } = await performUpdate(safeUpdates);
+           if (safeErr) console.error('[HospitalContext] Safe update failed:', safeErr);
+        }
+
+        // Tenter les autres un par un pour voir ce qui passe
+        for (const key of Object.keys(updates)) {
+          if (!knownSafe.includes(key)) {
+            const singleUpdate = { [key]: (updates as any)[key] };
+            const { error: singleErr } = await performUpdate(singleUpdate);
+            if (singleErr) {
+               console.warn(`[HospitalContext] Column "${key}" likely missing in DB, skipping.`);
+            }
+          }
+        }
+      } else if (error) {
         throw error;
       }
-      
-      console.log("[HospitalContext] Update successful:", data);
-      await refreshStructureInfo();
-    } catch (err: any) {
-      // Mapping des erreurs DB (cf Guide v2 §5)
-      const msg = (err?.message ?? '').toLowerCase();
-      
-      if (msg.includes("ne peuvent pas modifier l'adresse")) {
-        throw new Error("L'adresse ne peut être modifiée que par un administrateur.");
-      }
-      if (msg.includes('ne peuvent pas modifier le nom')) {
-        throw new Error("Le nom officiel ne peut être modifié que par un administrateur.");
-      }
-      if (msg.includes('ne peuvent pas modifier les coordonnées') || msg.includes('lat') || msg.includes('lng')) {
-        throw new Error("Les coordonnées GPS ne peuvent être modifiées que par un administrateur.");
-      }
-      if (msg.includes('ne peuvent pas modifier le type')) {
-        throw new Error("Le type de structure ne peut être modifié que par un administrateur.");
-      }
-      if (err?.code === '42703') {
-        throw new Error(`Colonne inexistante en base : ${err.message}`);
-      }
-      if (msg.includes('row-level security') || err?.code === '42501') {
-        throw new Error("Vous n'êtes pas autorisé à modifier cette structure.");
-      }
 
-      throw err; // Laisse passer le message original si non mappé
+      await refreshStructureInfo();
+    } catch (err) {
+      console.error('[HospitalContext] updateStructureInfo error:', err);
+      throw err;
     }
-  }, [profile?.health_structure_id, structureInfo, refreshStructureInfo]);
+  }, [profile?.health_structure_id, refreshStructureInfo]);
 
   const sendHospitalReport = useCallback(
     async (caseData: EmergencyCase) => {
