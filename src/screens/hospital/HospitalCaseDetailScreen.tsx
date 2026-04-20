@@ -35,7 +35,7 @@ import {
   formatDistanceMeters,
   type RouteResult,
 } from '../../lib/mapbox';
-import type { EmergencyCase, UrgencyLevel } from './HospitalDashboardTab';
+import type { EmergencyCase, UrgencyLevel } from './hospitalTypes';
 import { POST_AMBULANCE_TRACKING_STATUSES } from '../../lib/hospitalNavigation';
 import { formatDetailedDateTime } from '../../utils/timeFormat';
 

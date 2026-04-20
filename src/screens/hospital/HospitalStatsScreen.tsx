@@ -20,7 +20,8 @@ import {
   countPendingHospital,
   filterPastCases,
 } from '../../lib/hospitalStats';
-import { getLevelConfig, getStatusConfig, type CaseStatus } from './HospitalDashboardTab';
+import { getLevelConfig, getStatusConfig } from './hospitalUtils';
+import type { EmergencyCase, UrgencyLevel } from './hospitalTypes';
 
 export function HospitalStatsScreen({ navigation }: any) {
   const { activeCases, isLoading: casesLoading, refresh } = useHospital();
