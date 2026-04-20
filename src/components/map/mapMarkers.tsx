@@ -90,6 +90,7 @@ export const IncidentMarker = memo(function IncidentMarker({
 export const HospitalMarker = memo(function HospitalMarker({
   onPress,
   label,
+  beds,
 }: {
   label?: string;
   beds?: number;
@@ -100,6 +101,11 @@ export const HospitalMarker = memo(function HospitalMarker({
       <PulseRing color="#E53935" size={32} />
       <Pressable onPress={onPress} style={styles.hospital}>
         <Hospital size={16} color="#E53935" strokeWidth={2.5} />
+        {beds != null && (
+          <View style={styles.bedsBadge}>
+            <Text style={styles.bedsText}>{beds}</Text>
+          </View>
+        )}
       </Pressable>
       {label && (
         <View style={styles.topLabel}>

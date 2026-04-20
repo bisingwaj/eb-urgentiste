@@ -9,8 +9,7 @@ import { DeviceEventEmitter } from 'react-native';
 import { useActiveMission } from '../../hooks/useActiveMission';
 import * as Location from 'expo-location';
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from '../../lib/mapbox';
-import { MapboxMapView } from '../../components/map/MapboxMapView';
-import { MePuck, ProximityCluster } from '../../components/map/mapMarkers';
+import { EBMap, EBMapMarker } from '../../components/map/EBMap';
 import { useMapPuckHeading } from '../../hooks/useMapPuckHeading';
 import { openExternalDirections } from '../../utils/navigation';
 import { formatMissionAddress, formatIncidentType } from '../../utils/missionAddress';
@@ -243,110 +242,46 @@ export function MissionActiveScreen({ navigation }: any) {
       {/* MAP BOX PRO */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]}>
         {!isTransitioning && (
-          <MapboxMapView 
-          style={styles.map} 
-          styleURL={Mapbox.StyleURL.Dark} 
-          compassEnabled={false}
-          scaleBarEnabled={true}
-          scaleBarPosition={{ top: 120, left: 16 }}
-          onCameraChanged={(e) => {
-            if (!isTransitioning) {
-              setZoomLevel(e.properties.zoom);
-            }
-          }}
-        >
-          <Mapbox.Camera
-            followUserLocation={mapMode === '3D'}
-            followUserMode={Mapbox.UserTrackingMode.FollowWithCourse}
-            pitch={mapMode === '3D' ? 62 : 0}
-            heading={mapMode === '3D' ? myHeadingDeg : 0}
-            zoomLevel={mapMode === '3D' ? 16.5 : zoomLevel}
-            animationMode="flyTo"
-            animationDuration={isTransitioning ? 0 : 600}
-            defaultSettings={{
-              centerCoordinate: missionCoords || undefined,
-              zoomLevel: 15,
+          <EBMap
+            mode="NAVIGATION"
+            markers={useMemo(() => {
+              const m: EBMapMarker[] = [];
+              if (missionCoords) {
+                m.push({
+                  id: 'incident-target',
+                  type: activeMission?.dispatch_status === 'en_route_hospital' ? 'hospital' : 'incident',
+                  coordinate: missionCoords as [number, number],
+                  priority: activeMission.priority,
+                });
+              }
+              if (myLocation) {
+                m.push({
+                  id: 'me',
+                  type: 'me',
+                  coordinate: [myLocation.coords.longitude, myLocation.coords.latitude],
+                  headingDeg: myHeadingDeg,
+                });
+              }
+              return m;
+            }, [activeMission?.id, missionCoords, myLocation, myHeadingDeg, activeMission?.dispatch_status])}
+            routeData={useMemo(() => routeGeoJSON ? {
+              routes: [{
+                geometry: routeGeoJSON.features[0].geometry as GeoJSON.LineString,
+                duration: routeDuration || 0,
+                distance: routeDistance || 0,
+                steps: [],
+              }],
+              selectedIndex: 0,
+            } : undefined, [routeGeoJSON, routeDuration, routeDistance])}
+            myLocation={myLocation ? [myLocation.coords.longitude, myLocation.coords.latitude] : undefined}
+            myHeading={myHeadingDeg}
+            cameraConfig={{
+               zoom: zoomLevel,
+               center: missionCoords || undefined,
             }}
-            centerCoordinate={
-              mapMode === '3D' 
-                ? undefined 
-                : (distanceToIncident < 400 && myLocation)
-                  ? [myLocation.coords.longitude, myLocation.coords.latitude] 
-                  : (missionCoords || undefined)
-            }
-            padding={{ paddingLeft: 40, paddingRight: 40, paddingTop: 180, paddingBottom: 120 }}
-            bounds={
-              mapMode === '2D' && distanceToIncident > 400 && myLocation && missionCoords
-                ? {
-                    ne: [
-                      Math.max(myLocation.coords.longitude, missionCoords[0]),
-                      Math.max(myLocation.coords.latitude, missionCoords[1]),
-                    ],
-                    sw: [
-                      Math.min(myLocation.coords.longitude, missionCoords[0]),
-                      Math.min(myLocation.coords.latitude, missionCoords[1]),
-                    ],
-                  }
-                : undefined
-            }
+            showControls={true}
+            style={styles.map}
           />
-
-          {/* 3D BUILDINGS & SKY */}
-          {mapMode === '3D' && (
-            <>
-              <Mapbox.FillExtrusionLayer
-                id="3d-buildings"
-                sourceID="composite"
-                sourceLayerID="building"
-                minZoomLevel={15}
-                maxZoomLevel={22}
-                filter={['>', 'height', 0]}
-                style={{
-                  fillExtrusionHeight: ['get', 'height'],
-                  fillExtrusionBase: ['get', 'min_height'],
-                  fillExtrusionColor: '#333',
-                  fillExtrusionOpacity: 0.8,
-                }}
-              />
-              <Mapbox.SkyLayer 
-                id="sky" 
-                style={{
-                  skyType: 'atmosphere',
-                  skyAtmosphereColor: '#111',
-                }} 
-              />
-            </>
-          )}
-
-          {/* TRAFFIC LAYER */}
-          <Mapbox.VectorSource id="traffic" url="mapbox://mapbox.mapbox-traffic-v1" />
-
-          {/* MARKERS */}
-          {showProximityCluster && missionCoords ? (
-             <Mapbox.PointAnnotation id="proximity" coordinate={missionCoords}>
-               <ProximityCluster priority={activeMission.priority || 'medium'} />
-             </Mapbox.PointAnnotation>
-          ) : (
-            <>
-              {missionCoords && (
-                <Mapbox.PointAnnotation id="incident" coordinate={missionCoords}>
-                   <View style={styles.incidentMarkerPulse} />
-                </Mapbox.PointAnnotation>
-              )}
-              {myLocation && (
-                <Mapbox.PointAnnotation id="me" coordinate={[myLocation.coords.longitude, myLocation.coords.latitude]}>
-                  <MePuck headingDeg={myHeadingDeg} size={36} />
-                </Mapbox.PointAnnotation>
-              )}
-            </>
-          )}
-
-          {routeGeoJSON && (
-            <Mapbox.ShapeSource id="route-line" shape={routeGeoJSON}>
-              <Mapbox.LineLayer id="route-layer" style={{ lineColor: colors.secondary, lineWidth: 6, lineOpacity: 0.9, lineCap: 'round' }} />
-            </Mapbox.ShapeSource>
-          )}
-          </MapboxMapView>
         )}
       </View>
 

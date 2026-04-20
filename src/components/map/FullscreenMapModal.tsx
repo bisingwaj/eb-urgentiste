@@ -63,7 +63,7 @@ export function FullscreenMapModal({ visible, onClose, children, topOverlay }: F
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#FFF',
   },
   map: {
     flex: 1,

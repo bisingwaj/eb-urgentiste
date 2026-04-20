@@ -15,7 +15,8 @@ import { StepDecision } from './components/StepDecision';
 import { StepAssignment } from './components/StepAssignment';
 import { StepClosure } from './components/StepClosure';
 import { FullscreenMapModal } from '../../../components/map/FullscreenMapModal';
-import { MapboxMapView } from '../../../components/map/MapboxMapView';
+import { EBMap, EBMapMarker } from '../../../components/map/EBMap';
+import { StyleSheet as RNStyleSheet } from 'react-native';
 import { MePuck } from '../../../components/map/mapMarkers';
 import Mapbox from "@rnmapbox/maps";
 import { HeartPulse, Hospital as HospitalIcon } from "lucide-react-native";
@@ -93,52 +94,59 @@ export default function SignalementScreen(props: any) {
 
    // Map content for the fullscreen modal
    const renderFullscreenMapChildren = () => {
-      // Logic for drawing markers based on step
       const isHospitalStep = step === "assignment";
       const destCoords = isHospitalStep && targetHospital?.coords
          ? [targetHospital.coords.longitude, targetHospital.coords.latitude]
          : [selectedMission?.location?.lng || 15.307045, selectedMission?.location?.lat || -4.322447];
 
-      const routeData = isHospitalStep ? logic.hospitalRouteGeoJSON : routeGeoJSON;
+      const routeDataRaw = isHospitalStep ? logic.hospitalRouteGeoJSON : routeGeoJSON;
       const bounds = isHospitalStep ? logic.hospitalRouteCameraBounds : receptionCameraBounds;
 
+      // Map to the unified EBMapMarker format
+      const markers: EBMapMarker[] = [];
+      
+      // Destination marker
+      markers.push({
+         id: 'fs-dest',
+         type: isHospitalStep ? 'hospital' : 'incident',
+         coordinate: destCoords as [number, number],
+         label: isHospitalStep ? targetHospital?.name : formatIncidentType(selectedMission?.type),
+         priority: selectedMission?.priority,
+      });
+
+      // Urgentiste puck
+      if (urgentisteLoc) {
+         markers.push({
+            id: 'fs-me',
+            type: 'me',
+            coordinate: [urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude],
+            headingDeg: urgentisteHeadingDeg,
+         });
+      }
+
+      // Convert route feature back to EBMap compatible route list if needed
+      // Actually, EBMap can take routeData.
+      const mapRouteData = routeDataRaw ? {
+         routes: [{
+            geometry: routeDataRaw.features[0].geometry,
+            duration: isHospitalStep ? logic.hospitalRouteDuration || 0 : logic.routeDuration || 0,
+            distance: isHospitalStep ? logic.hospitalRouteDistance || 0 : logic.routeDistance || 0,
+            steps: [],
+         }],
+         selectedIndex: 0,
+      } : undefined;
+
       return (
-         <>
-            <Mapbox.Camera
-               bounds={bounds}
-               animationMode="flyTo"
-               animationDuration={1000}
-            />
-
-            <Mapbox.PointAnnotation id="dest-marker" coordinate={destCoords as [number, number]}>
-               <View style={isHospitalStep ? styles.hospitalMarker : styles.victimMarker}>
-                  {isHospitalStep ? (
-                     <HospitalIcon size={16} color="#FFF" strokeWidth={2.5} />
-                  ) : (
-                     <HeartPulse size={16} color="#FFF" strokeWidth={2.5} />
-                  )}
-               </View>
-            </Mapbox.PointAnnotation>
-
-            {urgentisteLoc && (
-               <Mapbox.PointAnnotation id="my-unit-fs" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
-                  <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
-               </Mapbox.PointAnnotation>
-            )}
-
-            {routeData && (
-               <Mapbox.ShapeSource id="route-fs" shape={routeData}>
-                  <Mapbox.LineLayer
-                     id="route-fs-line"
-                     style={{
-                        lineColor: isHospitalStep ? '#34C759' : '#4A90D9',
-                        lineWidth: 5,
-                        lineOpacity: 0.9
-                     }}
-                  />
-               </Mapbox.ShapeSource>
-            )}
-         </>
+         <EBMap
+            mode="NAVIGATION"
+            markers={markers}
+            routeData={mapRouteData}
+            cameraConfig={{
+               bounds: bounds as any,
+            }}
+            showControls={true}
+            style={RNStyleSheet.absoluteFill}
+         />
       );
    };
 

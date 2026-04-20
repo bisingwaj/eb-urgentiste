@@ -45,14 +45,8 @@ import {
   openWazeDirections,
 } from "../../utils/navigation";
 import { spreadOverlappingMarkers } from "../../utils/mapMarkerLayout";
-import { MapboxMapView } from "../../components/map/MapboxMapView";
+import { EBMap, EBMapMarker } from "../../components/map/EBMap";
 import { useMapPuckHeading } from "../../hooks/useMapPuckHeading";
-import {
-  MePuck,
-  IncidentMarker,
-  HospitalMarker,
-  UnitMarker,
-} from "../../components/map/mapMarkers";
 
 const DEFAULT_COORDS = { latitude: -4.3224, longitude: 15.307 };
 
@@ -825,6 +819,58 @@ export function LiveMapTab() {
     (k) => establishmentTypeFilter[k] === true,
   ).length;
 
+  const mapRouteData = useMemo(() => {
+    if (routeList.length === 0) return undefined;
+    return {
+      routes: routeList,
+      selectedIndex: selectedRouteIndex,
+      showAlternatives: true,
+    };
+  }, [routeList, selectedRouteIndex]);
+
+  const allMarkers = useMemo((): EBMapMarker[] => {
+    const list: EBMapMarker[] = [];
+
+    // Units
+    rescuersForMapDisplay.forEach(({ item: r, displayCoord }) => {
+      list.push({
+        id: `unit-${r.id}`,
+        type: 'unit',
+        coordinate: displayCoord,
+        status: r.status,
+        headingDeg: r.heading != null && r.heading >= 0 ? r.heading : undefined,
+        label: rescuerNames[r.user_id],
+        data: r
+      });
+    });
+
+    // Hospitals
+    hospitalsForMapDisplay.forEach(({ item: h, displayCoord }) => {
+      list.push({
+        id: `hosp-${h.id}`,
+        type: 'hospital',
+        coordinate: displayCoord,
+        label: h.short_name || h.name,
+        beds: h.available_beds,
+        data: h
+      });
+    });
+
+    // Incidents
+    incidentsForMapDisplay.forEach(({ item: inc, displayCoord }) => {
+      list.push({
+        id: `inc-${inc.id}`,
+        type: 'incident',
+        coordinate: displayCoord,
+        priority: inc.priority,
+        label: inc.reference?.slice(-6).toUpperCase(),
+        data: inc
+      });
+    });
+
+    return list;
+  }, [rescuersForMapDisplay, hospitalsForMapDisplay, incidentsForMapDisplay, rescuerNames]);
+
   return (
     <TabScreenSafeArea style={[styles.container, styles.tabScreenNoBottomPad]}>
       <StatusBar barStyle="light-content" />
@@ -837,124 +883,29 @@ export function LiveMapTab() {
             <Text style={styles.loadingText}>Acquisition du signal GPS…</Text>
           </View>
         ) : (
-          <MapboxMapView
+          <EBMap
             ref={mapRef as any}
+            mode="TRACKING"
             style={StyleSheet.absoluteFillObject}
-            styleURL={Mapbox.StyleURL.Dark}
-            compassEnabled={false}
-            scaleBarEnabled={false}
-            rotateEnabled
-          >
-            {cameraBounds ? (
-              <Mapbox.Camera
-                bounds={cameraBounds}
-                animationMode="flyTo"
-                animationDuration={selection ? 900 : 600}
-              />
-            ) : (
-              <Mapbox.Camera
-                centerCoordinate={cameraCenter}
-                zoomLevel={cameraZoom}
-                animationMode="flyTo"
-                animationDuration={selection ? 900 : 600}
-              />
-            )}
-
-            {routeList.map((r, i) => {
-              if (i === selectedRouteIndex) return null;
-              const altColors = [
-                "rgba(92, 156, 230, 0.5)",
-                "rgba(105, 240, 174, 0.45)",
-                "rgba(255, 159, 10, 0.5)",
-              ];
-              const c = altColors[(i - 1) % altColors.length];
-              return (
-                <Mapbox.ShapeSource
-                  key={`route-alt-${i}`}
-                  id={`route-alt-${i}`}
-                  shape={buildRouteFeature(r.geometry)}
-                >
-                  <Mapbox.LineLayer
-                    id={`route-alt-line-${i}`}
-                    style={{
-                      lineColor: c,
-                      lineWidth: 3,
-                      lineOpacity: 0.9,
-                      lineDasharray: [2, 2],
-                    }}
-                  />
-                </Mapbox.ShapeSource>
-              );
-            })}
-
-            {selectedRoute && (
-              <Mapbox.ShapeSource
-                id="route-primary"
-                shape={buildRouteFeature(selectedRoute.geometry)}
-              >
-                <Mapbox.LineLayer
-                  id="route-primary-line"
-                  style={{
-                    lineColor: colors.routePrimary,
-                    lineWidth: 5,
-                    lineOpacity: 0.95,
-                  }}
-                />
-              </Mapbox.ShapeSource>
-            )}
-
-            <Mapbox.PointAnnotation
-              id="my-position"
-              coordinate={[myCoords.longitude, myCoords.latitude]}
-            >
-              <MePuck headingDeg={headingResolved} />
-            </Mapbox.PointAnnotation>
-
-            {rescuersForMapDisplay.map(({ item: r, displayCoord }) => (
-              <Mapbox.MarkerView
-                key={r.id}
-                id={`rescuer-mv-${r.id}`}
-                coordinate={displayCoord}
-              >
-                <UnitMarker
-                  status={r.status}
-                  headingDeg={r.heading != null && r.heading >= 0 ? r.heading : undefined}
-                  label={rescuerNames[r.user_id]}
-                  onPress={() => setSelection({ kind: "rescuer", data: r })}
-                />
-              </Mapbox.MarkerView>
-            ))}
-
-            {hospitalsForMapDisplay.map(({ item: h, displayCoord }) => (
-              <Mapbox.MarkerView
-                key={h.id}
-                id={`hospital-mv-${h.id}`}
-                coordinate={displayCoord}
-              >
-                <HospitalMarker
-                  label={h.short_name || h.name}
-                  beds={h.available_beds}
-                  onPress={() => setSelection({ kind: "hospital", data: h })}
-                />
-              </Mapbox.MarkerView>
-            ))}
-
-            {incidentsForMapDisplay.map(({ item: inc, displayCoord }) => (
-              <Mapbox.MarkerView
-                key={inc.id}
-                id={`incident-mv-${inc.id}`}
-                coordinate={displayCoord}
-              >
-                <IncidentMarker
-                  priority={inc.priority}
-                  label={inc.reference?.slice(-6).toUpperCase()}
-                  onPress={() =>
-                    setSelection({ kind: "incident", data: inc })
-                  }
-                />
-              </Mapbox.MarkerView>
-            ))}
-          </MapboxMapView>
+            markers={allMarkers}
+            myLocation={[myCoords.longitude, myCoords.latitude]}
+            myHeading={headingResolved}
+            routeData={mapRouteData}
+            cameraConfig={selection ? {
+              bounds: cameraBounds || undefined,
+            } : {
+              center: cameraCenter,
+              zoom: cameraZoom,
+            }}
+            onMarkerPress={(m) => {
+              if (m.type === 'unit') setSelection({ kind: "rescuer", data: m.data });
+              else if (m.type === 'hospital') setSelection({ kind: "hospital", data: m.data });
+              else if (m.type === 'incident') setSelection({ kind: "incident", data: m.data });
+            }}
+            onMapPress={() => setSelection(null)}
+            onRoutePress={(idx) => setSelectedRouteIndex(idx)}
+            showControls={true}
+          />
         )}
 
         {gpsReady && isFocused && (

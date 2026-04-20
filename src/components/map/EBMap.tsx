@@ -1,4 +1,4 @@
-import React, { forwardRef, useMemo, useCallback, useState } from 'react';
+import React, { forwardRef, useMemo, useCallback, useState, useEffect, useRef } from 'react';
 import { StyleSheet, View, Text } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
@@ -12,8 +12,6 @@ import {
   UnitMarker,
   MePuck,
   ProximityCluster,
-  DestinationPin,
-  HospitalPin,
   RouteETABadge,
 } from './mapMarkers';
 import { buildRouteFeature, type RouteResult, haversineMeters } from '../../lib/mapbox';
@@ -97,10 +95,10 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
   } = props;
 
   const insets = useSafeAreaInsets();
-  const mapRef = React.useRef<Mapbox.MapView>(null);
-  const cameraRef = React.useRef<Mapbox.Camera>(null);
+  const mapRef = useRef<Mapbox.MapView>(null);
+  const cameraRef = useRef<Mapbox.Camera>(null);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
-  const [mapStyle, setMapStyle] = useState<string>(Mapbox.StyleURL.Light);
+  const [mapStyle, setMapStyle] = useState<string>(Mapbox.StyleURL.Street);
   const [cameraState, setCameraState] = useState({
     center: cameraConfig?.center || markers[0]?.coordinate || undefined,
     zoom: cameraConfig?.zoom || 13,
@@ -131,7 +129,23 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
   const toggleMapStyle = useCallback(() => {
     setMapStyle(prev => prev === Mapbox.StyleURL.Light ? Mapbox.StyleURL.Satellite : Mapbox.StyleURL.Light);
   }, []);
+
   const [showSheet, setShowSheet] = useState(mode === 'NAVIGATION');
+  const [followUser, setFollowUser] = useState(mode === 'NAVIGATION');
+
+  // Auto-follow logic for active navigation
+  useEffect(() => {
+    if (mode === 'NAVIGATION' && followUser && myLocation) {
+      cameraRef.current?.setCamera({
+        centerCoordinate: myLocation,
+        zoomLevel: 16.5,
+        heading: myHeading,
+        pitch: 0, // Keep 2D top-down as requested
+        animationDuration: 1000,
+        animationMode: 'flyTo',
+      });
+    }
+  }, [mode, followUser, myLocation, myHeading]);
 
   const selectedMarker = useMemo(() =>
     markers.find(m => m.id === selectedMarkerId),
@@ -258,9 +272,9 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
               <Mapbox.LineLayer
                 id={`route-layer-${i}`}
                 style={{
-                  lineColor: isPrimary ? '#4285F4' : '#80B1FF',
+                  lineColor: isPrimary ? colors.secondary : 'rgba(255, 255, 255, 0.3)',
                   lineWidth: isPrimary ? 6 : 4,
-                  lineOpacity: isPrimary ? 1 : 0.6,
+                  lineOpacity: isPrimary ? 0.9 : 0.6,
                   lineCap: 'round',
                   lineJoin: 'round',
                 }}
@@ -333,11 +347,15 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
             {m.type === 'me' ? (
               <MePuck headingDeg={myHeading} />
             ) : m.type === 'hospital' ? (
-              <HospitalPin 
+              <HospitalMarker 
+                label={m.label}
+                beds={m.beds}
                 onPress={() => handleMarkerPressLocal(m)} 
               />
             ) : m.type === 'incident' ? (
-              <DestinationPin
+              <IncidentMarker
+                priority={m.priority || 'medium'}
+                label={m.label}
                 onPress={() => handleMarkerPressLocal(m)}
               />
             ) : (m as any).count > 0 ? (
