@@ -16,7 +16,7 @@ import type { Hospital } from "../../../contexts/MissionContext";
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export function useSignalementLogic(navigation: any, route: any) {
-   const { activeMission, updateDispatchStatus, refresh } = useActiveMission();
+   const { activeMission, isLoading: missionLoading, updateDispatchStatus, refresh } = useActiveMission();
    const { updateMissionDetails, appendIncidentTerrainPhoto } = useMission();
    const initialMission = route?.params?.mission || activeMission;
 
@@ -31,10 +31,12 @@ export function useSignalementLogic(navigation: any, route: any) {
          case 'dispatched': return 'reception';
          case 'en_route': return 'arrival';
          case 'on_scene': return 'assessment';
-         case 'en_route_hospital': return 'transport';
-         case 'arrived_hospital': return 'closure';
-         case 'mission_end': return 'closure';
-         case 'completed': return 'closure';
+         // If we are en route or arrived at hospital, skip to closure (Map handled externally)
+         case 'en_route_hospital': 
+         case 'arrived_hospital': 
+         case 'mission_end': 
+         case 'completed': 
+            return 'closure';
          default: return 'reception';
       }
    };
@@ -90,6 +92,7 @@ export function useSignalementLogic(navigation: any, route: any) {
    const lastRouteFetch = useRef<number>(0);
    const [voipLoading, setVoipLoading] = useState(false);
    const [terrainPhotoBusy, setTerrainPhotoBusy] = useState(false);
+   const [isFinishing, setIsFinishing] = useState(false);
 
    // Animations for Standby
    const radarAnim = useRef(new Animated.Value(0.4)).current;
@@ -132,6 +135,13 @@ export function useSignalementLogic(navigation: any, route: any) {
    };
 
    // Location & Routing
+   useEffect(() => {
+      if (!missionLoading && !activeMission && step !== 'standby' && !isFinishing) {
+         console.log("[Signalement] Active mission gone from context -> Auto-exiting screen");
+         navigation.replace('MainTabs');
+      }
+   }, [activeMission, missionLoading, step, isFinishing]);
+
    useEffect(() => {
       if (!urgentisteLoc || !selectedMission) return;
       const now = Date.now();
@@ -336,11 +346,20 @@ export function useSignalementLogic(navigation: any, route: any) {
       if (!missionStorageKey) { setStateRestored(true); return; }
       (async () => {
          try {
-            const raw = await AsyncStorage.getItem(missionStorageKey);
-            if (raw) {
-               const saved = JSON.parse(raw);
-               if (saved.step && saved.step !== "standby" && saved.step !== "closure") {
-                  setStep(saved.step);
+            const json = await AsyncStorage.getItem(missionStorageKey);
+            if (json) {
+               const saved = JSON.parse(json);
+               if (saved.step) {
+                  // Safety: Only restore saved step if mission status hasn't moved beyond it
+                  const currentStatus = initialMission?.dispatch_status;
+                  const isPastAssignment = currentStatus === 'en_route_hospital' || currentStatus === 'arrived_hospital';
+                  
+                  if (isPastAssignment && saved.step === 'assignment') {
+                     // Mission is already ahead, don't regress to assignment screen
+                     console.log("[Signalement] Skipping stale 'assignment' step from storage");
+                  } else {
+                     setStep(saved.step);
+                  }
                   if (saved.assessment) setAssessment(saved.assessment);
                   if (saved.careChecklist) setCareChecklist(saved.careChecklist);
                   if (saved.decision !== undefined) setDecision(saved.decision);
@@ -387,6 +406,7 @@ export function useSignalementLogic(navigation: any, route: any) {
 
    const handleConfirmAssessment = async () => {
       try {
+         // Persist structured assessment to DB
          await updateMissionDetails({ assessment });
          transitionTo("aid");
          addTimelineEvent("Évaluation terminée", "analytics", assessment.severity || "Stable");
@@ -401,9 +421,15 @@ export function useSignalementLogic(navigation: any, route: any) {
       });
    };
 
-   const handleConfirmAid = () => {
-      transitionTo("decision");
-      addTimelineEvent("Soins prodigués", "favorite");
+   const handleConfirmAid = async () => {
+      try {
+         // Sync careChecklist to DB so hospital can see "Premiers Soins"
+         await updateMissionDetails({ 
+            assessment: { ...assessment, careChecklist } 
+         });
+         transitionTo("decision");
+         addTimelineEvent("Soins prodigués", "favorite");
+      } catch (err) { }
    };
 
    const handleDecideTransport = async (choice: string) => {
@@ -424,8 +450,10 @@ export function useSignalementLogic(navigation: any, route: any) {
 
    const handleSelectTransportMode = async (mode: any) => {
       setTransportMode(mode);
-      try { await updateDispatchStatus('en_route_hospital'); } catch (err) { }
-      transitionTo("transport");
+      try { 
+         await updateDispatchStatus('en_route_hospital'); 
+         navigation.goBack(); // Return to map
+      } catch (err) { }
       addTimelineEvent("Mode de transport choisi", "local-shipping", mode);
    };
 
@@ -438,14 +466,54 @@ export function useSignalementLogic(navigation: any, route: any) {
    };
 
    const [departingEnRoute, setDepartingEnRoute] = useState(false);
+   useEffect(() => {
+      if (isFinishing) return;
+
+      const status = activeMission?.dispatch_status;
+      const isAtHospitalStage = status === 'en_route_hospital' || status === 'arrived_hospital';
+
+      // Auto-trigger departure when hospital accepts (which now automatically updates status)
+      // OR if someone manually updated it. We avoid the intermediate "Depart" click.
+      if (isAtHospitalStage && step === 'assignment') {
+         console.log("[Signalement] Remote Status Updated to En Route Hospital -> Auto-Navigating to Map");
+         // Use a small delay to ensure the user sees the confirmation if they were watching
+         const timer = setTimeout(() => {
+            navigation.navigate('MissionActive', { mission: activeMission || selectedMission });
+         }, 500);
+         return () => clearTimeout(timer);
+      }
+   }, [activeMission?.dispatch_status, step, isFinishing]);
+
    const handleDepartVersStructure = async () => {
       if (departingEnRoute || !targetHospital?.coords) return;
       setDepartingEnRoute(true);
       try {
          await updateDispatchStatus("en_route_hospital");
-         transitionTo("transport_mode");
          addTimelineEvent("Départ vers la structure", "local-shipping", targetHospital?.name);
-      } catch (err) { } finally { setDepartingEnRoute(false); }
+         // Explicitly navigate to the map view instead of goBack() to avoid dashboard loops
+         navigation.navigate('MissionActive', { mission: selectedMission });
+      } catch (err) { } finally {
+         setDepartingEnRoute(false);
+      }
+   };
+
+   const handleCompleteMission = async () => {
+      try {
+         setIsFinishing(true);
+         // Use 'mission_end' to release the unit while keeping the incident open for hospital
+         await updateDispatchStatus('mission_end');
+         
+         // Clear local cache for this mission
+         if (missionStorageKey) {
+            await AsyncStorage.removeItem(missionStorageKey);
+         }
+         
+         // Navigate back to Dashboard - use popToTop or specific route to be safe
+         navigation.replace('MainTabs'); 
+      } catch (err) {
+         console.error("[Signalement] Error during mission completion:", err);
+         navigation.replace('MainTabs');
+      }
    };
 
    // Sync structure/hospital updates
@@ -564,7 +632,7 @@ export function useSignalementLogic(navigation: any, route: any) {
       receptionCameraBounds, fadeAnim, mapFullscreenOpen, setMapFullscreenOpen,
       voipLoading, terrainPhotoBusy, radarAnim, notifyAnim, isAssigned,
       handleStartMission, handleArrivalOnScene, handleConfirmAssessment, handleToggleCare, handleConfirmAid,
-      handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure,
+      handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure, handleCompleteMission,
       pickAndUploadTerrainPhoto, runVictimVoip, runVictimPstn,
       pan, panResponder,
       transitionTo,

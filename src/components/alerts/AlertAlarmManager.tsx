@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { AppState, AppStateStatus, DeviceEventEmitter } from 'react-native';
-import { AlarmService } from '../../services/AlarmService';
+import { AlarmService, ALARM_STOP_EVENT } from '../../services/AlarmService';
 import { NotificationService } from '../../services/NotificationService';
 import { useMission } from '../../contexts/MissionContext';
 
@@ -35,28 +35,18 @@ export function AlertAlarmManager() {
       });
     });
 
-    return () => subscription.remove();
-  }, []);
-
-  // ── Stopper l'alarme quand l'app revient au foreground ──
-  useEffect(() => {
-    const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
-      const previousState = appStateRef.current;
-      appStateRef.current = nextState;
-
-      if (
-        nextState === 'active' &&
-        (previousState === 'background' || previousState === 'inactive')
-      ) {
-        if (AlarmService.isPlaying()) {
-          console.log('[AlertAlarmManager] 📱 Foreground — stopping alarm');
-          AlarmService.stopAlarm();
-        }
+    const stopSub = DeviceEventEmitter.addListener(ALARM_STOP_EVENT, () => {
+      if (AlarmService.isPlaying()) {
+        console.log('[AlertAlarmManager] 🛑 STOP_ALARM_EVENT received — stopping alarm');
+        AlarmService.stopAlarm();
         NotificationService.dismissAll();
       }
     });
 
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+      stopSub.remove();
+    };
   }, []);
 
   // ── Stopper l'alarme si la mission change ──
@@ -64,13 +54,15 @@ export function AlertAlarmManager() {
     const currentId = activeMission?.id ?? null;
     const prevId = prevMissionRef.current;
 
+    // On ne stoppe l'alarme que si la mission est supprimée (currentId === null)
+    // ou si on a explicitement changé de mission.
+    // On ne stoppe plus l'alarme juste parce que le statut n'est plus 'dispatched',
+    // car le passage à 'en_route' peut être automatique ou rapide.
     if (
-      activeMission &&
-      currentId === prevId &&
-      activeMission.dispatch_status !== 'dispatched' &&
-      AlarmService.isPlaying()
+      (!activeMission && AlarmService.isPlaying()) ||
+      (currentId !== prevId && prevId !== null && AlarmService.isPlaying())
     ) {
-      console.log('[AlertAlarmManager] 🔇 Mission status changed — stopping alarm');
+      console.log('[AlertAlarmManager] 🔇 Mission cleared or changed — stopping alarm');
       AlarmService.stopAlarm();
       NotificationService.dismissAll();
     }

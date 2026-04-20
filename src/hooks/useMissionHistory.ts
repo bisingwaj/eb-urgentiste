@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Mission } from './useActiveMission';
+import { Mission } from '../types/mission';
 import { fetchMissionHistoryForUnit } from '../lib/missionHistoryRemote';
 import {
   readMissionHistoryCache,

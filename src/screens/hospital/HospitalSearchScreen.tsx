@@ -10,21 +10,21 @@ TextInput,
   Platform,
   KeyboardAvoidingView} from 'react-native';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
-import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { useHospital } from '../../contexts/HospitalContext';
-import { getLevelConfig, getStatusConfig } from './HospitalDashboardTab';
+import { getLevelConfig, getStatusConfig } from './hospitalUtils';
 import { navigateFromHospitalAdmissionsList } from '../../lib/hospitalNavigation';
 import {
   ACTIVE_ADMISSION_STATUSES,
   filterPastCases,
   isCaseClosed,
 } from '../../lib/hospitalStats';
+import { HospitalHeader } from './components/HospitalHeader';
 
 const { width } = Dimensions.get('window');
 
-export function HospitalAdmissionsListScreen({ navigation }: any) {
+export function HospitalSearchScreen({ navigation }: any) {
   const [searchQuery, setSearchQuery] = useState('');
   const { activeCases } = useHospital();
 
@@ -50,15 +50,16 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <TabScreenSafeArea style={styles.safeArea}>
+      <View style={{ flex: 1, backgroundColor: colors.mainBackground }}>
+      <HospitalHeader title="Recherche & Archives" />
       <StatusBar barStyle="light-content" />
 
       {/* 🔝 Premium Header with Search */}
       <View style={styles.topSection}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.headerSub}>GESTION CLINIQUE</Text>
-            <Text style={styles.title}>Admissions Active</Text>
+            <Text style={styles.headerSub}>ANNUAIRE CLINIQUE</Text>
+            <Text style={styles.title}>Rechercher</Text>
           </View>
           <View style={styles.countBadge}>
             <Text style={styles.countText}>{admittedCases.length}</Text>
@@ -207,7 +208,7 @@ export function HospitalAdmissionsListScreen({ navigation }: any) {
           })
         )}
       </ScrollView>
-      </TabScreenSafeArea>
+      </View>
     </KeyboardAvoidingView>
   );
 }

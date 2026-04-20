@@ -6,7 +6,8 @@ import {
   EmergencyCase,
   CaseStatus,
   HospitalStatus,
-} from '../screens/hospital/HospitalDashboardTab';
+  HealthStructure,
+} from '../screens/hospital/hospitalTypes';
 import { mergeHospitalDataPartial } from '../lib/hospitalMerge';
 import { mapDispatchRowToEmergencyCase } from '../lib/hospitalCaseMapping';
 import { buildHospitalReportPayload } from '../lib/hospitalReportPayload';
@@ -60,13 +61,21 @@ export type HospitalListBlocker =
   | 'no_structure_link'
   | 'supabase_error';
 
+export type HospitalCapacityStatus = 'fluid' | 'saturated' | 'diversion';
+
 interface HospitalContextType {
   activeCases: EmergencyCase[];
   isLoading: boolean;
+  /** État de saturation déclaré par l’hôpital */
+  hospitalCapacity: HospitalCapacityStatus;
+  isUpdatingCapacity: boolean;
   /** Raison métier / config si aucun dispatch n’est chargé (diagnostic) */
   listBlocker: HospitalListBlocker;
   lastFetchError: string | null;
+  /** Nombre d'alertes en attente (hospitalStatus === 'pending') */
+  pendingAlertCount: number;
   refresh: () => Promise<void>;
+  updateHospitalCapacity: (status: HospitalCapacityStatus) => Promise<void>;
   updateCaseStatus: (
     caseId: string,
     transition: {
@@ -104,8 +113,12 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   const { profile, session } = useAuth();
   const [activeCases, setActiveCases] = useState<EmergencyCase[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [structureInfo, setStructureInfo] = useState<HealthStructure | null>(null);
+  const [hospitalCapacity, setHospitalCapacity] = useState<HospitalCapacityStatus>('fluid');
+  const [isUpdatingCapacity, setIsUpdatingCapacity] = useState(false);
   const [listBlocker, setListBlocker] = useState<HospitalListBlocker>(null);
   const [lastFetchError, setLastFetchError] = useState<string | null>(null);
+  const [pendingAlertCount, setPendingAlertCount] = useState(0);
 
   const activeCasesRef = useRef(activeCases);
   useEffect(() => {
@@ -113,6 +126,114 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
   }, [activeCases]);
 
   const fetchCasesRef = React.useRef<((opts?: { silent?: boolean }) => Promise<void>) | null>(null);
+
+  const refreshStructureInfo = useCallback(async () => {
+    const structureId = profile?.health_structure_id;
+    if (!structureId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('health_structures')
+        .select('*')
+        .eq('id', structureId)
+        .single();
+      
+      if (!error && data) {
+        // Mapping flexible pour s'adapter au schéma réel
+        const rawSpecialties = data.specialties || data.specialities || data.specialites || data.specialty || data.hospital_data?.specialties || [];
+        const rawEquipments = data.equipments || data.equipements || data.equipment || data.technical_plateau || data.equipment_list || data.hospital_data?.equipments || [];
+
+        const normalizeList = (val: any): string[] => {
+          if (Array.isArray(val)) return val;
+          if (typeof val === 'string' && val.trim()) return val.split(',').map(s => s.trim());
+          return [];
+        };
+
+        const normalized: HealthStructure = {
+          ...data,
+          id: data.id,
+          name: data.name || data.nom || '',
+          short_name: data.short_name || data.nom_court || data.code || null,
+          type: data.type || data.categorie || data.category || data.structure_type || data.kind || null,
+          address: data.address || data.adresse || null,
+          phone: data.phone || data.telephone || null,
+          email: data.email || data.courriel || null,
+          opening_hours: data.opening_hours || data.horaires || data.horaire_ouverture || null,
+          primary_contact: data.primary_contact || data.contact || data.responsable || null,
+          capacity: data.capacity || data.capacite_totale || data.hospital_data?.capacity || 0,
+          available_beds: data.available_beds || data.lits_disponibles || data.dispo || data.hospital_data?.available_beds || 0,
+          is_open: data.is_open ?? data.ouvert ?? true,
+          latitude: data.latitude ?? data.location_lat ?? data.lat,
+          longitude: data.longitude ?? data.location_lng ?? data.lng,
+          specialties: normalizeList(rawSpecialties),
+          equipments: normalizeList(rawEquipments),
+          capacity_status: data.capacity_status,
+        };
+        
+        setStructureInfo(normalized);
+        if (normalized.capacity_status) {
+          setHospitalCapacity(normalized.capacity_status as HospitalCapacityStatus);
+        }
+      }
+    } catch (err) {
+      console.error('[HospitalContext] refreshStructureInfo error:', err);
+    }
+  }, [profile?.health_structure_id]);
+
+  const updateStructureInfo = useCallback(async (updates: Partial<HealthStructure>) => {
+    const structureId = profile?.health_structure_id;
+    if (!structureId) return;
+
+    try {
+      const performUpdate = async (obj: Record<string, any>) => {
+        return await supabase
+          .from('health_structures')
+          .update(obj)
+          .eq('id', structureId);
+      };
+
+      let { error } = await performUpdate(updates);
+
+      // Si erreur de colonne manquante, on essaie de filtrer
+      if (error && (error.code === 'PGRST204' || error.code === '42703')) {
+        console.warn('[HospitalContext] Some columns missing, attempting resilient update...');
+        
+        // On garde uniquement les colonnes "sûres" et on tente le reste une par une
+        const safeUpdates: Record<string, any> = {};
+        const knownSafe = ['name', 'short_name', 'address', 'phone', 'capacity_status'];
+        
+        for (const key of Object.keys(updates)) {
+          if (knownSafe.includes(key)) {
+            safeUpdates[key] = (updates as any)[key];
+          }
+        }
+
+        // Tenter d'abord le bloc "sûr"
+        if (Object.keys(safeUpdates).length > 0) {
+           const { error: safeErr } = await performUpdate(safeUpdates);
+           if (safeErr) console.error('[HospitalContext] Safe update failed:', safeErr);
+        }
+
+        // Tenter les autres un par un pour voir ce qui passe
+        for (const key of Object.keys(updates)) {
+          if (!knownSafe.includes(key)) {
+            const singleUpdate = { [key]: (updates as any)[key] };
+            const { error: singleErr } = await performUpdate(singleUpdate);
+            if (singleErr) {
+               console.warn(`[HospitalContext] Column "${key}" likely missing in DB, skipping.`);
+            }
+          }
+        }
+      } else if (error) {
+        throw error;
+      }
+
+      await refreshStructureInfo();
+    } catch (err) {
+      console.error('[HospitalContext] updateStructureInfo error:', err);
+      throw err;
+    }
+  }, [profile?.health_structure_id, refreshStructureInfo]);
 
   const sendHospitalReport = useCallback(
     async (caseData: EmergencyCase) => {
@@ -160,7 +281,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
           reportSentAt: new Date().toISOString(),
         });
         const { error: updErr } = await supabase.from('dispatches').update({ hospital_data: merged }).eq('id', caseData.id);
-        if (updErr?.code === '42703') {
+        if (updErr?.code === '42703' || updErr?.code === 'PGRST204') {
           console.warn('[HospitalContext] hospital_data column missing; skip reportSent merge.');
         } else if (updErr) {
           console.error('[HospitalContext] merge reportSent', updErr);
@@ -171,6 +292,38 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       await fetchCasesRef.current?.({ silent: true });
     },
     [profile?.health_structure_id, session?.user?.id]
+  );
+
+  const updateHospitalCapacity = useCallback(
+    async (status: HospitalCapacityStatus) => {
+      const structureId = profile?.health_structure_id;
+      if (!structureId) return;
+
+      setIsUpdatingCapacity(true);
+      try {
+        // En local d'abord pour réactivité
+        setHospitalCapacity(status);
+
+        // Sync Supabase
+        const { error } = await supabase
+          .from('health_structures')
+          .update({ capacity_status: status })
+          .eq('id', structureId);
+
+        if (error) {
+          if (error.code === '42703' || error.code === 'PGRST204') {
+            console.warn('[HospitalContext] capacity_status column missing in health_structures table. Keeping local state.');
+          } else {
+            throw error;
+          }
+        }
+      } catch (err) {
+        console.error('[HospitalContext] updateHospitalCapacity error:', err);
+      } finally {
+        setIsUpdatingCapacity(false);
+      }
+    },
+    [profile?.health_structure_id]
   );
 
   const fetchCases = useCallback(async (options?: { silent?: boolean }) => {
@@ -283,6 +436,10 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       const mappedCases = data.map((d) =>
         mapDispatchRowToEmergencyCase(d, profileMap, responsesMap, unitPhoneByUnitId),
       );
+      
+      const pendingCount = mappedCases.filter(c => c.hospitalStatus === 'pending').length;
+      setPendingAlertCount(pendingCount);
+
       setActiveCases(mappedCases);
       void writeHospitalCasesCache(structureId, mappedCases);
     } catch (err: any) {
@@ -311,11 +468,12 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         setListBlocker(null);
       }
       await fetchCases({ silent: true });
+      await refreshStructureInfo();
     })();
     return () => {
       cancelled = true;
     };
-  }, [fetchCases, profile?.health_structure_id, profile?.role]);
+  }, [fetchCases, refreshStructureInfo, profile?.health_structure_id, profile?.role]);
 
   useEffect(() => {
     const structureId = profile?.health_structure_id;
@@ -388,11 +546,17 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       if (transition.hospitalStatus) {
         updateObj.hospital_status = transition.hospitalStatus;
         updateObj.hospital_responded_at = new Date().toISOString();
+        
+        // If hospital accepts, we immediately move to en_route_hospital status
+        // Only if we haven't already moved past this stage (safety check)
+        const canAdvanceStatus = !['en_route_hospital', 'arrived_hospital', 'completed', 'mission_end'].includes(currentDispatch.status);
+        if (transition.hospitalStatus === 'accepted' && canAdvanceStatus) {
+          updateObj.status = 'en_route_hospital';
+        }
       }
       if (transition.hospitalNotes) {
         updateObj.hospital_notes = transition.hospitalNotes;
       } else if (transition.hospitalStatus === 'accepted') {
-        /** PROMPT_CURSOR_HOPITAL_WORKFLOW §2 — note par défaut si non fournie */
         updateObj.hospital_notes = "Accepté par l'établissement";
       }
 
@@ -407,13 +571,13 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
 
       let updateError = await performUpdate(updateObj);
 
-      if (updateError?.code === '42703') {
+      if (updateError?.code === '42703' || updateError?.code === 'PGRST204') {
         const stripped = { ...updateObj };
         delete stripped.hospital_data;
         console.warn('[HospitalContext] hospital_data missing; retrying without JSON.');
         updateError = await performUpdate(stripped);
       }
-      if (updateError?.code === '42703') {
+      if (updateError?.code === '42703' || updateError?.code === 'PGRST204') {
         const stripped = { ...updateObj };
         delete stripped.hospital_data;
         delete stripped.admission_recorded_at;
@@ -421,7 +585,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         console.warn('[HospitalContext] admission_recorded_* missing; retrying without.');
         updateError = await performUpdate(stripped);
       }
-      if (updateError?.code === '42703') {
+      if (updateError?.code === '42703' || updateError?.code === 'PGRST204') {
         const stripped = { ...updateObj };
         delete stripped.hospital_data;
         delete stripped.admission_recorded_at;
@@ -452,11 +616,18 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       value={{
         activeCases,
         isLoading,
+        hospitalCapacity,
+        isUpdatingCapacity,
         listBlocker,
         lastFetchError,
+        pendingAlertCount,
         refresh: fetchCases,
+        updateHospitalCapacity,
         updateCaseStatus,
         sendHospitalReport,
+        structureInfo,
+        updateStructureInfo,
+        refreshStructureInfo,
       }}
     >
       {children}

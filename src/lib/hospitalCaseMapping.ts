@@ -47,13 +47,14 @@ function isCaseStatus(s: unknown): s is CaseStatus {
 
 export function resolveCaseStatusFromRow(d: { status?: string }, hData: { status?: unknown }): CaseStatus {
   const ds = d.status;
-  if (ds === 'completed') {
+  // mission_end = urgentist released the unit, patient handed to hospital
+  if (ds === 'completed' || ds === 'mission_end') {
     if (isCaseStatus(hData.status)) return hData.status;
-    return 'termine';
+    return 'handedOver';
   }
   if (ds === 'arrived_hospital') {
     if (isCaseStatus(hData.status)) return hData.status;
-    return 'admis';
+    return 'arrived';
   }
   if (ds === 'dispatched' || ds === 'en_route' || ds === 'on_scene') return 'en_attente';
   if (ds === 'en_route_hospital') return 'en_cours';
@@ -80,6 +81,15 @@ function parseLovableDischargeType(v: unknown): LovableDischargeType | undefined
   return v;
 }
 
+function capitalizeName(name: string): string {
+  if (!name) return 'Inconnu';
+  return name
+    .toLowerCase()
+    .split(' ')
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .join(' ');
+}
+
 /**
  * Mappe une ligne `dispatches` (+ embeds) vers `EmergencyCase`.
  * `unitPhoneByUnitId` : téléphone secouriste depuis `users_directory.assigned_unit_id`.
@@ -92,6 +102,7 @@ export function mapDispatchRowToEmergencyCase(
 ): EmergencyCase {
   const inc = d.incidents || {};
   const hData = d.hospital_data || {};
+  const medicalAssessmentRaw = d.medical_assessment || {};
 
   const patientProfileRaw = inc.citizen_id ? profileMap[inc.citizen_id] : undefined;
   const patientProfile = patientProfileRaw
@@ -136,7 +147,7 @@ export function mapDispatchRowToEmergencyCase(
     completedAt: typeof d.completed_at === 'string' ? d.completed_at : undefined,
     dispatchCreatedAt: typeof d.created_at === 'string' ? d.created_at : undefined,
     incidentId: typeof inc.id === 'string' ? inc.id : undefined,
-    victimName: inc.caller_name || 'Inconnu',
+    victimName: capitalizeName(inc.caller_name || 'Inconnu'),
     age: resolvedAge,
     sex: hData.sex === 'M' || hData.sex === 'F' ? hData.sex : 'Inconnu',
     description: inc.description || '',
@@ -149,11 +160,14 @@ export function mapDispatchRowToEmergencyCase(
     unitVehicleType: typeof u.vehicle_type === 'string' ? u.vehicle_type : undefined,
     unitVehiclePlate: typeof u.vehicle_plate === 'string' ? u.vehicle_plate : undefined,
     unitAgentName: typeof u.agent_name === 'string' && u.agent_name.trim() ? u.agent_name.trim() : undefined,
+    unitLat: toNullableNumber(u.location_lat) ?? undefined,
+    unitLng: toNullableNumber(u.location_lng) ?? undefined,
     eta: '5 min',
+    distance: '1.2 KM',
     status: resolveCaseStatusFromRow(d, hData),
     address: inc.location_address || '',
     timestamp: new Date(inc.created_at || d.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    typeUrgence: inc.type || 'Inconnu',
+    typeUrgence: (inc.type || 'Inconnu').replace(/_/g, ' ').toUpperCase(),
     unitId: d.unit_id,
     assignedStructureLat: toNullableNumber(d.assigned_structure_lat) ?? undefined,
     assignedStructureLng: toNullableNumber(d.assigned_structure_lng) ?? undefined,
@@ -180,6 +194,13 @@ export function mapDispatchRowToEmergencyCase(
         : undefined,
     gravityScore,
 
+    medicalAssessment: hData.medicalAssessment || medicalAssessmentRaw,
+    careChecklist: Array.isArray(hData.medicalAssessment?.careChecklist) 
+      ? hData.medicalAssessment.careChecklist 
+      : Array.isArray(medicalAssessmentRaw.careChecklist) 
+        ? medicalAssessmentRaw.careChecklist 
+        : undefined,
+
     arrivalTime: hData.arrivalTime,
     arrivalMode: hData.arrivalMode,
     arrivalState: hData.arrivalState,
@@ -191,6 +212,7 @@ export function mapDispatchRowToEmergencyCase(
     provisionalDiagnosis: hData.provisionalDiagnosis,
     triageNotes: typeof hData.triageNotes === 'string' ? hData.triageNotes : undefined,
     triageRecordedAt: typeof hData.triageRecordedAt === 'string' ? hData.triageRecordedAt : undefined,
+    admittedAt: typeof hData.admittedAt === 'string' ? hData.admittedAt : undefined,
 
     observations: Array.isArray(hData.observations) ? hData.observations : undefined,
     treatments: Array.isArray(hData.treatments) ? hData.treatments : undefined,
@@ -217,5 +239,6 @@ export function mapDispatchRowToEmergencyCase(
     closureTime: hData.closureTime,
     reportSent: hData.reportSent === true,
     reportSentAt: typeof hData.reportSentAt === 'string' ? hData.reportSentAt : undefined,
+    hospitalDetailStatus: typeof hData.status === 'string' ? hData.status : undefined,
   };
 }

@@ -1,13 +1,10 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { HeartPulse } from "lucide-react-native";
-import Mapbox from "@rnmapbox/maps";
 import { colors } from '../../../../theme/colors';
 import { styles } from '../styles';
 import { AppTouchableOpacity } from '../../../../components/ui/AppTouchableOpacity';
-import { MapboxMapView } from '../../../../components/map/MapboxMapView';
-import { MePuck } from '../../../../components/map/mapMarkers';
+import { EBMap, EBMapMarker } from '../../../../components/map/EBMap';
 
 interface StepArrivalProps {
    selectedMission: any;
@@ -59,44 +56,41 @@ export const StepArrival: React.FC<StepArrivalProps> = ({
              >
                 <MaterialIcons name="arrow-back" color="#FFF" size={24} />
              </AppTouchableOpacity>
-             <MapboxMapView 
-                style={styles.trackingMap} 
-                styleURL={Mapbox.StyleURL.Dark} 
-                compassEnabled={true} 
-                scaleBarEnabled={true}
-                scaleBarPosition={{ top: 120, left: 16 }}
-             >
-                {receptionCameraBounds ? (
-                   <Mapbox.Camera
-                      bounds={receptionCameraBounds}
-                      animationMode="flyTo"
-                      animationDuration={1000}
-                   />
-                ) : (
-                   <Mapbox.Camera
-                      centerCoordinate={[selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447]}
-                      zoomLevel={15}
-                   />
-                )}
-
-                <Mapbox.PointAnnotation id="victim-arrival" coordinate={[selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447]}>
-                  <View style={styles.victimMarker}>
-                     <HeartPulse size={16} color="#FFF" strokeWidth={2.5} />
-                  </View>
-                </Mapbox.PointAnnotation>
-
-                {urgentisteLoc && (
-                   <Mapbox.PointAnnotation id="my-unit-arrival" coordinate={[urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude]}>
-                      <MePuck headingDeg={urgentisteHeadingDeg} size={32} />
-                   </Mapbox.PointAnnotation>
-                )}
-
-                {routeGeoJSON && (
-                   <Mapbox.ShapeSource id="route-arrival" shape={routeGeoJSON}>
-                      <Mapbox.LineLayer id="route-arrival-line" style={{ lineColor: '#4A90D9', lineWidth: 4, lineOpacity: 0.85 }} />
-                   </Mapbox.ShapeSource>
-                )}
-            </MapboxMapView>
+             <EBMap
+                mode="NAVIGATION"
+                markers={useMemo(() => {
+                   const m: EBMapMarker[] = [];
+                   m.push({
+                      id: 'victim-arrival',
+                      type: 'incident',
+                      coordinate: [selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447],
+                      priority: selectedMission.priority,
+                   });
+                   if (urgentisteLoc) {
+                      m.push({
+                         id: 'my-unit-arrival',
+                         type: 'me',
+                         coordinate: [urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude],
+                         headingDeg: urgentisteHeadingDeg,
+                      });
+                   }
+                   return m;
+                }, [selectedMission.location?.lat, selectedMission.location?.lng, urgentisteLoc, urgentisteHeadingDeg])}
+                routeData={useMemo(() => routeGeoJSON ? {
+                   routes: [{
+                      geometry: routeGeoJSON.features[0].geometry,
+                      duration: 0,
+                      distance: 0,
+                      steps: [],
+                   }],
+                   selectedIndex: 0,
+                } : undefined, [routeGeoJSON])}
+                cameraConfig={{
+                   bounds: receptionCameraBounds || undefined,
+                }}
+                showControls={true}
+                style={styles.trackingMap}
+             />
             <View style={styles.mapAddressOverlay}>
                <MaterialIcons
                   name="place"

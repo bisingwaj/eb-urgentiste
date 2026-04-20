@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, StatusBar, Animated, Alert, ActivityIndicator, Modal, Dimensions, Platform, ScrollView } from 'react-native';
 import { TabScreenSafeArea } from '../../components/layout/TabScreenSafeArea';
 import { colors } from '../../theme/colors';
@@ -12,14 +12,18 @@ import { useConnectivity } from '../../hooks/useConnectivity';
 import { useDialog } from '../../contexts/GlobalDialogContext';
 import { supabase } from '../../lib/supabase';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
+import { DeviceEventEmitter } from 'react-native';
+import { ALARM_STOP_EVENT } from '../../services/AlarmService';
 import * as Location from 'expo-location';
 import Mapbox from '@rnmapbox/maps';
 import { Navigation2, Activity } from 'lucide-react-native';
 import {
   getRouteWithAlternatives,
   buildRouteFeature,
-  geometryToCameraBounds
+  geometryToCameraBounds,
+  haversineMeters
 } from '../../lib/mapbox';
+import { EBMap, EBMapMarker } from '../../components/map/EBMap';
 
 const { width } = Dimensions.get('window');
 
@@ -255,6 +259,8 @@ export function HomeTab({ navigation }: any) {
         // SUCCESS
         confirmProgress.setValue(0);
         setIsModalMinimized(true);
+        // Stop any active alarm sound as the user has interacted
+        DeviceEventEmitter.emit(ALARM_STOP_EVENT);
         // CRITICAL: Mark mission as in-progress in Supabase
         void updateDispatchStatus('en_route');
         navigation.navigate('MissionActive', { mission: activeMission });
@@ -360,9 +366,19 @@ export function HomeTab({ navigation }: any) {
     navigation.navigate('CallCenter');
   };
 
-  const hasActiveAlert = !!activeMission && activeMission.dispatch_status !== 'completed';
+  const hasActiveAlert = !!activeMission && 
+    activeMission.dispatch_status !== 'completed' && 
+    activeMission.dispatch_status !== 'mission_end';
 
   const isMissionAccepted = hasActiveAlert && activeMission?.dispatch_status !== 'dispatched';
+
+  if (hasActiveAlert) {
+    console.log("[Dashboard] Active Alert State:", {
+      missionId: activeMission?.id,
+      dispatchStatus: activeMission?.dispatch_status,
+      incidentStatus: (activeMission as any)?.incidents?.status || (activeMission as any)?.status
+    });
+  }
 
   return (
     <TabScreenSafeArea style={styles.container}>
@@ -370,54 +386,43 @@ export function HomeTab({ navigation }: any) {
 
       {/* MAP PREVIEW MODAL */}
       <Modal visible={showMapPreview} animationType="slide" transparent={false}>
-        <View style={{ flex: 1, backgroundColor: '#000' }}>
-          <Mapbox.MapView style={{ flex: 1 }} styleURL={Mapbox.StyleURL.Dark}>
-            {routeBounds ? (
-              <Mapbox.Camera
-                bounds={routeBounds}
-                animationDuration={1000}
-              />
-            ) : (
-              <Mapbox.Camera
-                zoomLevel={14}
-                centerCoordinate={
-                  activeMission?.location?.lng != null && activeMission?.location?.lat != null
-                    ? [activeMission.location.lng, activeMission.location.lat]
-                    : [15.3070, -4.3224]
-                }
-              />
-            )}
-
-            {routeFeature && (
-              <Mapbox.ShapeSource id="previewRouteSource" shape={routeFeature}>
-                <Mapbox.LineLayer
-                  id="previewRouteLayer"
-                  style={{
-                    lineColor: colors.secondary,
-                    lineWidth: 4,
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                    lineOpacity: 0.8
-                  }}
-                />
-              </Mapbox.ShapeSource>
-            )}
-
-            {activeMission?.location?.lng != null && activeMission?.location?.lat != null && (
-              <Mapbox.PointAnnotation id="victim" coordinate={[activeMission.location.lng, activeMission.location.lat]}>
-                <View style={[styles.victimMarker, { backgroundColor: colors.markerIncident }]}>
-                  <Activity size={18} color="#FFF" />
-                </View>
-              </Mapbox.PointAnnotation>
-            )}
-            {userLocation && (
-              <Mapbox.PointAnnotation id="me" coordinate={[userLocation.coords.longitude, userLocation.coords.latitude]}>
-                <View style={[styles.meMarker, { backgroundColor: colors.markerMe }]}>
-                  <Navigation2 size={16} color="#FFF" style={{ transform: [{ rotate: '45deg' }] }} />
-                </View>
-              </Mapbox.PointAnnotation>
-            )}
-          </Mapbox.MapView>
+        <View style={{ flex: 1, backgroundColor: '#FFF' }}>
+          <EBMap
+            mode="NAVIGATION"
+            markers={useMemo(() => {
+              const m: EBMapMarker[] = [];
+              if (activeMission?.location?.lng != null && activeMission?.location?.lat != null) {
+                m.push({
+                  id: 'victim',
+                  type: 'incident',
+                  coordinate: [activeMission.location.lng, activeMission.location.lat],
+                  priority: activeMission.priority,
+                });
+              }
+              if (userLocation) {
+                m.push({
+                  id: 'me',
+                  type: 'me',
+                  coordinate: [userLocation.coords.longitude, userLocation.coords.latitude],
+                });
+              }
+              return m;
+            }, [activeMission?.id, userLocation])}
+            routeData={useMemo(() => routeFeature ? {
+              routes: [{
+                geometry: routeFeature.features[0].geometry,
+                duration: 0,
+                distance: 0,
+                steps: [],
+              }],
+              selectedIndex: 0,
+            } : undefined, [routeFeature])}
+            cameraConfig={{
+              bounds: routeBounds || undefined,
+            }}
+            showControls={true}
+            style={{ flex: 1 }}
+          />
           <AppTouchableOpacity style={styles.closeMapBtn} onPress={() => setShowMapPreview(false)}>
             <MaterialIcons name="close" size={28} color="#FFF" />
           </AppTouchableOpacity>
@@ -607,13 +612,16 @@ export function HomeTab({ navigation }: any) {
                 onPress={() => {
                   if (isMissionAccepted) {
                     const status = activeMission?.dispatch_status || 'dispatched';
-                    // If we are already on scene or beyond, go to Signalement
-                    if (status === 'on_scene' || status === 'en_route_hospital' || status === 'arrived_hospital') {
+                    // If we are already on scene or arrived hospital, go to Signalement
+                    // If we are currently en route to patient OR en route to hospital, go to Map (MissionActive)
+                    if (status === 'on_scene' || status === 'arrived_hospital') {
                       navigation.navigate('Signalement', { mission: activeMission });
                     } else {
                       navigation.navigate('MissionActive', { mission: activeMission });
                     }
                   } else {
+                    // STOP THE ALARM ONLY WHEN THE USER CLICKS TO SEE THE ALERT
+                    DeviceEventEmitter.emit(ALARM_STOP_EVENT);
                     setIsModalMinimized(false);
                   }
                 }}

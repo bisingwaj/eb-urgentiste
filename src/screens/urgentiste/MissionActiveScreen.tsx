@@ -4,14 +4,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
+import { ALARM_STOP_EVENT } from '../../services/AlarmService';
+import { DeviceEventEmitter } from 'react-native';
 import { useActiveMission } from '../../hooks/useActiveMission';
 import * as Location from 'expo-location';
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from '../../lib/mapbox';
-import { MapboxMapView } from '../../components/map/MapboxMapView';
-import { MePuck, ProximityCluster } from '../../components/map/mapMarkers';
+import { EBMap, EBMapMarker } from '../../components/map/EBMap';
 import { useMapPuckHeading } from '../../hooks/useMapPuckHeading';
 import { openExternalDirections } from '../../utils/navigation';
-import { formatMissionAddress } from '../../utils/missionAddress';
+import { formatMissionAddress, formatIncidentType } from '../../utils/missionAddress';
 import { useCallSession } from '../../contexts/CallSessionContext';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { startRescuerToCitizenVoipCall, alertVoipError } from '../../lib/rescuerCallCitizen';
@@ -47,6 +48,11 @@ function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: numbe
 
 export function MissionActiveScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
+
+  useEffect(() => {
+    // Dès qu'on arrive sur le suivi de mission, on stoppe l'alarme
+    DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+  }, []);
   const { activeMission, updateDispatchStatus } = useActiveMission();
   const { minimized: activeCall } = useCallSession();
   
@@ -103,20 +109,26 @@ export function MissionActiveScreen({ navigation }: any) {
   // Safety check: if mission is already on_scene, redirect to Signalement
   useEffect(() => {
     if (activeMission?.dispatch_status === 'on_scene' || 
-        activeMission?.dispatch_status === 'en_route_hospital' || 
         activeMission?.dispatch_status === 'arrived_hospital' ||
+        activeMission?.dispatch_status === 'mission_end' ||
         activeMission?.dispatch_status === 'completed') {
       console.log('[MissionActive] Status is already', activeMission.dispatch_status, '-> Redirecting to Signalement');
       navigation.replace('Signalement', { mission: activeMission });
     }
+    // Note: 'en_route_hospital' is intentionality omitted here to allow navigation to hospital
   }, [activeMission?.dispatch_status]);
 
   const missionCoords = useMemo(() => {
+    // Phase 2: Vers l'hôpital
+    if (activeMission?.dispatch_status === 'en_route_hospital' && activeMission?.assigned_structure?.lat) {
+      return [Number(activeMission.assigned_structure.lng), Number(activeMission.assigned_structure.lat)] as [number, number];
+    }
+    // Phase 1: Vers l'incident
     if (activeMission?.location?.lat && activeMission?.location?.lng) {
       return [activeMission.location.lng, activeMission.location.lat] as [number, number];
     }
     return null;
-  }, [activeMission]);
+  }, [activeMission?.dispatch_status, activeMission?.location, activeMission?.assigned_structure]);
 
   // Dynamic Routing Logic (Auto Re-route)
   const fetchRoute = async (force = false) => {
@@ -172,20 +184,31 @@ export function MissionActiveScreen({ navigation }: any) {
   };
 
   const handleNextStatus = async () => {
-    const nextStatuses: Record<string, string> = { dispatched: 'en_route', en_route: 'on_scene', on_scene: 'completed' };
+    const nextStatuses: Record<string, string> = { 
+      dispatched: 'en_route', 
+      en_route: 'on_scene', 
+      en_route_hospital: 'arrived_hospital',
+      on_scene: 'mission_end' 
+    };
     const next = nextStatuses[activeMission?.dispatch_status || ''];
-    // No more manual confirmation needed for on-scene transition
+    
+    // Safety check for hospital arrival
+    if (activeMission?.dispatch_status === 'en_route_hospital') {
+      console.log("[Navigation] Arrivée à l'hôpital déclenchée");
+    }
+
     setIsUpdating(true);
     try {
       await updateDispatchStatus(next as any);
       
-      if (next === 'on_scene') {
+      if (next === 'on_scene' || next === 'arrived_hospital') {
+        const targetStatus = next;
         // Step 1: Force Mapbox to unmount by setting transitioning state
         setIsTransitioning(true);
         // Step 2: Delay to allow Mapbox native engine to cleanup
         await new Promise(r => setTimeout(r, 150));
         // Step 3: Navigate - pass the updated status so it doesn't use stale context
-        navigation.replace('Signalement', { mission: { ...activeMission, dispatch_status: 'on_scene' } });
+        navigation.replace('Signalement', { mission: { ...activeMission, dispatch_status: targetStatus } });
       }
     } catch (err) {
       Alert.alert('Erreur', 'Mise à jour échouée.');
@@ -219,232 +242,265 @@ export function MissionActiveScreen({ navigation }: any) {
       {/* MAP BOX PRO */}
       <View style={[StyleSheet.absoluteFill, { backgroundColor: '#000' }]}>
         {!isTransitioning && (
-          <MapboxMapView 
-          style={styles.map} 
-          styleURL={Mapbox.StyleURL.Dark} 
-          compassEnabled={false}
-          scaleBarEnabled={true}
-          scaleBarPosition={{ top: 120, left: 16 }}
-          onCameraChanged={(e) => {
-            if (!isTransitioning) {
-              setZoomLevel(e.properties.zoom);
-            }
-          }}
-        >
-          <Mapbox.Camera
-            followUserLocation={mapMode === '3D'}
-            followUserMode={Mapbox.UserTrackingMode.FollowWithCourse}
-            pitch={mapMode === '3D' ? 62 : 0}
-            heading={mapMode === '3D' ? myHeadingDeg : 0}
-            zoomLevel={mapMode === '3D' ? 16.5 : zoomLevel}
-            animationMode="flyTo"
-            animationDuration={isTransitioning ? 0 : 600}
-            defaultSettings={{
-              centerCoordinate: missionCoords || undefined,
-              zoomLevel: 15,
+          <EBMap
+            mode="NAVIGATION"
+            markers={useMemo(() => {
+              const m: EBMapMarker[] = [];
+              if (missionCoords) {
+                m.push({
+                  id: 'incident-target',
+                  type: activeMission?.dispatch_status === 'en_route_hospital' ? 'hospital' : 'incident',
+                  coordinate: missionCoords as [number, number],
+                  priority: activeMission.priority,
+                });
+              }
+              if (myLocation) {
+                m.push({
+                  id: 'me',
+                  type: 'me',
+                  coordinate: [myLocation.coords.longitude, myLocation.coords.latitude],
+                  headingDeg: myHeadingDeg,
+                });
+              }
+              return m;
+            }, [activeMission?.id, missionCoords, myLocation, myHeadingDeg, activeMission?.dispatch_status])}
+            routeData={useMemo(() => routeGeoJSON ? {
+              routes: [{
+                geometry: routeGeoJSON.features[0].geometry as GeoJSON.LineString,
+                duration: routeDuration || 0,
+                distance: routeDistance || 0,
+                steps: [],
+              }],
+              selectedIndex: 0,
+            } : undefined, [routeGeoJSON, routeDuration, routeDistance])}
+            myLocation={myLocation ? [myLocation.coords.longitude, myLocation.coords.latitude] : undefined}
+            myHeading={myHeadingDeg}
+            cameraConfig={{
+               zoom: zoomLevel,
+               center: missionCoords || undefined,
             }}
-            centerCoordinate={
-              mapMode === '3D' 
-                ? undefined 
-                : (distanceToIncident < 400 && myLocation)
-                  ? [myLocation.coords.longitude, myLocation.coords.latitude] 
-                  : (missionCoords || undefined)
-            }
-            padding={{ paddingLeft: 40, paddingRight: 40, paddingTop: 180, paddingBottom: 120 }}
-            bounds={
-              mapMode === '2D' && distanceToIncident > 400 && myLocation && missionCoords
-                ? {
-                    ne: [
-                      Math.max(myLocation.coords.longitude, missionCoords[0]),
-                      Math.max(myLocation.coords.latitude, missionCoords[1]),
-                    ],
-                    sw: [
-                      Math.min(myLocation.coords.longitude, missionCoords[0]),
-                      Math.min(myLocation.coords.latitude, missionCoords[1]),
-                    ],
-                  }
-                : undefined
-            }
+            showControls={true}
+            style={styles.map}
           />
-
-          {/* 3D BUILDINGS & SKY */}
-          {mapMode === '3D' && (
-            <>
-              <Mapbox.FillExtrusionLayer
-                id="3d-buildings"
-                sourceID="composite"
-                sourceLayerID="building"
-                minZoomLevel={15}
-                maxZoomLevel={22}
-                filter={['>', 'height', 0]}
-                style={{
-                  fillExtrusionHeight: ['get', 'height'],
-                  fillExtrusionBase: ['get', 'min_height'],
-                  fillExtrusionColor: '#333',
-                  fillExtrusionOpacity: 0.8,
-                }}
-              />
-              <Mapbox.SkyLayer 
-                id="sky" 
-                style={{
-                  skyType: 'atmosphere',
-                  skyAtmosphereColor: '#111',
-                }} 
-              />
-            </>
-          )}
-
-          {/* TRAFFIC LAYER */}
-          <Mapbox.VectorSource id="traffic" url="mapbox://mapbox.mapbox-traffic-v1" />
-
-          {/* MARKERS */}
-          {showProximityCluster && missionCoords ? (
-             <Mapbox.PointAnnotation id="proximity" coordinate={missionCoords}>
-               <ProximityCluster priority={activeMission.priority || 'medium'} />
-             </Mapbox.PointAnnotation>
-          ) : (
-            <>
-              {missionCoords && (
-                <Mapbox.PointAnnotation id="incident" coordinate={missionCoords}>
-                   <View style={styles.incidentMarkerPulse} />
-                </Mapbox.PointAnnotation>
-              )}
-              {myLocation && (
-                <Mapbox.PointAnnotation id="me" coordinate={[myLocation.coords.longitude, myLocation.coords.latitude]}>
-                  <MePuck headingDeg={myHeadingDeg} size={36} />
-                </Mapbox.PointAnnotation>
-              )}
-            </>
-          )}
-
-          {routeGeoJSON && (
-            <Mapbox.ShapeSource id="route-line" shape={routeGeoJSON}>
-              <Mapbox.LineLayer id="route-layer" style={{ lineColor: colors.secondary, lineWidth: 6, lineOpacity: 0.9, lineCap: 'round' }} />
-            </Mapbox.ShapeSource>
-          )}
-          </MapboxMapView>
         )}
       </View>
 
-      {/* TOP CONTROLS */}
-      <View style={[styles.topControls, { paddingTop: insets.top + 10 }]}>
-        <View style={styles.glassStepBar}>
-          {STATUS_STEPS.map((step, idx) => (
-            <View key={step.key} style={styles.stepCell}>
-              <View style={[styles.stepIcon, idx <= currentStepIndex ? { backgroundColor: colors.secondary } : { backgroundColor: '#333' }]}>
-                <MaterialIcons name={step.icon} size={13} color="#FFF" />
-              </View>
-              <Text style={[styles.stepLabel, idx <= currentStepIndex && { color: '#FFF', opacity: 1 }]} numberOfLines={1}>
-                {step.label}
-              </Text>
-              {idx < STATUS_STEPS.length - 1 && <View style={[styles.stepLink, idx < currentStepIndex && { backgroundColor: colors.secondary }]} />}
-            </View>
-          ))}
-        </View>
-
-        {/* ONE ROW INFO PILL: Address | Time | Distance */}
-        <AppTouchableOpacity 
-          style={styles.unifiedPill} 
-          activeOpacity={0.9}
-          onPress={() => {
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-            setIsAddressExpanded(!isAddressExpanded);
-          }}
-        >
-          <View style={styles.pillRow}>
-            {/* Address Part */}
-            <View style={styles.addrSection}>
-              <MaterialIcons name="map" size={16} color={colors.secondary} />
-              <Text style={styles.pillAddr} numberOfLines={isAddressExpanded ? 0 : 1}>
-                {formatMissionAddress(activeMission.location)}
-              </Text>
-            </View>
+      {/* TOP CONTROLS & OVERLAYS */}
+      {activeMission.dispatch_status === 'en_route_hospital' ? (
+        <View style={styles.hospitalOverlay}>
+          {/* HEADER BAR */}
+          <View style={[styles.hospitalHeader, { paddingTop: insets.top + 10 }]}>
+            <AppTouchableOpacity 
+              style={styles.headerBackBtn} 
+              onPress={() => navigation.goBack()}
+            >
+              <MaterialIcons name="arrow-back" size={24} color="#FFF" />
+            </AppTouchableOpacity>
             
-            <View style={styles.pillSep} />
-
-            {/* Time Part */}
-            <View style={styles.statSection}>
-              <MaterialIcons name="schedule" size={15} color="#FFF" style={{ opacity: 0.8 }} />
-              <Text style={styles.statVal}>{formatTimeValue(routeDuration)}</Text>
+            <View style={styles.headerTitleBox}>
+               <Text style={styles.headerLabel}>NAVIGATION</Text>
+               <Text style={styles.headerMainTitle}>{activeMission.assigned_structure?.name || "HÔPITAL"}</Text>
             </View>
+            <View style={{ width: 44 }} />
+          </View>
 
-            <View style={styles.pillSep} />
+          {/* TOP TACTICAL INFO BAR (Below Header) */}
+          <View style={styles.hospitalTopInfoLayer}>
+            <AppTouchableOpacity 
+              style={styles.tacticalInfoPill}
+              onPress={() => setIsAddressExpanded(!isAddressExpanded)}
+            >
+              <View style={styles.tacticalPillMain}>
+                <View style={styles.hospitalInfoText}>
+                  <Text style={styles.tacticalHospName} numberOfLines={1}>
+                    {activeMission.assigned_structure?.name || "Hôpital de destination"}
+                  </Text>
+                  {isAddressExpanded && (
+                    <Text style={styles.tacticalHospAddr}>
+                      {activeMission.assigned_structure?.address || "Adresse non renseignée"}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.tacticalStatsRowCompact}>
+                   <View style={styles.tacticalStat}>
+                      <MaterialIcons name="schedule" size={14} color={colors.secondary} />
+                      <Text style={styles.tacticalStatVal}>{formatTimeValue(routeDuration)}</Text>
+                   </View>
+                   <View style={styles.tacticalStat}>
+                      <MaterialIcons name="straighten" size={14} color={colors.secondary} />
+                      <Text style={styles.tacticalStatVal}>{formatDistanceValue(routeDistance)}</Text>
+                   </View>
+                </View>
+              </View>
+            </AppTouchableOpacity>
 
-            {/* Distance Part */}
-            <View style={styles.statSection}>
-              <MaterialIcons name="straighten" size={15} color="#FFF" style={{ opacity: 0.8 }} />
-              <Text style={styles.statVal}>{formatDistanceValue(routeDistance)}</Text>
+            {/* FLOATING ACTION STACK (Right Side) */}
+            <View style={styles.hospitalActionStack}>
+              <AppTouchableOpacity style={styles.sqBtnMini} onPress={() => navigation.goBack()}>
+                <MaterialIcons name="close" size={20} color="#FFF" />
+              </AppTouchableOpacity>
+              <AppTouchableOpacity style={[styles.sqBtnMini, mapMode === '3D' && { backgroundColor: colors.secondary }]} onPress={toggleMapMode}>
+                <MaterialIcons name={mapMode === '3D' ? 'view-in-ar' : 'map'} size={20} color="#FFF" />
+              </AppTouchableOpacity>
             </View>
           </View>
-        </AppTouchableOpacity>
 
-        {/* ACTION BUTTONS: X above 2D/3D - ALIGNED RIGHT */}
-        <View style={styles.actionStack}>
-          <AppTouchableOpacity style={styles.sqBtn} onPress={() => navigation.goBack()}>
-            <MaterialIcons name="close" size={22} color="#FFF" />
-          </AppTouchableOpacity>
-          <AppTouchableOpacity style={[styles.sqBtn, mapMode === '3D' && { backgroundColor: colors.secondary }]} onPress={toggleMapMode}>
-            <MaterialIcons name={mapMode === '3D' ? 'view-in-ar' : 'map'} size={22} color="#FFF" />
-          </AppTouchableOpacity>
-        </View>
-      </View>
+          {/* BOTTOM COMMAND CENTER (Dark Background) */}
+          <View style={[styles.hospitalBottomPanel, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+            {/* HERO ACTIONS ROW */}
+            <View style={styles.heroActionRow}>
+              <View style={styles.heroTimeBox}>
+                  <Text style={styles.heroLabel}>TEMPS ÉCOULÉ</Text>
+                  <Text style={styles.heroTimeVal}>{elapsedTime}</Text>
+              </View>
+              
+              <AppTouchableOpacity 
+                  style={styles.heroArrivalBtn}
+                  onPress={handleNextStatus}
+                  loading={isUpdating}
+              >
+                  <Text style={styles.heroArrivalBtnText}>ARRIVÉ À L'HÔPITAL</Text>
+              </AppTouchableOpacity>
+            </View>
 
-      {/* BOTTOM ACTION PANEL */}
-      <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, 20) }]}>
-        <View style={styles.mainRow}>
-          <View style={styles.timeBlock}>
-            <Text style={styles.tLabel}>TEMPS ÉCOULÉ</Text>
-            <Text style={styles.tValue}>{elapsedTime}</Text>
+            {/* COMMUNICATION ROW */}
+            <View style={styles.commActionRow}>
+              <AppTouchableOpacity 
+                style={styles.commBtn}
+                onPress={() => navigation.navigate('CallCenter', { target: 'central' })}
+              >
+                <MaterialIcons name="headset-mic" size={18} color={colors.secondary} />
+                <Text style={styles.commBtnText}>CENTRALE</Text>
+              </AppTouchableOpacity>
+              
+              <AppTouchableOpacity 
+                style={styles.commBtn}
+                onPress={() => {
+                  const phone = activeMission.assigned_structure?.phone;
+                  if (phone) Linking.openURL(`tel:${phone}`);
+                  else Alert.alert("Indisponible", "Aucun numéro de téléphone pour cet hôpital.");
+                }}
+              >
+                <MaterialIcons name="local-hospital" size={18} color="#34C759" />
+                <Text style={styles.commBtnText}>HÔPITAL</Text>
+              </AppTouchableOpacity>
+            </View>
           </View>
-          <AppTouchableOpacity 
-            style={[styles.bigBtn, isUpdating && { opacity: 0.6 }]} 
-            onPress={handleNextStatus} 
-            disabled={isUpdating}
-          >
-            <Text style={styles.bigBtnText}>
-              {activeMission.dispatch_status === 'dispatched' ? 'DÉPART ROUTE' : 
-               activeMission.dispatch_status === 'en_route' ? 'ARRIVÉ SUR SITE' : 'TERMINER'}
-            </Text>
-            <MaterialIcons name="chevron-right" size={24} color="#000" />
-          </AppTouchableOpacity>
         </View>
+      ) : (
+        <>
+          <View style={[styles.topControls, { paddingTop: insets.top + 10 }]}>
+            <View style={styles.glassStepBar}>
+              {STATUS_STEPS.map((step, idx) => (
+                <View key={step.key} style={styles.stepCell}>
+                  <View style={[styles.stepIcon, idx <= currentStepIndex ? { backgroundColor: colors.secondary } : { backgroundColor: '#333' }]}>
+                    <MaterialIcons name={step.icon} size={13} color="#FFF" />
+                  </View>
+                  <Text style={[styles.stepLabel, idx <= currentStepIndex && { color: '#FFF', opacity: 1 }]} numberOfLines={1}>
+                    {step.label}
+                  </Text>
+                  {idx < STATUS_STEPS.length - 1 && <View style={[styles.stepLink, idx < currentStepIndex && { backgroundColor: colors.secondary }]} />}
+                </View>
+              ))}
+            </View>
 
-        <View style={styles.callRow}>
-          <AppTouchableOpacity style={[styles.callBtn, isPhonePulseActive && { opacity: 0.4 }]} onPress={() => {
-             if (isPhonePulseActive) return;
-             setIsCalling(true);
-             setTimeout(() => setIsCalling(false), 3000);
-             navigation.navigate('CallCenter', { target: 'central' });
-          }} disabled={isPhonePulseActive}>
-            <MaterialIcons name="headset-mic" size={20} color={colors.secondary} />
-            <Text style={styles.callBtnText}>CENTRALE</Text>
-          </AppTouchableOpacity>
-          <AppTouchableOpacity style={[styles.callBtn, isPhonePulseActive && { opacity: 0.4 }]} onPress={async () => {
-            if (isPhonePulseActive || !activeMission.caller?.phone || !activeMission.citizen_id) return;
-            if (isLocalNumber(activeMission.caller.phone)) {
-              setShowCallModal(true);
-            } else {
-              // High performance direct App Call via Edge Function
-              setIsCalling(true);
-              try {
-                await startRescuerToCitizenVoipCall({
-                  incidentId: activeMission.incident_id,
-                  citizenId: activeMission.citizen_id,
-                  callType: 'audio',
-                  patientName: activeMission.caller?.name || 'Patient'
-                });
-              } catch (err) {
-                alertVoipError(err);
-              } finally {
-                setIsCalling(false);
-              }
-            }
-          }} disabled={isPhonePulseActive}>
-            <MaterialIcons name="person" size={20} color={colors.success} />
-            <Text style={styles.callBtnText}>PATIENT</Text>
-          </AppTouchableOpacity>
-        </View>
-      </View>
+            {/* ONE ROW INFO PILL: Address | Time | Distance */}
+            <AppTouchableOpacity 
+              style={styles.unifiedPill} 
+              activeOpacity={0.9}
+              onPress={() => {
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setIsAddressExpanded(!isAddressExpanded);
+              }}
+            >
+              <View style={styles.pillRow}>
+                <View style={styles.addrSection}>
+                  <MaterialIcons name="map" size={16} color={colors.secondary} />
+                  <Text style={styles.pillAddr} numberOfLines={isAddressExpanded ? 0 : 1}>
+                    {formatMissionAddress(activeMission.location)}
+                  </Text>
+                </View>
+                <View style={styles.pillSep} />
+                <View style={styles.statSection}>
+                  <MaterialIcons name="schedule" size={15} color="#FFF" style={{ opacity: 0.8 }} />
+                  <Text style={styles.statVal}>{formatTimeValue(routeDuration)}</Text>
+                </View>
+                <View style={styles.pillSep} />
+                <View style={styles.statSection}>
+                  <MaterialIcons name="straighten" size={15} color="#FFF" style={{ opacity: 0.8 }} />
+                  <Text style={styles.statVal}>{formatDistanceValue(routeDistance)}</Text>
+                </View>
+              </View>
+            </AppTouchableOpacity>
+
+            {/* ACTION BUTTONS: X above 2D/3D - ALIGNED RIGHT */}
+            <View style={styles.actionStack}>
+              <AppTouchableOpacity style={styles.sqBtn} onPress={() => navigation.goBack()}>
+                <MaterialIcons name="close" size={22} color="#FFF" />
+              </AppTouchableOpacity>
+              <AppTouchableOpacity style={[styles.sqBtn, mapMode === '3D' && { backgroundColor: colors.secondary }]} onPress={toggleMapMode}>
+                <MaterialIcons name={mapMode === '3D' ? 'view-in-ar' : 'map'} size={22} color="#FFF" />
+              </AppTouchableOpacity>
+            </View>
+          </View>
+
+          {/* BOTTOM ACTION PANEL */}
+          <View style={[styles.bottomPanel, { paddingBottom: Math.max(insets.bottom, 20) }]}>
+            <View style={styles.mainRow}>
+              <View style={styles.timeBlock}>
+                <Text style={styles.tLabel}>TEMPS ÉCOULÉ</Text>
+                <Text style={styles.tValue}>{elapsedTime}</Text>
+              </View>
+              <AppTouchableOpacity 
+                style={[styles.bigBtn, isUpdating && { opacity: 0.6 }]} 
+                onPress={handleNextStatus} 
+                disabled={isUpdating}
+              >
+                <Text style={styles.bigBtnText}>
+                  {activeMission.dispatch_status === 'dispatched' ? 'DÉPART ROUTE' : 
+                   activeMission.dispatch_status === 'en_route' ? 'ARRIVÉ SUR SITE' : 'TERMINER'}
+                </Text>
+                <MaterialIcons name="chevron-right" size={24} color="#000" />
+              </AppTouchableOpacity>
+            </View>
+
+            <View style={styles.callRow}>
+              <AppTouchableOpacity style={[styles.callBtn, isPhonePulseActive && { opacity: 0.4 }]} onPress={() => {
+                 if (isPhonePulseActive) return;
+                 setIsCalling(true);
+                 setTimeout(() => setIsCalling(false), 3000);
+                 navigation.navigate('CallCenter', { target: 'central' });
+              }} disabled={isPhonePulseActive}>
+                <MaterialIcons name="headset-mic" size={20} color={colors.secondary} />
+                <Text style={styles.callBtnText}>CENTRALE</Text>
+              </AppTouchableOpacity>
+              <AppTouchableOpacity style={[styles.callBtn, isPhonePulseActive && { opacity: 0.4 }]} onPress={async () => {
+                if (isPhonePulseActive || !activeMission.caller?.phone || !activeMission.citizen_id) return;
+                if (isLocalNumber(activeMission.caller.phone)) {
+                  setShowCallModal(true);
+                } else {
+                  setIsCalling(true);
+                  try {
+                    await startRescuerToCitizenVoipCall({
+                      incidentId: activeMission.incident_id,
+                      citizenId: activeMission.citizen_id,
+                      callType: 'audio',
+                      patientName: activeMission.caller?.name || 'Patient'
+                    });
+                  } catch (err) {
+                    alertVoipError(err);
+                  } finally {
+                    setIsCalling(false);
+                  }
+                }
+              }} disabled={isPhonePulseActive}>
+                <MaterialIcons name="person" size={20} color={colors.success} />
+                <Text style={styles.callBtnText}>PATIENT</Text>
+              </AppTouchableOpacity>
+            </View>
+          </View>
+        </>
+      )}
 
       {/* CALL SELECTION MODAL */}
       <Modal
@@ -622,4 +678,76 @@ const styles = StyleSheet.create({
     borderRadius: 16, backgroundColor: 'rgba(211, 47, 47, 0.12)', borderWidth: 1, borderColor: 'rgba(211, 47, 47, 0.3)' 
   },
   cancelText: { color: '#FF5252', fontSize: 13, fontWeight: '900', letterSpacing: 2, opacity: 0.9 },
+
+  // HOSPITAL NAVIGATION SPECIFIC
+  hospitalOverlay: { flex: 1 },
+  hospitalHeader: { 
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
+    paddingHorizontal: 20, zIndex: 10, paddingBottom: 12,
+    backgroundColor: 'rgba(0,0,0,0.8)', borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.08)' 
+  },
+  headerBackBtn: { 
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' 
+  },
+  headerTitleBox: { alignItems: 'center' },
+  headerLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+  headerMainTitle: { color: '#FFF', fontSize: 15, fontWeight: '800', marginTop: 1 },
+
+  hospitalTopInfoLayer: { paddingHorizontal: 16, marginTop: 8, zIndex: 10 },
+  hospitalActionStack: { position: 'absolute', right: 0, top: 62, gap: 8 },
+
+  heroActionRow: { 
+    flexDirection: 'row', gap: 10, marginTop: 2
+  },
+  heroTimeBox: { 
+    flex: 0.8, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, 
+    paddingVertical: 6, paddingHorizontal: 8, justifyContent: 'center', alignItems: 'center',
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.1)'
+  },
+  heroLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 8, fontWeight: '700', marginBottom: 1 },
+  heroTimeVal: { color: '#FFF', fontSize: 18, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  heroArrivalBtn: { 
+    flex: 1.2, backgroundColor: colors.success, borderRadius: 8, 
+    height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center'
+  },
+  heroArrivalBtnText: { color: '#000', fontSize: 13, fontWeight: '900' },
+
+  commActionRow: { 
+    flexDirection: 'row', gap: 8, marginTop: 8 
+  },
+  commBtn: { 
+    flex: 1, height: 40, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.03)', flexDirection: 'row', justifyContent: 'center', 
+    alignItems: 'center', gap: 6, borderStyle: 'dashed'
+  },
+  commBtnText: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800' },
+
+  hospitalBottomPanel: { 
+    position: 'absolute', bottom: 0, left: 0, right: 0, 
+    backgroundColor: 'rgba(0,0,0,0.96)',
+    paddingHorizontal: 16, paddingTop: 12,
+    borderRadius: 0,
+    borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    zIndex: 10 
+  },
+  miniMapActions: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+  sqBtnMini: { 
+    width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(15,15,15,0.9)', 
+    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' 
+  },
+  tacticalInfoPill: { 
+    backgroundColor: 'rgba(15,15,15,0.95)', borderRadius: 20, padding: 12, 
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    shadowColor: '#000', shadowOpacity: 1, shadowRadius: 20, elevation: 12
+  },
+  tacticalPillMain: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  hospitalInfoText: { flex: 1 },
+  tacticalStatsRowCompact: { flexDirection: 'row', gap: 12 },
+  tacticalHospName: { color: '#FFF', fontSize: 14, fontWeight: '900' },
+  tacticalHospAddr: { color: 'rgba(255,255,255,0.4)', fontSize: 12, marginTop: 4, lineHeight: 16 },
+  tacticalStat: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  tacticalStatVal: { color: colors.secondary, fontSize: 13, fontWeight: '900' }
 });
