@@ -5,11 +5,12 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-StatusBar,
+  StatusBar,
   Dimensions,
   ActivityIndicator,
   RefreshControl,
-  Platform} from "react-native";
+  Platform
+} from "react-native";
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -28,13 +29,12 @@ import { HospitalHeader } from "./components/HospitalHeader";
 
 const { width } = Dimensions.get("window");
 
-<<<<<<< HEAD
-import { 
-  UrgencyLevel, 
-  CaseStatus, 
-  HospitalStatus, 
-  EmergencyCase, 
-  LovableDischargeType, 
+import {
+  UrgencyLevel,
+  CaseStatus,
+  HospitalStatus,
+  EmergencyCase,
+  LovableDischargeType,
   MonitoringPatientStatus,
   Intervention,
   isCaseClosed
@@ -287,23 +287,23 @@ export function HospitalDashboardTab({ navigation }: any) {
   // 2. EN ROUTE & ARRIVÉS (Incoming but not admitted)
   const enRouteCases = useMemo(() => {
     return activeCases
-      .filter(c => 
-        c.hospitalStatus === 'accepted' && 
+      .filter(c =>
+        c.hospitalStatus === 'accepted' &&
         (c.dispatchStatus === 'en_route_hospital' || c.dispatchStatus === 'arrived_hospital' || c.dispatchStatus === 'completed' || c.dispatchStatus === 'mission_end') &&
         !['admis', 'triage', 'prise_en_charge', 'monitoring', 'termine'].includes(c.hospitalDetailStatus || '')
       )
       .sort((a, b) => {
-         const timeA = new Date(a.hospitalRespondedAt || a.dispatchCreatedAt || 0).getTime();
-         const timeB = new Date(b.hospitalRespondedAt || b.dispatchCreatedAt || 0).getTime();
-         return timeB - timeA;
+        const timeA = new Date(a.hospitalRespondedAt || a.dispatchCreatedAt || 0).getTime();
+        const timeB = new Date(b.hospitalRespondedAt || b.dispatchCreatedAt || 0).getTime();
+        return timeB - timeA;
       });
   }, [activeCases]);
 
   // 3. ADMISSIONS (Officially at the clinic)
   const admissionCases = useMemo(() => {
     return activeCases
-      .filter(c => 
-        c.hospitalStatus === 'accepted' && 
+      .filter(c =>
+        c.hospitalStatus === 'accepted' &&
         ['admis', 'triage', 'prise_en_charge', 'monitoring'].includes(c.hospitalDetailStatus || '')
       )
       .sort((a, b) => {
@@ -343,10 +343,10 @@ export function HospitalDashboardTab({ navigation }: any) {
       <HospitalHeader />
 
       <View style={styles.topHeader}>
-        <DashboardSegmentedControl 
-          activeTab={activeTab} 
-          onTabChange={setActiveTab} 
-          counts={tabCounts} 
+        <DashboardSegmentedControl
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          counts={tabCounts}
         />
       </View>
 
@@ -395,9 +395,9 @@ export function HospitalDashboardTab({ navigation }: any) {
               </View>
               {requestCases.length > 0 ? (
                 requestCases.map((caseItem) => (
-                  <IncomingCaseItem 
-                    key={caseItem.id} 
-                    caseItem={caseItem} 
+                  <IncomingCaseItem
+                    key={caseItem.id}
+                    caseItem={caseItem}
                     onAccept={handleQuickAccept}
                     onRefuse={handleQuickRefuse}
                     onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
@@ -417,9 +417,9 @@ export function HospitalDashboardTab({ navigation }: any) {
               </View>
               {enRouteCases.length > 0 ? (
                 enRouteCases.map((caseItem) => (
-                  <ActiveCaseItem 
-                    key={caseItem.id} 
-                    caseItem={caseItem} 
+                  <ActiveCaseItem
+                    key={caseItem.id}
+                    caseItem={caseItem}
                     mode="en_route"
                     onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
                     displayTime={formatCaseTime(caseItem.hospitalRespondedAt || caseItem.dispatchCreatedAt)}
@@ -438,9 +438,9 @@ export function HospitalDashboardTab({ navigation }: any) {
               </View>
               {admissionCases.length > 0 ? (
                 admissionCases.map((caseItem) => (
-                  <ActiveCaseItem 
-                    key={caseItem.id} 
-                    caseItem={caseItem} 
+                  <ActiveCaseItem
+                    key={caseItem.id}
+                    caseItem={caseItem}
                     mode="admissions"
                     onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
                     displayTime={formatCaseTime(caseItem.triageRecordedAt || caseItem.arrivalTime || caseItem.hospitalRespondedAt)}
@@ -459,10 +459,10 @@ export function HospitalDashboardTab({ navigation }: any) {
 
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: colors.mainBackground },
-  topHeader: { 
-    paddingHorizontal: 24, 
-    paddingTop: 4, 
-    paddingBottom: 8, 
+  topHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 4,
+    paddingBottom: 8,
     backgroundColor: "#0A0A0A",
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 },
