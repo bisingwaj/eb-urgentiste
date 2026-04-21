@@ -233,6 +233,40 @@ export function MissionActiveScreen({ navigation }: any) {
     return `${Math.ceil(seconds / 60)}'`;
   };
 
+  const mapMarkers = useMemo(() => {
+    const m: EBMapMarker[] = [];
+    if (missionCoords) {
+      m.push({
+        id: 'incident-target',
+        type: activeMission?.dispatch_status === 'en_route_hospital' ? 'hospital' : 'incident',
+        coordinate: missionCoords as [number, number],
+        priority: activeMission.priority,
+      });
+    }
+    if (myLocation) {
+      m.push({
+        id: 'me',
+        type: 'me',
+        coordinate: [myLocation.coords.longitude, myLocation.coords.latitude],
+        headingDeg: myHeadingDeg,
+      });
+    }
+    return m;
+  }, [activeMission?.id, missionCoords, myLocation, myHeadingDeg, activeMission?.dispatch_status]);
+
+  const mapRouteData = useMemo(() => {
+    if (!routeGeoJSON) return undefined;
+    return {
+      routes: [{
+        geometry: routeGeoJSON.features[0].geometry as GeoJSON.LineString,
+        duration: routeDuration || 0,
+        distance: routeDistance || 0,
+        steps: [],
+      }],
+      selectedIndex: 0,
+    };
+  }, [routeGeoJSON, routeDuration, routeDistance]);
+
   if (!activeMission) return null;
 
   return (
@@ -244,35 +278,8 @@ export function MissionActiveScreen({ navigation }: any) {
         {!isTransitioning && (
           <EBMap
             mode="NAVIGATION"
-            markers={useMemo(() => {
-              const m: EBMapMarker[] = [];
-              if (missionCoords) {
-                m.push({
-                  id: 'incident-target',
-                  type: activeMission?.dispatch_status === 'en_route_hospital' ? 'hospital' : 'incident',
-                  coordinate: missionCoords as [number, number],
-                  priority: activeMission.priority,
-                });
-              }
-              if (myLocation) {
-                m.push({
-                  id: 'me',
-                  type: 'me',
-                  coordinate: [myLocation.coords.longitude, myLocation.coords.latitude],
-                  headingDeg: myHeadingDeg,
-                });
-              }
-              return m;
-            }, [activeMission?.id, missionCoords, myLocation, myHeadingDeg, activeMission?.dispatch_status])}
-            routeData={useMemo(() => routeGeoJSON ? {
-              routes: [{
-                geometry: routeGeoJSON.features[0].geometry as GeoJSON.LineString,
-                duration: routeDuration || 0,
-                distance: routeDistance || 0,
-                steps: [],
-              }],
-              selectedIndex: 0,
-            } : undefined, [routeGeoJSON, routeDuration, routeDistance])}
+            markers={mapMarkers}
+            routeData={mapRouteData}
             myLocation={myLocation ? [myLocation.coords.longitude, myLocation.coords.latitude] : undefined}
             myHeading={myHeadingDeg}
             cameraConfig={{

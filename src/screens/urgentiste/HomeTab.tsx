@@ -372,6 +372,39 @@ export function HomeTab({ navigation }: any) {
 
   const isMissionAccepted = hasActiveAlert && activeMission?.dispatch_status !== 'dispatched';
 
+  const mapMarkers = useMemo(() => {
+    const m: EBMapMarker[] = [];
+    if (activeMission?.location?.lng != null && activeMission?.location?.lat != null) {
+      m.push({
+        id: 'victim',
+        type: 'incident',
+        coordinate: [activeMission.location.lng, activeMission.location.lat],
+        priority: activeMission.priority,
+      });
+    }
+    if (userLocation) {
+      m.push({
+        id: 'me',
+        type: 'me',
+        coordinate: [userLocation.coords.longitude, userLocation.coords.latitude],
+      });
+    }
+    return m;
+  }, [activeMission?.id, userLocation]);
+
+  const mapRouteData = useMemo(() => {
+    if (!routeFeature) return undefined;
+    return {
+      routes: [{
+        geometry: routeFeature.features[0].geometry,
+        duration: 0,
+        distance: 0,
+        steps: [],
+      }],
+      selectedIndex: 0,
+    };
+  }, [routeFeature]);
+
   if (hasActiveAlert) {
     console.log("[Dashboard] Active Alert State:", {
       missionId: activeMission?.id,
@@ -389,34 +422,8 @@ export function HomeTab({ navigation }: any) {
         <View style={{ flex: 1, backgroundColor: '#FFF' }}>
           <EBMap
             mode="NAVIGATION"
-            markers={useMemo(() => {
-              const m: EBMapMarker[] = [];
-              if (activeMission?.location?.lng != null && activeMission?.location?.lat != null) {
-                m.push({
-                  id: 'victim',
-                  type: 'incident',
-                  coordinate: [activeMission.location.lng, activeMission.location.lat],
-                  priority: activeMission.priority,
-                });
-              }
-              if (userLocation) {
-                m.push({
-                  id: 'me',
-                  type: 'me',
-                  coordinate: [userLocation.coords.longitude, userLocation.coords.latitude],
-                });
-              }
-              return m;
-            }, [activeMission?.id, userLocation])}
-            routeData={useMemo(() => routeFeature ? {
-              routes: [{
-                geometry: routeFeature.features[0].geometry,
-                duration: 0,
-                distance: 0,
-                steps: [],
-              }],
-              selectedIndex: 0,
-            } : undefined, [routeFeature])}
+            markers={mapMarkers}
+            routeData={mapRouteData}
             cameraConfig={{
               bounds: routeBounds || undefined,
             }}

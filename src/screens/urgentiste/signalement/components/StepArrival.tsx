@@ -35,6 +35,38 @@ export const StepArrival: React.FC<StepArrivalProps> = ({
    onOpenFullscreenMap,
    onArrivalOnScene
 }) => {
+   const mapMarkers = useMemo(() => {
+      const m: EBMapMarker[] = [];
+      m.push({
+         id: 'victim-arrival',
+         type: 'incident',
+         coordinate: [selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447],
+         priority: selectedMission.priority,
+      });
+      if (urgentisteLoc) {
+         m.push({
+            id: 'my-unit-arrival',
+            type: 'me',
+            coordinate: [urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude],
+            headingDeg: urgentisteHeadingDeg,
+         });
+      }
+      return m;
+   }, [selectedMission.location?.lat, selectedMission.location?.lng, urgentisteLoc, urgentisteHeadingDeg]);
+
+   const mapRouteData = useMemo(() => {
+      if (!routeGeoJSON) return undefined;
+      return {
+         routes: [{
+            geometry: routeGeoJSON.features[0].geometry,
+            duration: 0,
+            distance: 0,
+            steps: [],
+         }],
+         selectedIndex: 0,
+      };
+   }, [routeGeoJSON]);
+
    return (
       <View
          style={[
@@ -58,33 +90,8 @@ export const StepArrival: React.FC<StepArrivalProps> = ({
              </AppTouchableOpacity>
              <EBMap
                 mode="NAVIGATION"
-                markers={useMemo(() => {
-                   const m: EBMapMarker[] = [];
-                   m.push({
-                      id: 'victim-arrival',
-                      type: 'incident',
-                      coordinate: [selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447],
-                      priority: selectedMission.priority,
-                   });
-                   if (urgentisteLoc) {
-                      m.push({
-                         id: 'my-unit-arrival',
-                         type: 'me',
-                         coordinate: [urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude],
-                         headingDeg: urgentisteHeadingDeg,
-                      });
-                   }
-                   return m;
-                }, [selectedMission.location?.lat, selectedMission.location?.lng, urgentisteLoc, urgentisteHeadingDeg])}
-                routeData={useMemo(() => routeGeoJSON ? {
-                   routes: [{
-                      geometry: routeGeoJSON.features[0].geometry,
-                      duration: 0,
-                      distance: 0,
-                      steps: [],
-                   }],
-                   selectedIndex: 0,
-                } : undefined, [routeGeoJSON])}
+                markers={mapMarkers}
+                routeData={mapRouteData}
                 cameraConfig={{
                    bounds: receptionCameraBounds || undefined,
                 }}
