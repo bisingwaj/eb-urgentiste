@@ -16,7 +16,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.eburgentiste.app",
       "infoPlist": {
-        "UIBackgroundModes": ["audio", "remote-notification"],
+        "UIBackgroundModes": [
+          "audio",
+          "remote-notification"
+        ],
         "NSMicrophoneUsageDescription": "L'application utilise le micro pour les appels avec la centrale de régulation.",
         "NSCameraUsageDescription": "La caméra est utilisée pour les appels vidéo avec la centrale et pour photographier le terrain lors des interventions.",
         "NSFaceIDUsageDescription": "L'application utilise Face ID pour déverrouiller l'accès après connexion."
@@ -83,10 +86,6 @@
         }
       ]
     ],
-    "extra": {
-      "eas": {
-        "projectId": "f8b5d6a4-d96d-44cf-9c3d-1c9c4d225377"
-      }
-    }
+    "extra": {}
   }
 }

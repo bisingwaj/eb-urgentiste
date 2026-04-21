@@ -4,7 +4,7 @@ import type {
   UrgencyLevel,
   MonitoringPatientStatus,
   LovableDischargeType,
-} from '../screens/hospital/HospitalDashboardTab';
+} from '../screens/hospital/hospitalTypes';
 
 function toNullableNumber(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null;

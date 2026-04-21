@@ -62,6 +62,8 @@ export interface EmergencyCase {
   assignedStructureLng?: number;
   /** `dispatches.assigned_structure_name` — libellé carte / UI */
   assignedStructureName?: string;
+  unitLat?: number;
+  unitLng?: number;
 
   /** `incidents.id` — FK pour rapports / historique */
   incidentId?: string;

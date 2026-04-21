@@ -19,9 +19,9 @@ import Mapbox from '@rnmapbox/maps';
 import { Navigation2, Activity } from 'lucide-react-native';
 import {
   getRouteWithAlternatives,
-  buildRouteFeature,
   geometryToCameraBounds,
-  haversineMeters
+  haversineMeters,
+  type RouteResult
 } from '../../lib/mapbox';
 import { EBMap, EBMapMarker } from '../../components/map/EBMap';
 
@@ -136,7 +136,7 @@ export function HomeTab({ navigation }: any) {
   const [userLocation, setUserLocation] = useState<Location.LocationObject | null>(null);
   const [showMapPreview, setShowMapPreview] = useState(false);
   const [showSymptoms, setShowSymptoms] = useState(false);
-  const [routeFeature, setRouteFeature] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [activeRoute, setActiveRoute] = useState<RouteResult | null>(null);
   const [routeBounds, setRouteBounds] = useState<any>(null);
 
   useEffect(() => {
@@ -299,10 +299,9 @@ export function HomeTab({ navigation }: any) {
           const result = await getRouteWithAlternatives(origin, destination);
           if (cancelled || !result) return;
 
-          const feature = buildRouteFeature(result.primary.geometry);
           const bounds = geometryToCameraBounds(result.primary.geometry, 80);
 
-          setRouteFeature(feature);
+          setActiveRoute(result.primary);
           setRouteBounds(bounds);
         } catch (err) {
           console.error('[MapRoute] Error fetching route:', err);
@@ -311,7 +310,7 @@ export function HomeTab({ navigation }: any) {
 
       return () => { cancelled = true; };
     } else if (!showMapPreview) {
-      setRouteFeature(null);
+      setActiveRoute(null);
       setRouteBounds(null);
     }
   }, [showMapPreview, userLocation, activeMission?.location]);
@@ -408,15 +407,10 @@ export function HomeTab({ navigation }: any) {
               }
               return m;
             }, [activeMission?.id, userLocation])}
-            routeData={useMemo(() => routeFeature ? {
-              routes: [{
-                geometry: routeFeature.features[0].geometry,
-                duration: 0,
-                distance: 0,
-                steps: [],
-              }],
+            routeData={useMemo(() => activeRoute ? {
+              routes: [activeRoute],
               selectedIndex: 0,
-            } : undefined, [routeFeature])}
+            } : undefined, [activeRoute])}
             cameraConfig={{
               bounds: routeBounds || undefined,
             }}
