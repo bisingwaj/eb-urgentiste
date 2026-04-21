@@ -126,8 +126,10 @@ interface MissionContextType {
     mimeType: string,
     meta?: { incidentId: string; previousUrls?: string[] | null },
   ) => Promise<void>;
-  /** Désactivé pour l’urgentiste (affectation via `dispatches.assigned_structure_*` uniquement). */
+  /** Désactivé précédemment pour l’urgentiste, maintenant actif pour sélection manuelle. */
   fetchHospitals: () => Promise<Hospital[]>;
+  /** Demande d'affectation à une structure par l'urgentiste */
+  requestHospitalAssignment: (hospitalId: string, hospital: Hospital) => Promise<void>;
 }
 
 const MissionContext = createContext<MissionContextType | undefined>(undefined);
@@ -758,8 +760,77 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   };
 
   const fetchHospitals = async (): Promise<Hospital[]> => {
-    /** L’urgentiste n’utilise pas `health_structures` pour l’affectation (voir workflow Lovable). */
-    return [];
+    try {
+      const { data, error } = await supabase
+        .from('health_structures')
+        .select('id, name, lat, lng, type, available_beds, address, phone, is_open')
+        .eq('is_open', true)
+        .order('name');
+
+      if (error) throw error;
+
+      return (data || []).map((h) => ({
+        id: h.id,
+        name: h.name,
+        specialty: h.type,
+        address: h.address,
+        phone: h.phone,
+        capacity: h.available_beds ? String(h.available_beds) : undefined,
+        coords: {
+          latitude: toNullableNumber(h.lat) || 0,
+          longitude: toNullableNumber(h.lng) || 0,
+        }
+      }));
+    } catch (err: any) {
+      console.error('[MissionContext] fetchHospitals error:', err.message);
+      return [];
+    }
+  };
+
+  const requestHospitalAssignment = async (hospitalId: string, hospital: Hospital) => {
+    if (!activeMission) return;
+    
+    try {
+      console.log(`[MissionContext] 🏥 Requesting assignment to hospital: ${hospital.name} (${hospitalId})`);
+      
+      const { error } = await supabase
+        .from('dispatches')
+        .update({
+          assigned_structure_id: hospitalId,
+          assigned_structure_name: hospital.name,
+          assigned_structure_lat: hospital.coords.latitude,
+          assigned_structure_lng: hospital.coords.longitude,
+          assigned_structure_phone: hospital.phone,
+          assigned_structure_address: hospital.address,
+          assigned_structure_type: hospital.specialty || 'hopital',
+          hospital_status: 'pending',
+          hospital_notes: null, // Clear any previous refusal notes
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', activeMission.id);
+
+      if (error) throw error;
+      
+      // Update local state selectively to reflect "Pending" state
+      setActiveMission(prev => prev ? {
+        ...prev,
+        assigned_structure: {
+          id: hospitalId,
+          name: hospital.name,
+          lat: null, // Hide coords until accepted
+          lng: null,
+          phone: hospital.phone || null,
+          address: hospital.address || null,
+          type: hospital.specialty || 'hopital',
+        },
+        hospital_status: 'pending',
+        hospital_notes: null
+      } : null);
+
+    } catch (err: any) {
+      console.error('[MissionContext] requestHospitalAssignment error:', err.message);
+      throw err;
+    }
   };
 
   useEffect(() => {
@@ -778,7 +849,10 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       updateDispatchStatus,
       updateMissionDetails,
       appendIncidentTerrainPhoto,
-      fetchHospitals
+      updateMissionDetails,
+      appendIncidentTerrainPhoto,
+      fetchHospitals,
+      requestHospitalAssignment
     }}>
       {children}
     </MissionContext.Provider>

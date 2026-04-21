@@ -17,7 +17,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export function useSignalementLogic(navigation: any, route: any) {
    const { activeMission, isLoading: missionLoading, updateDispatchStatus, refresh } = useActiveMission();
-   const { updateMissionDetails, appendIncidentTerrainPhoto } = useMission();
+   const { updateMissionDetails, appendIncidentTerrainPhoto, fetchHospitals, requestHospitalAssignment } = useMission();
    const initialMission = route?.params?.mission || activeMission;
 
    const getInitialStep = (): MissionStep => {
@@ -93,6 +93,11 @@ export function useSignalementLogic(navigation: any, route: any) {
    const [voipLoading, setVoipLoading] = useState(false);
    const [terrainPhotoBusy, setTerrainPhotoBusy] = useState(false);
    const [isFinishing, setIsFinishing] = useState(false);
+
+   // --- HOSPITAL SELECTION STATE ---
+   const [nearbyHospitals, setNearbyHospitals] = useState<Hospital[]>([]);
+   const [hospitalsLoading, setHospitalsLoading] = useState(false);
+
 
    // Animations for Standby
    const radarAnim = useRef(new Animated.Value(0.4)).current;
@@ -312,6 +317,39 @@ export function useSignalementLogic(navigation: any, route: any) {
       return distanceInfo.dist + " • " + distanceInfo.eta;
    }, [routeDistance, routeDuration, distanceInfo]);
 
+   const fetchNearbyHospitals = useCallback(async () => {
+      setHospitalsLoading(true);
+      try {
+         const list = await fetchHospitals();
+         // Sort by distance if location available
+         if (urgentisteLoc) {
+            const sorted = [...list].sort((a, b) => {
+               const distA = getDistanceMeters(urgentisteLoc.coords.latitude, urgentisteLoc.coords.longitude, a.coords.latitude, a.coords.longitude);
+               const distB = getDistanceMeters(urgentisteLoc.coords.latitude, urgentisteLoc.coords.longitude, b.coords.latitude, b.coords.longitude);
+               return distA - distB;
+            });
+            setNearbyHospitals(sorted);
+         } else {
+            setNearbyHospitals(list);
+         }
+      } catch (err) {
+         console.warn("[Signalement] fetchNearbyHospitals failed:", err);
+      } finally {
+         setHospitalsLoading(false);
+      }
+   }, [fetchHospitals, urgentisteLoc]);
+
+   // Helper to calculate distance in meters (using the same one from the file or local)
+   function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
+      const R = 6371e3;
+      const φ1 = lat1 * Math.PI / 180;
+      const φ2 = lat2 * Math.PI / 180;
+      const Δφ = (lat2 - lat1) * Math.PI / 180;
+      const Δλ = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
+      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+   }
+
    // State Restoration
    const missionStorageKey = selectedMission?.id ? `@mission_state_${selectedMission.id}` : null;
 
@@ -445,6 +483,7 @@ export function useSignalementLogic(navigation: any, route: any) {
          void refresh();
          transitionTo("assignment");
          addTimelineEvent(`Décision d'évacuation`, "local-shipping", choice);
+         fetchNearbyHospitals(); // Load hospitals as soon as transport is decided
       }
    };
 
@@ -455,6 +494,16 @@ export function useSignalementLogic(navigation: any, route: any) {
          navigation.goBack(); // Return to map
       } catch (err) { }
       addTimelineEvent("Mode de transport choisi", "local-shipping", mode);
+   };
+
+   const handleSelectHospital = async (hosp: Hospital) => {
+      try {
+         await requestHospitalAssignment(hosp.id, hosp);
+         addTimelineEvent("Demande d'affectation hospitalière", "local-hospital", hosp.name);
+         // The structure info will sync via context and Transition logic
+      } catch (err) {
+         Alert.alert("Erreur", "Impossible d'envoyer la demande à cet établissement.");
+      }
    };
 
    const handleArrivedAtHospital = async () => {
@@ -631,8 +680,10 @@ export function useSignalementLogic(navigation: any, route: any) {
       transportMode, setTransportMode, departingEnRoute,
       receptionCameraBounds, fadeAnim, mapFullscreenOpen, setMapFullscreenOpen,
       voipLoading, terrainPhotoBusy, radarAnim, notifyAnim, isAssigned,
+      nearbyHospitals, hospitalsLoading,
       handleStartMission, handleArrivalOnScene, handleConfirmAssessment, handleToggleCare, handleConfirmAid,
       handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure, handleCompleteMission,
+      handleSelectHospital, fetchNearbyHospitals,
       pickAndUploadTerrainPhoto, runVictimVoip, runVictimPstn,
       pan, panResponder,
       transitionTo,

@@ -36,6 +36,7 @@ export default function SignalementScreen(props: any) {
       receptionCameraBounds, hospitalRouteGeoJSON, hospitalRouteDuration, hospitalRouteDistance, hospitalRouteCameraBounds,
       fadeAnim, mapFullscreenOpen, setMapFullscreenOpen,
       voipLoading, terrainPhotoBusy, radarAnim, notifyAnim, isAssigned,
+      nearbyHospitals, hospitalsLoading, handleSelectHospital,
       handleArrivalOnScene, handleConfirmAssessment, handleToggleCare, handleConfirmAid,
       handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure, handleCompleteMission,
       pickAndUploadTerrainPhoto, runVictimVoip, runVictimPstn,
@@ -234,6 +235,8 @@ export default function SignalementScreen(props: any) {
                   <StepAssignment
                      pendingStructureInfo={pendingStructureInfo}
                      targetHospital={targetHospital}
+                     nearbyHospitals={nearbyHospitals}
+                     hospitalsLoading={hospitalsLoading}
                      urgentisteLoc={urgentisteLoc}
                      urgentisteHeadingDeg={urgentisteHeadingDeg}
                      hospitalRouteGeoJSON={logic.hospitalRouteGeoJSON}
@@ -242,6 +245,7 @@ export default function SignalementScreen(props: any) {
                      hospitalRouteCameraBounds={logic.hospitalRouteCameraBounds}
                      departingEnRoute={logic.departingEnRoute}
                      onDepartVersStructure={handleDepartVersStructure}
+                     onSelectHospital={handleSelectHospital}
                      onOpenFullscreenMap={() => setMapFullscreenOpen(true)}
                      renderStepInlineHeader={renderStepInlineHeader}
                   />

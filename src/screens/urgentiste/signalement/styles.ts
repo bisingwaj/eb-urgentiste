@@ -1167,4 +1167,78 @@ export const styles = StyleSheet.create({
       fontSize: 14,
       fontWeight: '700',
    },
+   // HOSPITAL SELECTION STYLES
+   hospitalList: { marginTop: 10, paddingBottom: 100 },
+   hospitalCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: '#161616',
+      borderRadius: 18,
+      padding: 16,
+      marginBottom: 12,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.08)',
+      gap: 16,
+   },
+   hospitalCardActive: {
+      borderColor: colors.secondary,
+      backgroundColor: colors.secondary + '10',
+   },
+   hospitalIconBox: {
+      width: 44,
+      height: 44,
+      borderRadius: 14,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      justifyContent: 'center',
+      alignItems: 'center',
+   },
+   hospitalCardInfo: { flex: 1 },
+   hospitalCardName: {
+      color: '#FFF',
+      fontSize: 16,
+      fontWeight: '800',
+      marginBottom: 4,
+   },
+   hospitalCardStats: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+   },
+   hospitalStatItem: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+   },
+   hospitalStatText: {
+      color: 'rgba(255,255,255,0.4)',
+      fontSize: 12,
+      fontWeight: '700',
+   },
+   selectHospBtn: {
+      backgroundColor: colors.secondary,
+      paddingHorizontal: 16,
+      paddingVertical: 10,
+      borderRadius: 12,
+   },
+   selectHospBtnText: {
+      color: '#FFF',
+      fontSize: 13,
+      fontWeight: '900',
+   },
+   hospitalsLoadingContainer: {
+      paddingVertical: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+   },
+   hospitalsEmptyContainer: {
+      paddingVertical: 40,
+      alignItems: 'center',
+      justifyContent: 'center',
+   },
+   hospitalsEmptyText: {
+      color: 'rgba(255,255,255,0.4)',
+      fontSize: 14,
+      textAlign: 'center',
+      lineHeight: 20,
+   }
 });

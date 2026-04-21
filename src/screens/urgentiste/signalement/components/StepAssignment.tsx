@@ -1,18 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, ActivityIndicator, Linking, Modal, TouchableWithoutFeedback, Platform } from 'react-native';
+import { View, Text, ActivityIndicator, Linking, Modal, TouchableWithoutFeedback, Platform, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Hospital as HospitalIcon, Phone, PhoneForwarded } from "lucide-react-native";
-import Mapbox from "@rnmapbox/maps";
+import { Hospital as HospitalIcon, Phone, PhoneForwarded, Navigation } from "lucide-react-native";
 import { colors } from '../../../../theme/colors';
 import { styles } from '../styles';
 import { AppTouchableOpacity } from '../../../../components/ui/AppTouchableOpacity';
-import { MapboxMapView } from '../../../../components/map/MapboxMapView';
-import { MePuck } from '../../../../components/map/mapMarkers';
-import { openExternalDirections } from '../../../../utils/navigation';
+import type { Hospital } from '../../../../contexts/MissionContext';
 
 interface StepAssignmentProps {
    pendingStructureInfo: any;
    targetHospital: any;
+   nearbyHospitals: Hospital[];
+   hospitalsLoading: boolean;
    urgentisteLoc: any;
    urgentisteHeadingDeg: number;
    hospitalRouteGeoJSON: any;
@@ -21,6 +20,7 @@ interface StepAssignmentProps {
    hospitalRouteCameraBounds: any;
    departingEnRoute: boolean;
    onDepartVersStructure: () => void;
+   onSelectHospital: (hospital: Hospital) => void;
    onOpenFullscreenMap: () => void;
    renderStepInlineHeader: () => React.ReactNode;
 }
@@ -28,6 +28,8 @@ interface StepAssignmentProps {
 export const StepAssignment: React.FC<StepAssignmentProps> = ({
    pendingStructureInfo,
    targetHospital,
+   nearbyHospitals,
+   hospitalsLoading,
    urgentisteLoc,
    urgentisteHeadingDeg,
    hospitalRouteGeoJSON,
@@ -36,6 +38,7 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
    hospitalRouteCameraBounds,
    departingEnRoute,
    onDepartVersStructure,
+   onSelectHospital,
    onOpenFullscreenMap,
    renderStepInlineHeader
 }) => {
@@ -44,53 +47,95 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
    const currentHospital = targetHospital || pendingStructureInfo;
    const isRefused = pendingStructureInfo?.refused;
    const isPending = !!pendingStructureInfo && !targetHospital;
-   const isAssigned = !!targetHospital;
+   
+   // If no hospital is assigned OR if the current one refused, we show the list
+   const showHospitalList = !currentHospital || isRefused;
 
    const handleCall = (mode: 'pstn' | 'voip') => {
       setCallModalVisible(false);
       if (mode === 'pstn' && currentHospital?.phone) {
          Linking.openURL(`tel:${currentHospital.phone}`);
       } else {
-         // App call placeholder/logic
          console.log("App call to hospital not yet implemented");
       }
+   };
+
+   // Map status/type icon
+   const getHospitalIcon = (type?: string) => {
+      if (type?.toLowerCase().includes('pharmacie')) return 'medical-services';
+      if (type?.toLowerCase().includes('clinique')) return 'local-hospital';
+      return 'hospital';
    };
 
    // Render Logic
    let content;
 
-   if (isRefused) {
-      content = (
-         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 40, paddingBottom: 100 }}>
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,59,48,0.1)', justifyContent: 'center', alignItems: 'center' }}>
-               <MaterialIcons name="error-outline" size={40} color="#FF3B30" />
+   if (showHospitalList) {
+      if (hospitalsLoading) {
+         content = (
+            <View style={styles.hospitalsLoadingContainer}>
+               <ActivityIndicator size="large" color={colors.secondary} />
+               <Text style={[styles.standbySub, { marginTop: 16 }]}>Recherche des établissements à proximité...</Text>
             </View>
-            <Text style={[styles.standbyText, { marginTop: 24, fontSize: 22 }]}>Désolé pour ce contretemps</Text>
-            <Text style={[styles.standbySub, { marginTop: 12, textAlign: 'center' }]}>
-               L'établissement <Text style={{ color: '#FFF', fontWeight: '800' }}>{pendingStructureInfo.name}</Text> ne peut pas recevoir le patient pour le moment.
-            </Text>
-            <Text style={[styles.standbySub, { marginTop: 24, textAlign: 'center', color: 'rgba(255,255,255,0.6)' }]}>
-               Nous cherchons immédiatement une alternative plus adaptée...
-            </Text>
-            <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 32 }} />
-         </View>
-      );
-   } else if (!currentHospital) {
-      content = (
-         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 40, paddingBottom: 100 }}>
-            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(0,122,255,0.1)', justifyContent: 'center', alignItems: 'center' }}>
-               <HospitalIcon size={40} color={colors.secondary} />
+         );
+      } else if (nearbyHospitals.length === 0) {
+         content = (
+            <View style={styles.hospitalsEmptyContainer}>
+               <MaterialIcons name="search-off" size={48} color="rgba(255,255,255,0.1)" />
+               <Text style={styles.hospitalsEmptyText}>
+                  Aucun établissement trouvé à proximité.{"\n"}Veuillez contacter la centrale.
+               </Text>
             </View>
-            <Text style={[styles.standbyText, { marginTop: 24, fontSize: 22 }]}>Recherche en cours...</Text>
-            <Text style={[styles.standbySub, { marginTop: 12, textAlign: 'center' }]}>
-               Nous recherchons l'établissement le plus adapté pour la prise en charge de votre patient.
-            </Text>
-            <Text style={[styles.standbySub, { marginTop: 24, textAlign: 'center', color: 'rgba(255,255,255,0.6)' }]}>
-                Cela ne prendra que quelques instants. Merci de votre patience.
-            </Text>
-            <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 32 }} />
-         </View>
-      );
+         );
+      } else {
+         content = (
+            <ScrollView style={styles.hospitalList} showsVerticalScrollIndicator={false}>
+               <View style={{ marginBottom: 12 }}>
+                  <Text style={styles.stepSectionHeading}>Établissements proches</Text>
+                  {isRefused && (
+                     <View style={{ backgroundColor: 'rgba(255,59,48,0.1)', padding: 12, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,59,48,0.2)' }}>
+                        <Text style={{ color: '#FF3B30', fontSize: 13, fontWeight: '800' }}>
+                           Dernière demande refusée : {pendingStructureInfo.name}
+                        </Text>
+                        <Text style={{ color: 'rgba(255,59,48,0.7)', fontSize: 12, marginTop: 4 }}>
+                           Veuillez choisir un autre établissement ci-dessous.
+                        </Text>
+                     </View>
+                  )}
+               </View>
+
+               {nearbyHospitals.map((h) => (
+                  <AppTouchableOpacity 
+                     key={h.id} 
+                     style={styles.hospitalCard}
+                     onPress={() => onSelectHospital(h)}
+                  >
+                     <View style={styles.hospitalIconBox}>
+                        <MaterialIcons name={getHospitalIcon(h.specialty) as any} size={22} color={colors.secondary} />
+                     </View>
+                     <View style={styles.hospitalCardInfo}>
+                        <Text style={styles.hospitalCardName}>{h.name}</Text>
+                        <View style={styles.hospitalCardStats}>
+                           <View style={styles.hospitalStatItem}>
+                              <Navigation size={12} color="rgba(255,255,255,0.4)" />
+                              <Text style={styles.hospitalStatText}>{h.distance || "N/A"}</Text>
+                           </View>
+                           {h.capacity && (
+                              <View style={styles.hospitalStatItem}>
+                                 <MaterialIcons name="airline-seat-flat" size={14} color="rgba(255,255,255,0.4)" />
+                                 <Text style={styles.hospitalStatText}>{h.capacity} lits dispos</Text>
+                              </View>
+                           )}
+                        </View>
+                     </View>
+                     <View style={styles.selectHospBtn}>
+                        <Text style={styles.selectHospBtnText}>CHOISIR</Text>
+                     </View>
+                  </AppTouchableOpacity>
+               ))}
+            </ScrollView>
+         );
+      }
    } else if (isPending) {
       content = (
          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 40, paddingBottom: 100 }}>
@@ -108,9 +153,6 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
          </View>
       );
    } else {
-      // This state is technically unreachable because useSignalementLogic auto-navigates
-      // once status becomes 'en_route_hospital'. We show a simple loader just in case
-      // there is a split second of latency before navigation triggers.
       content = (
          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingBottom: 100 }}>
             <ActivityIndicator size="small" color={colors.secondary} />
@@ -119,17 +161,13 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
       );
    }
 
-   // The bottom button is no longer needed in the assignment step
-   // because the transition to en_route_hospital is now automatic.
-   const renderBottomAction = () => null;
-
    return (
       <View style={[styles.stepBase, { paddingHorizontal: 0, paddingBottom: 0 }]}>
          <View style={{ paddingHorizontal: 24 }}>{renderStepInlineHeader()}</View>
          
-         {content}
-
-         {renderBottomAction()}
+         <View style={{ flex: 1, paddingHorizontal: 24 }}>
+            {content}
+         </View>
 
          <Modal visible={callModalVisible} transparent animationType="slide">
             <TouchableWithoutFeedback onPress={() => setCallModalVisible(false)}>
