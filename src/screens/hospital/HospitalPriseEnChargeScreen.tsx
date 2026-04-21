@@ -15,7 +15,7 @@ import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
-import type { EmergencyCase } from "./HospitalDashboardTab";
+import type { EmergencyCase } from "./hospitalTypes";
 import { useHospital } from "../../contexts/HospitalContext";
 import { HospitalHeader } from "./components/HospitalHeader";
 

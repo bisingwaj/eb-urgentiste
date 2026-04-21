@@ -17,7 +17,7 @@ import {
 } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
-import type { EmergencyCase } from "./HospitalDashboardTab";
+import type { EmergencyCase } from "./hospitalTypes";
 import { normalizeBloodPressureInput } from "../../lib/bloodPressureInput";
 import { useHospital } from "../../contexts/HospitalContext";
 import { HospitalHeader } from './components/HospitalHeader';

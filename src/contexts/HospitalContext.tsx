@@ -87,6 +87,9 @@ interface HospitalContextType {
   ) => Promise<void>;
   /** INSERT `hospital_reports` + fusion `reportSent` dans `hospital_data` */
   sendHospitalReport: (caseData: EmergencyCase) => Promise<void>;
+  structureInfo: HealthStructure | null;
+  updateStructureInfo: (updates: Partial<HealthStructure>) => Promise<void>;
+  refreshStructureInfo: () => Promise<void>;
 }
 
 const HospitalContext = createContext<HospitalContextType | undefined>(undefined);

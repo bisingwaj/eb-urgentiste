@@ -12,7 +12,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../../theme/colors';
 import { getTransportModeLabel } from '../../lib/transportMode';
-import type { EmergencyCase } from './HospitalDashboardTab';
+import type { EmergencyCase } from './hospitalTypes';
 import { useHospital } from '../../contexts/HospitalContext';
 
 /** Aligné sur `HospitalPriseEnChargeScreen` — `hospital_data.timeline` */
