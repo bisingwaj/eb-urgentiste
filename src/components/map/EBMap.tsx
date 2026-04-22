@@ -107,6 +107,8 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
   });
 
   const handleRecenter = useCallback(() => {
+    setIsFollowingPosition(true);
+    setIsFollowingHeading(true);
     const target = myLocation || (markers.length > 0 ? markers[0].coordinate : null);
     if (target) {
       cameraRef.current?.setCamera({
@@ -131,21 +133,22 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
   }, []);
 
   const [showSheet, setShowSheet] = useState(mode === 'NAVIGATION');
-  const [followUser, setFollowUser] = useState(mode === 'NAVIGATION');
+  const [isFollowingPosition, setIsFollowingPosition] = useState(mode === 'NAVIGATION');
+  const [isFollowingHeading, setIsFollowingHeading] = useState(mode === 'NAVIGATION');
+  const lastManualHeadingRef = useRef<number>(0);
 
   // Auto-follow logic for active navigation
   useEffect(() => {
-    if (mode === 'NAVIGATION' && followUser && myLocation) {
+    if (mode === 'NAVIGATION' && (isFollowingPosition || isFollowingHeading) && myLocation) {
       cameraRef.current?.setCamera({
-        centerCoordinate: myLocation,
-        zoomLevel: 16.5,
-        heading: myHeading,
+        ...(isFollowingPosition ? { centerCoordinate: myLocation } : {}),
+        ...(isFollowingHeading ? { heading: myHeading } : {}),
         pitch: 0, // Keep 2D top-down as requested
         animationDuration: 1000,
         animationMode: 'flyTo',
       });
     }
-  }, [mode, followUser, myLocation, myHeading]);
+  }, [mode, isFollowingPosition, isFollowingHeading, myLocation, myHeading]);
 
   const selectedMarker = useMemo(() =>
     markers.find(m => m.id === selectedMarkerId),
@@ -181,7 +184,7 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
   const { pointMarkers, symbolMarkers } = useMemo(() => {
     const processed: EBMapMarker[] = [];
     const groupedIds = new Set<string>();
-    
+
     const units = markers.filter(m => m.type === 'unit');
     const targets = markers.filter(m => m.type === 'incident' || m.type === 'hospital' || m.type === 'me');
 
@@ -228,11 +231,24 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
         scrollEnabled={true}
         zoomEnabled={true}
         compassEnabled={false}
+        onCameraChanged={(e) => {
+          if (e.gestures.isGestureActive) {
+            // Panning always stops following position
+            setIsFollowingPosition(false);
+            
+            // Detect manual rotation: if heading changed significantly while gesturing
+            const currentCamHeading = e.properties.heading;
+            if (Math.abs(currentCamHeading - lastManualHeadingRef.current) > 1) {
+               setIsFollowingHeading(false);
+            }
+            lastManualHeadingRef.current = currentCamHeading;
+          }
+        }}
         {...mapProps}
       >
         <Mapbox.Camera
           ref={cameraRef}
-          {...(cameraConfig?.bounds ? { 
+          {...(cameraConfig?.bounds ? {
             bounds: cameraConfig.bounds,
             heading: cameraState.heading,
             pitch: cameraState.pitch,
@@ -345,12 +361,12 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
             coordinate={m.coordinate}
           >
             {m.type === 'me' ? (
-              <MePuck headingDeg={myHeading} />
+              <MePuck headingDeg={m.headingDeg ?? myHeading} />
             ) : m.type === 'hospital' ? (
-              <HospitalMarker 
+              <HospitalMarker
                 label={m.label}
                 beds={m.beds}
-                onPress={() => handleMarkerPressLocal(m)} 
+                onPress={() => handleMarkerPressLocal(m)}
               />
             ) : m.type === 'incident' ? (
               <IncidentMarker

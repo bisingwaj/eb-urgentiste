@@ -2,6 +2,7 @@ import React, { memo, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, Animated } from 'react-native';
 import { Navigation2, TriangleAlert, Hospital, Ambulance } from 'lucide-react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Svg, { Path, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { colors } from '../../theme/colors';
 import { radius } from '../../theme/spacing';
 
@@ -38,18 +39,18 @@ const PulseRing = ({ color, size, active = true }: { color: string, size: number
   if (!active) return null;
 
   return (
-    <Animated.View 
+    <Animated.View
       style={[
-        styles.pulseRing, 
-        { 
-          width: size, 
-          height: size, 
-          borderRadius: size / 2, 
+        styles.pulseRing,
+        {
+          width: size,
+          height: size,
+          borderRadius: size / 2,
           backgroundColor: color,
           transform: [{ scale }],
           opacity
         }
-      ]} 
+      ]}
     />
   );
 };
@@ -135,7 +136,7 @@ export const UnitMarker = memo(function UnitMarker({
         : colors.markerUnit;
   const showDirection = headingDeg != null && Number.isFinite(headingDeg);
   const isEnRoute = status === 'en_route';
-  
+
   return (
     <MarkerHost>
       <PulseRing color={bg} size={34} active={isEnRoute} />
@@ -189,26 +190,54 @@ export const ProximityCluster = memo(function ProximityCluster({
   );
 });
 
-/** Google Maps Style Puck (Blue dot + Direction beam) */
+/** 
+ * Refined Google Maps Style Beam (SVG Cone)
+ * Shorter, wider, and more integrated.
+ */
+const LocationBeam = ({ heading, size }: { heading: number, size: number }) => {
+  const beamSize = size * 3.5;
+  return (
+    <View style={[styles.beamContainer, { width: beamSize, height: beamSize, transform: [{ rotate: `${heading}deg` }] }]}>
+      <Svg width={beamSize} height={beamSize} viewBox="0 0 100 100">
+        <Defs>
+          <RadialGradient id="beamGrad" cx="50" cy="50" rx="50" ry="50" fx="50" fy="50" gradientUnits="userSpaceOnUse">
+            <Stop offset="0%" stopColor="#4285F4" stopOpacity="4" />
+            <Stop offset="45%" stopColor="#4285F4" stopOpacity="1" />
+            <Stop offset="80%" stopColor="#4285F4" stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Path
+          d="M 50 50 L 30 10.3 A 45 45 0 0 1 70 10.3 Z"
+          fill="url(#beamGrad)"
+        />
+      </Svg>
+    </View>
+  );
+};
+
+/** Google Maps Style Puck (Blue dot + Direction beam + Pulse) */
 export const MePuck = memo(function MePuck({
   headingDeg,
-  size = 22,
+  size = 18,
 }: {
   headingDeg: number;
   size?: number;
 }) {
-  const outerSize = size * 1.8;
   return (
     <MarkerHost>
       <View style={styles.meContainer}>
-        {/* Direction Beam */}
-        <View style={[styles.beamContainer, { transform: [{ rotate: `${headingDeg}deg` }] }]}>
-          <View style={styles.beam} />
+        {/* Pulsing accuracy ring */}
+        <PulseRing color="#4285F4" size={size * 2} />
+
+        {/* Conical Direction Beam (Radar) */}
+        <LocationBeam heading={headingDeg} size={size} />
+
+        {/* Central Puck with Arrow Icon */}
+        <View style={[styles.meDot, { width: size, height: size, borderRadius: size / 2 }]}>
+          <View style={{ transform: [{ rotate: `${headingDeg}deg` }] }}>
+            <Navigation2 size={size * 0.7} color="#FFFFFF" fill="#FFFFFF" strokeWidth={3} />
+          </View>
         </View>
-        {/* Outer Glow */}
-        <View style={[styles.meOuterGlow, { width: outerSize, height: outerSize, borderRadius: outerSize / 2 }]} />
-        {/* Inner Dot */}
-        <View style={[styles.meDot, { width: size, height: size, borderRadius: size / 2 }]} />
       </View>
     </MarkerHost>
   );
@@ -261,19 +290,19 @@ export const RouteETABadge = memo(function RouteETABadge({
   return (
     <MarkerHost>
       <Pressable onPress={onPress} style={[
-        styles.etaBadge, 
+        styles.etaBadge,
         isPrimary ? styles.etaBadgePrimary : styles.etaBadgeAlt
       ]}>
         <Text style={[
-          styles.etaText, 
+          styles.etaText,
           isPrimary ? styles.etaTextPrimary : styles.etaTextAlt
         ]}>{duration}</Text>
         {isPrimary && (
-          <MaterialCommunityIcons 
-            name="leaf" 
-            size={12} 
-            color="#FFF" 
-            style={{ marginLeft: 4 }} 
+          <MaterialCommunityIcons
+            name="leaf"
+            size={12}
+            color="#FFF"
+            style={{ marginLeft: 4 }}
           />
         )}
       </Pressable>
@@ -307,37 +336,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: 60,
-    height: 60,
+    height: 100,
   },
   meDot: {
     backgroundColor: '#4285F4',
-    borderWidth: 3,
+    borderWidth: 2.2,
     borderColor: '#FFFFFF',
     shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 5,
-  },
-  meOuterGlow: {
-    position: 'absolute',
-    backgroundColor: 'rgba(66, 133, 244, 0.2)',
-  },
-  beamContainer: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  beam: {
-    width: 40,
-    height: 60,
-    backgroundColor: 'rgba(66, 133, 244, 0.4)',
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    top: -20,
+  beamContainer: {
     position: 'absolute',
-    transform: [{ scaleX: 0.5 }],
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pinContainer: {
     alignItems: 'center',

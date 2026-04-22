@@ -244,14 +244,6 @@ export function MissionActiveScreen({ navigation }: any) {
         priority: activeMission?.priority,
       });
     }
-    if (myLocation) {
-      m.push({
-        id: 'me',
-        type: 'me',
-        coordinate: [myLocation.coords.longitude, myLocation.coords.latitude],
-        headingDeg: myHeadingDeg,
-      });
-    }
     return m;
   }, [activeMission?.id, missionCoords, myLocation, myHeadingDeg, activeMission?.dispatch_status]);
 

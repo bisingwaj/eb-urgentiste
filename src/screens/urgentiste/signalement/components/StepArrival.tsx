@@ -43,14 +43,6 @@ export const StepArrival: React.FC<StepArrivalProps> = ({
          coordinate: [selectedMission.location?.lng || 15.307045, selectedMission.location?.lat || -4.322447],
          priority: selectedMission.priority,
       });
-      if (urgentisteLoc) {
-         m.push({
-            id: 'my-unit-arrival',
-            type: 'me',
-            coordinate: [urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude],
-            headingDeg: urgentisteHeadingDeg,
-         });
-      }
       return m;
    }, [selectedMission.location?.lat, selectedMission.location?.lng, urgentisteLoc, urgentisteHeadingDeg]);
 
@@ -92,6 +84,8 @@ export const StepArrival: React.FC<StepArrivalProps> = ({
                 mode="NAVIGATION"
                 markers={mapMarkers}
                 routeData={mapRouteData}
+                myLocation={urgentisteLoc ? [urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude] : undefined}
+                myHeading={urgentisteHeadingDeg}
                 cameraConfig={{
                    bounds: arrivalCameraBounds || undefined,
                 }}
