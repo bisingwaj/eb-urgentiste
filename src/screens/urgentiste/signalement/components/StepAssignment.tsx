@@ -273,6 +273,103 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
             </Text>
          </View>
       );
+   } else if (targetHospital) {
+      content = (
+         <View style={{ flex: 1, paddingVertical: 10 }}>
+            <View style={{ 
+               backgroundColor: 'rgba(48,209,88,0.1)', 
+               padding: 20, 
+               borderRadius: 20, 
+               borderWidth: 1, 
+               borderColor: 'rgba(48,209,88,0.2)',
+               alignItems: 'center',
+               marginBottom: 24
+            }}>
+               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(48,209,88,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
+                  <MaterialIcons name="check-circle" size={40} color="#30D158" />
+               </View>
+               <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900', textAlign: 'center' }}>Hôpital Confirmé</Text>
+               <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center', marginTop: 4 }}>
+                  La structure a accepté votre demande de prise en charge.
+               </Text>
+            </View>
+
+            <View style={[styles.hospitalCard, { borderColor: '#30D158', borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.03)' }]}>
+               <View style={styles.hospitalCardHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                     <HospitalIcon size={20} color="#30D158" />
+                     <Text style={styles.hospitalCardName}>{targetHospital.name}</Text>
+                  </View>
+                  <View style={[styles.hospitalTypeBadge, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
+                     <Text style={styles.hospitalTypeText}>{targetHospital.specialty || 'Hôpital'}</Text>
+                  </View>
+               </View>
+
+               <View style={[styles.hospitalCardStats, { marginTop: 12 }]}>
+                  <View style={styles.hospitalStatItem}>
+                     <Navigation size={14} color="rgba(255,255,255,0.4)" />
+                     <Text style={styles.hospitalStatText}>{hospitalRouteDistance ? (hospitalRouteDistance / 1000).toFixed(1) : '--'} km</Text>
+                  </View>
+                  <View style={styles.hospitalStatItem}>
+                     <MaterialIcons name="access-time" size={16} color="rgba(255,255,255,0.4)" />
+                     <Text style={styles.hospitalStatText}>{hospitalRouteDuration ? Math.ceil(hospitalRouteDuration / 60) : '--'} min</Text>
+                  </View>
+               </View>
+
+               {targetHospital.address && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 6 }}>
+                     <MaterialIcons name="place" size={14} color="rgba(255,255,255,0.3)" />
+                     <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, flex: 1 }} numberOfLines={1}>
+                        {targetHospital.address}
+                     </Text>
+                  </View>
+               )}
+            </View>
+
+            <View style={{ marginTop: 'auto', gap: 12 }}>
+               <AppTouchableOpacity 
+                  onPress={onDepartVersStructure}
+                  disabled={departingEnRoute}
+                  style={{ 
+                     backgroundColor: '#30D158', 
+                     paddingVertical: 18, 
+                     borderRadius: 16, 
+                     flexDirection: 'row', 
+                     justifyContent: 'center', 
+                     alignItems: 'center',
+                     shadowColor: '#30D158',
+                     shadowOffset: { width: 0, height: 4 },
+                     shadowOpacity: 0.3,
+                     shadowRadius: 8,
+                     elevation: 5
+                  }}
+               >
+                  {departingEnRoute ? (
+                     <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                     <>
+                        <Navigation size={20} color="#FFF" style={{ marginRight: 10 }} />
+                        <Text style={{ color: '#FFF', fontSize: 18, fontWeight: '900' }}>DÉMARRER L'ITINÉRAIRE</Text>
+                     </>
+                  )}
+               </AppTouchableOpacity>
+
+               <AppTouchableOpacity 
+                  onPress={onCancelAssignment}
+                  style={{ 
+                     paddingVertical: 14, 
+                     borderRadius: 16, 
+                     borderWidth: 1,
+                     borderColor: 'rgba(255,255,255,0.1)',
+                     justifyContent: 'center', 
+                     alignItems: 'center'
+                  }}
+               >
+                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '600' }}>Changer de structure</Text>
+               </AppTouchableOpacity>
+            </View>
+         </View>
+      );
    } else {
       content = (
          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingBottom: 100 }}>

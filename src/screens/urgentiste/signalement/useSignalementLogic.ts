@@ -21,7 +21,7 @@ export function useSignalementLogic(navigation: any, route: any) {
    const { updateMissionDetails, appendIncidentTerrainPhoto, fetchHospitals, requestHospitalAssignment, cancelHospitalAssignment } = useMission();
    const initialMission = route?.params?.mission || activeMission;
 
-   const getInitialStep = (): MissionStep => {
+   const getInitialStep = useCallback((): MissionStep => {
       // Prioritize activeMission from context as it's the freshest source
       const m = activeMission || initialMission;
       if (!m || !m.dispatch_status) return "standby";
@@ -40,7 +40,7 @@ export function useSignalementLogic(navigation: any, route: any) {
             return 'closure';
          default: return 'reception';
       }
-   };
+   }, [activeMission?.dispatch_status, initialMission?.dispatch_status]);
 
    const [step, setStep] = useState<MissionStep>(getInitialStep);
    const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false);
@@ -57,11 +57,48 @@ export function useSignalementLogic(navigation: any, route: any) {
       // logic to fetch from backend and setAssessmentSchema
       console.log("[Questionnaire] Placeholder for API fetch");
    };
+   const prevMissionIdRef = useRef<string | null>(activeMission?.id || null);
+
+   const resetStates = useCallback(() => {
+      console.log("[Signalement] 🔄 Resetting all local states.");
+      setStep(getInitialStep());
+      setTimeline([]);
+      setAssessment({ conscious: null, breathing: null, severity: null });
+      setCareChecklist([]);
+      setDecision(null);
+      setTargetHospital(null);
+      setPendingStructureInfo(null);
+      setTransportMode(null);
+      setElapsedSeconds(0);
+      setIsAssigned(false);
+      setRouteGeoJSON(null);
+      setRouteDuration(null);
+      setRouteDistance(null);
+      setHospitalRouteGeoJSON(null);
+      setHospitalRouteDuration(null);
+      setHospitalRouteDistance(null);
+      setNearbyHospitals([]);
+      setStateRestored(false);
+   }, [getInitialStep]);
+
    useEffect(() => {
       if (activeMission) {
          setSelectedMission(activeMission);
+         
+         // If mission ID changed, reset all local states to avoid leakage
+         if (prevMissionIdRef.current !== activeMission.id) {
+            prevMissionIdRef.current = activeMission.id;
+            resetStates();
+            // Re-fill assessment if provided by backend
+            setAssessment(activeMission.medical_assessment || { conscious: null, breathing: null, severity: null });
+         }
+      } else if (prevMissionIdRef.current !== null) {
+         // Mission disappeared (completed or cancelled)
+         console.log("[Signalement] ⏹ Mission disappeared. Cleaning up.");
+         prevMissionIdRef.current = null;
+         resetStates();
       }
-   }, [activeMission]);
+   }, [activeMission?.id, getInitialStep, resetStates]);
 
    useEffect(() => {
       if (activeMission?.type || initialMission?.type) {
@@ -593,7 +630,7 @@ export function useSignalementLogic(navigation: any, route: any) {
       }
    };
 
-   const handleCompleteMission = async () => {
+   const handleCompleteMission = useCallback(async () => {
       try {
          setIsFinishing(true);
          // Use 'mission_end' to release the unit while keeping the incident open for hospital
@@ -610,7 +647,7 @@ export function useSignalementLogic(navigation: any, route: any) {
          console.error("[Signalement] Error during mission completion:", err);
          navigation.replace('MainTabs');
       }
-   };
+   }, [missionStorageKey, navigation, updateDispatchStatus]);
 
    // Sync structure/hospital updates
    const structureTimelineLoggedRef = useRef<string | null>(null);
