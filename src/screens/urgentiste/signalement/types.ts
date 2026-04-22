@@ -1,6 +1,5 @@
 export type MissionStep =
    | "standby"
-   | "reception"
    | "arrival"
    | "assessment"
    | "aid"
@@ -37,7 +36,6 @@ export interface AlertData {
 
 export const STEP_LABELS: Record<MissionStep, string> = {
    standby: "Attente",
-   reception: "Réception",
    arrival: "En route",
    assessment: "Évaluation initiale",
    aid: "Premiers soins",
@@ -48,7 +46,7 @@ export const STEP_LABELS: Record<MissionStep, string> = {
    closure: "Clôture",
 };
 
-export const STEP_ORDER: MissionStep[] = ["standby", "reception", "arrival", "assessment", "aid", "decision", "assignment", "transport_mode", "transport", "closure"];
+export const STEP_ORDER: MissionStep[] = ["standby", "arrival", "assessment", "aid", "decision", "assignment", "transport_mode", "transport", "closure"];
 
 /** TYPES POUR LE SYSTÈME DE QUESTIONNAIRE DYNAMIQUE (BILAN MÉDICAL) */
 

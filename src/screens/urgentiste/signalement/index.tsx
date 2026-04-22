@@ -7,7 +7,6 @@ import { MissionTimeline } from './components/MissionTimeline';
 import { VictimContactStrip } from './components/VictimContactStrip';
 import { TerrainPhotosStrip } from './components/TerrainPhotosStrip';
 import { StepStandby } from './components/StepStandby';
-import { StepReception } from './components/StepReception';
 import { StepArrival } from './components/StepArrival';
 import { StepAssessment } from './components/StepAssessment';
 import { StepAid } from './components/StepAid';
@@ -33,14 +32,14 @@ export default function SignalementScreen(props: any) {
       routeGeoJSON, displayAddress, routeInfoText,
       assessment, setAssessment, careChecklist, decision,
       targetHospital, pendingStructureInfo, transportMode,
-      receptionCameraBounds, hospitalRouteGeoJSON, hospitalRouteDuration, hospitalRouteDistance, hospitalRouteCameraBounds,
+      arrivalCameraBounds, hospitalRouteGeoJSON, hospitalRouteDuration, hospitalRouteDistance, hospitalRouteCameraBounds,
       fadeAnim, mapFullscreenOpen, setMapFullscreenOpen,
       voipLoading, terrainPhotoBusy, radarAnim, notifyAnim, isAssigned,
       nearbyHospitals, hospitalsLoading, handleSelectHospital,
       handleArrivalOnScene, handleConfirmAssessment, handleToggleCare, handleConfirmAid,
       handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure, handleCompleteMission,
       pickAndUploadTerrainPhoto, runVictimVoip, runVictimPstn,
-      pan, panResponder, transitionTo, formatTime
+      transitionTo, formatTime
    } = logic;
 
    const [toolsMenuVisible, setToolsMenuVisible] = useState(false);
@@ -101,7 +100,7 @@ export default function SignalementScreen(props: any) {
          : [selectedMission?.location?.lng || 15.307045, selectedMission?.location?.lat || -4.322447];
 
       const routeDataRaw = isHospitalStep ? logic.hospitalRouteGeoJSON : routeGeoJSON;
-      const bounds = isHospitalStep ? logic.hospitalRouteCameraBounds : receptionCameraBounds;
+      const bounds = isHospitalStep ? logic.hospitalRouteCameraBounds : arrivalCameraBounds;
 
       // Map to the unified EBMapMarker format
       const markers: EBMapMarker[] = [];
@@ -165,36 +164,18 @@ export default function SignalementScreen(props: any) {
                      radarAnim={radarAnim}
                      notifyAnim={notifyAnim}
                      displayAddress={displayAddress}
-                     onConsultAlert={(m) => transitionTo("reception", m)}
+                     onConsultAlert={(m) => transitionTo("arrival", m)}
                      onBack={() => props.navigation.goBack()}
                   />
                )}
 
-               {step === "reception" && selectedMission && (
-                  <StepReception
-                     selectedMission={selectedMission}
-                     urgentisteLoc={urgentisteLoc}
-                     urgentisteHeadingDeg={urgentisteHeadingDeg}
-                     routeGeoJSON={routeGeoJSON}
-                     routeInfoText={routeInfoText}
-                     receptionCameraBounds={receptionCameraBounds}
-                     displayAddress={displayAddress}
-                     pan={pan}
-                     panResponder={panResponder}
-                     insets={insets}
-                     onBack={() => props.navigation.goBack()}
-                     onOpenFullscreenMap={() => setMapFullscreenOpen(true)}
-                     renderVictimContactStrip={renderVictimContactStrip}
-                  />
-               )}
-
-               {step === "arrival" && selectedMission && (
+               {(step === "arrival" || (step as string) === "reception") && selectedMission && (
                   <StepArrival
                      selectedMission={selectedMission}
                      urgentisteLoc={urgentisteLoc}
                      urgentisteHeadingDeg={urgentisteHeadingDeg}
                      routeGeoJSON={routeGeoJSON}
-                     receptionCameraBounds={receptionCameraBounds}
+                     arrivalCameraBounds={arrivalCameraBounds}
                      displayAddress={displayAddress}
                      elapsedSeconds={logic.elapsedSeconds}
                      formatTime={formatTime}

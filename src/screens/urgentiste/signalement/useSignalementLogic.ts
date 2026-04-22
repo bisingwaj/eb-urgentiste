@@ -22,14 +22,23 @@ export function useSignalementLogic(navigation: any, route: any) {
    const initialMission = route?.params?.mission || activeMission;
 
    const getInitialStep = useCallback((): MissionStep => {
-      // Prioritize activeMission from context as it's the freshest source
-      const m = activeMission || initialMission;
+      // 1. Explicitly forced step via navigation params (highest priority)
+      const forced = route?.params?.forcedStep as MissionStep;
+      if (forced) {
+         console.log("[Signalement] Using forced step from params:", forced);
+         return forced;
+      }
+
+      // 2. Fallback to status-based logic (Prioritize navigation params mission)
+      const m = initialMission || activeMission;
       if (!m || !m.dispatch_status) return "standby";
       
       console.log("[Signalement] Initializing step for status:", m.dispatch_status);
       
       switch (m.dispatch_status) {
-         case 'dispatched': return 'reception';
+         // The 'reception' step (Slider) is being removed per user request.
+         // If a mission is dispatched, we show the arrival (navigation) view instead.
+         case 'dispatched': return 'arrival';
          case 'en_route': return 'arrival';
          case 'on_scene': return 'assessment';
          // If we are en route or arrived at hospital, skip to closure (Map handled externally)
@@ -38,9 +47,9 @@ export function useSignalementLogic(navigation: any, route: any) {
          case 'mission_end': 
          case 'completed': 
             return 'closure';
-         default: return 'reception';
+         default: return 'arrival';
       }
-   }, [activeMission?.dispatch_status, initialMission?.dispatch_status]);
+   }, [route?.params?.forcedStep, activeMission?.dispatch_status, initialMission?.dispatch_status]);
 
    const [step, setStep] = useState<MissionStep>(getInitialStep);
    const [mapFullscreenOpen, setMapFullscreenOpen] = useState(false);
@@ -260,7 +269,7 @@ export function useSignalementLogic(navigation: any, route: any) {
       };
    }, [urgentisteLoc?.coords.latitude, urgentisteLoc?.coords.longitude, selectedMission?.location?.lat, selectedMission?.location?.lng]);
 
-   const receptionCameraBounds = useMemo(
+   const arrivalCameraBounds = useMemo(
       () => routeCameraBounds ?? cameraBounds,
       [routeCameraBounds, cameraBounds],
    );
@@ -471,7 +480,8 @@ export function useSignalementLogic(navigation: any, route: any) {
                      // Mission is already ahead, don't regress to assignment screen
                      console.log("[Signalement] Skipping stale 'assignment' step from storage");
                   } else {
-                     setStep(saved.step);
+                     const stepToRestore = saved.step === 'reception' ? 'arrival' : (saved.step as MissionStep);
+                     setStep(stepToRestore);
                   }
                   if (saved.assessment) setAssessment(saved.assessment);
                   if (saved.careChecklist) setCareChecklist(saved.careChecklist);
@@ -762,7 +772,7 @@ export function useSignalementLogic(navigation: any, route: any) {
       assessment, setAssessment, careChecklist, setCareChecklist, decision, setDecision,
       targetHospital, setTargetHospital, pendingStructureInfo, setPendingStructureInfo,
       transportMode, setTransportMode, departingEnRoute,
-      receptionCameraBounds, fadeAnim, mapFullscreenOpen, setMapFullscreenOpen,
+      arrivalCameraBounds, fadeAnim, mapFullscreenOpen, setMapFullscreenOpen,
       voipLoading, terrainPhotoBusy, radarAnim, notifyAnim, isAssigned,
       nearbyHospitals, hospitalsLoading,
       isRecalculating, handleRecalculateHospitals,

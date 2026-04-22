@@ -11,7 +11,7 @@ interface StepArrivalProps {
    urgentisteLoc: any;
    urgentisteHeadingDeg: number;
    routeGeoJSON: any;
-   receptionCameraBounds: any;
+   arrivalCameraBounds: any;
    displayAddress: string;
    elapsedSeconds: number;
    formatTime: (s: number) => string;
@@ -26,7 +26,7 @@ export const StepArrival: React.FC<StepArrivalProps> = ({
    urgentisteLoc,
    urgentisteHeadingDeg,
    routeGeoJSON,
-   receptionCameraBounds,
+   arrivalCameraBounds,
    displayAddress,
    elapsedSeconds,
    formatTime,
@@ -93,7 +93,7 @@ export const StepArrival: React.FC<StepArrivalProps> = ({
                 markers={mapMarkers}
                 routeData={mapRouteData}
                 cameraConfig={{
-                   bounds: receptionCameraBounds || undefined,
+                   bounds: arrivalCameraBounds || undefined,
                 }}
                 showControls={true}
                 style={styles.trackingMap}

@@ -205,10 +205,11 @@ export function MissionActiveScreen({ navigation }: any) {
         const targetStatus = next;
         // Step 1: Force Mapbox to unmount by setting transitioning state
         setIsTransitioning(true);
-        // Step 2: Delay to allow Mapbox native engine to cleanup
-        await new Promise(r => setTimeout(r, 150));
-        // Step 3: Navigate - pass the updated status so it doesn't use stale context
-        navigation.replace('Signalement', { mission: { ...activeMission, dispatch_status: targetStatus } });
+        // Step 3: Navigate - pass the updated status and force the 'assessment' step
+        navigation.replace('Signalement', { 
+          mission: { ...activeMission, dispatch_status: targetStatus },
+          forcedStep: 'assessment'
+        });
       }
     } catch (err) {
       Alert.alert('Erreur', 'Mise à jour échouée.');
@@ -240,7 +241,7 @@ export function MissionActiveScreen({ navigation }: any) {
         id: 'incident-target',
         type: activeMission?.dispatch_status === 'en_route_hospital' ? 'hospital' : 'incident',
         coordinate: missionCoords as [number, number],
-        priority: activeMission.priority,
+        priority: activeMission?.priority,
       });
     }
     if (myLocation) {
