@@ -244,8 +244,12 @@ export default function SignalementScreen(props: any) {
                      hospitalRouteDistance={logic.hospitalRouteDistance}
                      hospitalRouteCameraBounds={logic.hospitalRouteCameraBounds}
                      departingEnRoute={logic.departingEnRoute}
+                     selectedMission={selectedMission}
+                     recalculating={logic.isRecalculating}
+                     onRecalculate={logic.handleRecalculateHospitals}
                      onDepartVersStructure={handleDepartVersStructure}
                      onSelectHospital={handleSelectHospital}
+                     urgencyCategory={selectedMission?.type}
                      onOpenFullscreenMap={() => setMapFullscreenOpen(true)}
                      renderStepInlineHeader={renderStepInlineHeader}
                   />

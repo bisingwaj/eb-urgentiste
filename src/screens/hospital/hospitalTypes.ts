@@ -162,20 +162,21 @@ export interface EmergencyCase {
 export interface HealthStructure {
   id: string;
   name: string;
+  official_name?: string | null;
   short_name: string | null;
   type?: string;
   address: string | null;
   phone: string | null;
   email?: string | null;
-  opening_hours?: string | null;
-  primary_contact?: string | null;
+  operating_hours?: string | null;
+  contact_person?: string | null;
   capacity?: number;
   available_beds?: number;
   is_open?: boolean;
-  latitude?: number;
-  longitude?: number;
+  lat?: number;
+  lng?: number;
   specialties?: string[];
-  equipments?: string[];
+  equipment?: string[];
   capacity_status?: string;
   metadata?: Record<string, any>;
 }

@@ -1240,5 +1240,86 @@ export const styles = StyleSheet.create({
       fontSize: 14,
       textAlign: 'center',
       lineHeight: 20,
-   }
+   },
+   // ENHANCED HOSPITAL CARD STYLES
+   hospitalCardHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'baseline',
+      marginBottom: 2,
+   },
+   hospitalTypeBadge: {
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 6,
+      backgroundColor: 'rgba(255,255,255,0.06)',
+      marginLeft: 8,
+   },
+   hospitalTypeText: {
+      color: 'rgba(255,255,255,0.4)',
+      fontSize: 10,
+      fontWeight: '800',
+      textTransform: 'uppercase',
+   },
+   bedIndicator: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 8,
+   },
+   bedIndicatorText: {
+      fontSize: 11,
+      fontWeight: '900',
+   },
+   specialtyScroll: {
+      marginTop: 8,
+   },
+   specialtyChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: 10,
+      backgroundColor: 'rgba(255,255,255,0.04)',
+      marginRight: 6,
+      borderWidth: 1,
+      borderColor: 'rgba(255,255,255,0.03)',
+   },
+   specialtyChipActive: {
+      backgroundColor: colors.secondary + '20',
+      borderColor: colors.secondary + '40',
+   },
+   specialtyText: {
+      color: 'rgba(255,255,255,0.5)',
+      fontSize: 11,
+      fontWeight: '700',
+   },
+   specialtyTextActive: {
+      color: colors.secondary,
+   },
+   // NEW BADGE STYLES (§7.2)
+   badgeRecommended: {
+      backgroundColor: 'rgba(48, 209, 88, 0.1)',
+      borderColor: 'rgba(48, 209, 88, 0.3)',
+      borderWidth: 1,
+   },
+   badgeAlternative: {
+      backgroundColor: 'rgba(0, 122, 255, 0.1)',
+      borderColor: 'rgba(0, 122, 255, 0.3)',
+      borderWidth: 1,
+   },
+   badgeCentrale: {
+      backgroundColor: 'rgba(175, 82, 222, 0.1)',
+      borderColor: 'rgba(175, 82, 222, 0.3)',
+      borderWidth: 1,
+   },
+   badgeSaturation: {
+      backgroundColor: 'rgba(255, 159, 10, 0.1)',
+      borderColor: 'rgba(255, 159, 10, 0.3)',
+      borderWidth: 1,
+   },
+   badgeTextRecommended: { color: '#30D158', fontSize: 10, fontWeight: '900' },
+   badgeTextAlternative: { color: '#007AFF', fontSize: 10, fontWeight: '900' },
+   badgeTextCentrale: { color: '#AF52DE', fontSize: 10, fontWeight: '900' },
+   badgeTextSaturation: { color: '#FF9F0A', fontSize: 10, fontWeight: '900' },
 });

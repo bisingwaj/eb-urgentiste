@@ -28,6 +28,24 @@ export interface SosResponseItem {
   answered_at: string;
 }
 
+export interface HospitalSuggestion {
+  rank: number;
+  id: string;
+  name: string;
+  type: string;
+  lat: number;
+  lng: number;
+  address: string | null;
+  phone: string | null;
+  capacity: number | null;
+  availableBeds: number | null;
+  specialties: string[];
+  distanceKm: number;
+  etaMin: number;
+  score: number;
+  isSelected?: boolean;
+}
+
 export interface Mission {
   id: string;
   incident_id: string;
@@ -78,4 +96,13 @@ export interface Mission {
   hospital_data?: Record<string, unknown> | null;
   /** Bilan médical structuré (JSONB). À terme, synchronisé avec le backend. */
   medical_assessment?: Record<string, any> | null;
+  
+  // NOUVEAU : Snapshots hôpitaux suggérés (§2)
+  suggested_hospitals?: HospitalSuggestion[] | null;
+  suggested_hospitals_computed_at?: string | null;
+  suggested_hospitals_origin_lat?: number | null;
+  suggested_hospitals_origin_lng?: number | null;
+  updated_at?: string | null;
+  /** Données brutes de l'incident (accessoires ou logs) */
+  incident?: any;
 }

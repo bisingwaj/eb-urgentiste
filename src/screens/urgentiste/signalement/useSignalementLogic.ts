@@ -3,6 +3,7 @@ import { Alert, Animated, PanResponder, Platform, Linking, Dimensions } from "re
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "../../../lib/supabase";
 import { getRoute, buildRouteFeature, geometryToCameraBounds } from "../../../lib/mapbox";
 import { useActiveMission } from "../../../hooks/useActiveMission";
 import { useMission } from "../../../contexts/MissionContext";
@@ -11,7 +12,7 @@ import { alertVoipError, startRescuerToCitizenVoipCall } from "../../../lib/resc
 import { formatMissionAddress, formatIncidentType } from "../../../utils/missionAddress";
 import { MissionStep, TimelineEvent, AlertData, STEP_ORDER, AssessmentSchema } from "./types";
 import { getAssessmentSchema } from "./constants/assessmentSchemas";
-import type { Hospital } from "../../../contexts/MissionContext";
+import { HospitalSuggestion } from "../../../types/mission";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -56,6 +57,11 @@ export function useSignalementLogic(navigation: any, route: any) {
       // logic to fetch from backend and setAssessmentSchema
       console.log("[Questionnaire] Placeholder for API fetch");
    };
+   useEffect(() => {
+      if (activeMission) {
+         setSelectedMission(activeMission);
+      }
+   }, [activeMission]);
 
    useEffect(() => {
       if (activeMission?.type || initialMission?.type) {
@@ -95,8 +101,36 @@ export function useSignalementLogic(navigation: any, route: any) {
    const [isFinishing, setIsFinishing] = useState(false);
 
    // --- HOSPITAL SELECTION STATE ---
-   const [nearbyHospitals, setNearbyHospitals] = useState<Hospital[]>([]);
+   const [nearbyHospitals, setNearbyHospitals] = useState<HospitalSuggestion[]>([]);
    const [hospitalsLoading, setHospitalsLoading] = useState(false);
+   const [isRecalculating, setIsRecalculating] = useState(false);
+
+   const handleRecalculateHospitals = async () => {
+      if (!selectedMission?.id) return;
+      setIsRecalculating(true);
+      try {
+         console.log(`[Signalement] 🚀 Invoking compute-mission-hospitals for ID: ${selectedMission.id}`);
+         
+         const response = await supabase.functions.invoke('compute-mission-hospitals', {
+            body: { dispatch_id: selectedMission.id }
+         });
+
+         console.log("[Signalement] 📡 Server Response Data:", JSON.stringify(response.data, null, 2));
+         console.log("[Signalement] 📡 Server Response Error:", JSON.stringify(response.error, null, 2));
+
+         if (response.error) throw response.error;
+         
+         // On force un rafraîchissement de la mission pour voir le nouveau snapshot
+         await refresh();
+         const newList = await fetchNearbyHospitals();
+         console.log("[Signalement] ✅ List refreshed, count:", newList?.length || 0);
+      } catch (err: any) {
+         console.error("[Signalement] ❌ Recalculate server failed:", err);
+         Alert.alert("Erreur Serveur", `Le calcul a échoué. L'erreur a été loggée pour analyse.`);
+      } finally {
+         setIsRecalculating(false);
+      }
+   };
 
 
    // Animations for Standby
@@ -317,38 +351,42 @@ export function useSignalementLogic(navigation: any, route: any) {
       return distanceInfo.dist + " • " + distanceInfo.eta;
    }, [routeDistance, routeDuration, distanceInfo]);
 
-   const fetchNearbyHospitals = useCallback(async () => {
+   const fetchNearbyHospitals = useCallback(async (): Promise<HospitalSuggestion[]> => {
       setHospitalsLoading(true);
       try {
          const list = await fetchHospitals();
-         // Sort by distance if location available
-         if (urgentisteLoc) {
-            const sorted = [...list].sort((a, b) => {
-               const distA = getDistanceMeters(urgentisteLoc.coords.latitude, urgentisteLoc.coords.longitude, a.coords.latitude, a.coords.longitude);
-               const distB = getDistanceMeters(urgentisteLoc.coords.latitude, urgentisteLoc.coords.longitude, b.coords.latitude, b.coords.longitude);
-               return distA - distB;
-            });
-            setNearbyHospitals(sorted);
-         } else {
-            setNearbyHospitals(list);
+         console.log("list", JSON.stringify(list));
+         if (list.length > 0) {
+            console.log(`\n[Signalement] 🏥 ${list.length} Hôpitaux suggérés par le serveur :`);
+            console.table(list.map(h => ({
+               Rang: h.rank,
+               Nom: h.name,
+               Dist: `${h.distanceKm} km`,
+               ETA: `${h.etaMin} min`,
+               Lits: h.availableBeds,
+               Score: h.score,
+               Choisi: h.isSelected ? '✅' : ' '
+            })));
          }
+
+         // Tri par distance (du plus proche au plus loin)
+         const sortedList = [...list].sort((a, b) => (a.distanceKm || 0) - (b.distanceKm || 0));
+         setNearbyHospitals(sortedList);
+         return sortedList;
       } catch (err) {
          console.warn("[Signalement] fetchNearbyHospitals failed:", err);
+         return [];
       } finally {
          setHospitalsLoading(false);
       }
-   }, [fetchHospitals, urgentisteLoc]);
+   }, [fetchHospitals]);
 
-   // Helper to calculate distance in meters (using the same one from the file or local)
-   function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: number) {
-      const R = 6371e3;
-      const φ1 = lat1 * Math.PI / 180;
-      const φ2 = lat2 * Math.PI / 180;
-      const Δφ = (lat2 - lat1) * Math.PI / 180;
-      const Δλ = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ/2) * Math.sin(Δλ/2);
-      return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
-   }
+   // Les rafraîchissements Realtime sont désormais gérés par le MissionContext
+   useEffect(() => {
+      if (step === 'assignment') {
+         fetchNearbyHospitals();
+      }
+   }, [step, fetchNearbyHospitals, selectedMission?.suggested_hospitals]);
 
    // State Restoration
    const missionStorageKey = selectedMission?.id ? `@mission_state_${selectedMission.id}` : null;
@@ -496,11 +534,11 @@ export function useSignalementLogic(navigation: any, route: any) {
       addTimelineEvent("Mode de transport choisi", "local-shipping", mode);
    };
 
-   const handleSelectHospital = async (hosp: Hospital) => {
+   const handleSelectHospital = async (hosp: HospitalSuggestion) => {
       try {
+         // requestHospitalAssignment: (hospitalId, hospitalObj)
          await requestHospitalAssignment(hosp.id, hosp);
          addTimelineEvent("Demande d'affectation hospitalière", "local-hospital", hosp.name);
-         // The structure info will sync via context and Transition logic
       } catch (err) {
          Alert.alert("Erreur", "Impossible d'envoyer la demande à cet établissement.");
       }
@@ -681,6 +719,7 @@ export function useSignalementLogic(navigation: any, route: any) {
       receptionCameraBounds, fadeAnim, mapFullscreenOpen, setMapFullscreenOpen,
       voipLoading, terrainPhotoBusy, radarAnim, notifyAnim, isAssigned,
       nearbyHospitals, hospitalsLoading,
+      isRecalculating, handleRecalculateHospitals,
       handleStartMission, handleArrivalOnScene, handleConfirmAssessment, handleToggleCare, handleConfirmAid,
       handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure, handleCompleteMission,
       handleSelectHospital, fetchNearbyHospitals,

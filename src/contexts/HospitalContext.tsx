@@ -153,23 +153,23 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         };
 
         const normalized: HealthStructure = {
-          ...data,
           id: data.id,
           name: data.name || data.nom || '',
+          official_name: data.official_name || data.nom_officiel || null,
           short_name: data.short_name || data.nom_court || data.code || null,
           type: data.type || data.categorie || data.category || data.structure_type || data.kind || null,
           address: data.address || data.adresse || null,
           phone: data.phone || data.telephone || null,
           email: data.email || data.courriel || null,
-          opening_hours: data.opening_hours || data.horaires || data.horaire_ouverture || null,
-          primary_contact: data.primary_contact || data.contact || data.responsable || null,
+          operating_hours: data.operating_hours || data.operating_hours || data.horaires || data.horaire_ouverture || data.opening_hours || null,
+          contact_person: data.contact_person || data.contact || data.responsable || data.primary_contact || null,
           capacity: data.capacity || data.capacite_totale || data.hospital_data?.capacity || 0,
           available_beds: data.available_beds || data.lits_disponibles || data.dispo || data.hospital_data?.available_beds || 0,
           is_open: data.is_open ?? data.ouvert ?? true,
-          latitude: data.latitude ?? data.location_lat ?? data.lat,
-          longitude: data.longitude ?? data.location_lng ?? data.lng,
+          lat: data.lat ?? data.latitude ?? data.location_lat,
+          lng: data.lng ?? data.longitude ?? data.location_lng,
           specialties: normalizeList(rawSpecialties),
-          equipments: normalizeList(rawEquipments),
+          equipment: normalizeList(rawEquipments),
           capacity_status: data.capacity_status,
         };
         
@@ -203,7 +203,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         
         // On garde uniquement les colonnes "sûres" et on tente le reste une par une
         const safeUpdates: Record<string, any> = {};
-        const knownSafe = ['name', 'short_name', 'address', 'phone', 'capacity_status'];
+        const knownSafe = ['name', 'official_name', 'short_name', 'address', 'phone', 'capacity_status', 'operating_hours', 'contact_person', 'lat', 'lng', 'equipment'];
         
         for (const key of Object.keys(updates)) {
           if (knownSafe.includes(key)) {

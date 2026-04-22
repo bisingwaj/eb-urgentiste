@@ -3,9 +3,20 @@ import { Alert, Vibration, DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { uploadIncidentTerrainPhotoToStorage } from '../lib/incidentTerrainPhotos';
 import { useAuth } from './AuthContext';
-import { Mission, normalizeHospitalStatus } from '../types/mission';
+import { Mission, normalizeHospitalStatus, HospitalSuggestion } from '../types/mission';
 import { readMissionCache, writeMissionCache } from '../lib/localAppCache';
 import { APP_FOREGROUND_SYNC } from '../lib/syncEvents';
+import { haversineMeters } from '../lib/mapbox';
+
+/** Normalise une chaîne pour comparaison (minuscule, sans accents, sans espaces superflus) */
+function normalizeStr(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  return String(v)
+    .toLowerCase()
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
 
 /** PostgREST / JSON peuvent renvoyer des nombres en string */
 function toNullableNumber(v: unknown): number | null {
@@ -36,6 +47,10 @@ interface SupabaseIncident {
   created_at: string;
   /** URLs Storage / HTTPS — photos terrain ajoutées par l’urgentiste */
   media_urls?: string[] | null;
+  incident_at?: string | null;
+  incident_updated_at?: string | null;
+  incident_notes?: string | null;
+  recommended_actions?: string | null;
 }
 
 interface SupabaseDispatch {
@@ -50,10 +65,19 @@ interface SupabaseDispatch {
   assigned_structure_phone: string | null;
   assigned_structure_address: string | null;
   assigned_structure_type: string | null;
+  hospital_data?: unknown;
   hospital_status?: string | null;
   hospital_notes?: string | null;
-  hospital_data?: unknown;
+  suggested_hospitals?: any[];
+  suggested_hospitals_computed_at?: string | null;
+  suggested_hospitals_origin_lat?: number | null;
+  suggested_hospitals_origin_lng?: number | null;
   created_at: string;
+  dispatched_at?: string | null;
+  arrived_at?: string | null;
+  completed_at?: string | null;
+  updated_at?: string | null;
+  dispatch_notes?: string | null;
   incidents: SupabaseIncident;
 }
 
@@ -99,15 +123,26 @@ function logStructureGps(source: string, row: Record<string, unknown>) {
   );
 }
 
-export interface Hospital {
-  id: string;
-  name: string;
-  distance?: string;
-  capacity?: string;
-  specialty?: string;
-  address?: string;
-  phone?: string;
-  coords: { latitude: number; longitude: number };
+// HospitalSuggestion est déjà importé de '../types/mission'
+function normalizeHospitalSuggestions(raw: any[] | null | undefined): HospitalSuggestion[] {
+  if (!raw || !Array.isArray(raw)) return [];
+  return raw.map((h: any, idx: number) => ({
+    rank: h.rank ?? (idx + 1),
+    id: h.id || String(idx),
+    name: h.name || 'Hôpital Inconnu',
+    type: h.type || 'Hopital',
+    lat: h.lat ?? h.latitude ?? 0,
+    lng: h.lng ?? h.longitude ?? 0,
+    address: h.address || null,
+    phone: h.phone || null,
+    capacity: h.capacity ?? h.capacite_totale ?? null,
+    availableBeds: h.availableBeds ?? h.available_beds ?? h.lits_disponibles ?? 0,
+    specialties: Array.isArray(h.specialties) ? h.specialties : [],
+    distanceKm: h.distanceKm ?? h.distance_km ?? 0,
+    etaMin: h.etaMin ?? h.eta_min ?? 0,
+    score: h.score ?? 0,
+    isSelected: !!h.isSelected,
+  }));
 }
 
 interface MissionContextType {
@@ -126,10 +161,10 @@ interface MissionContextType {
     mimeType: string,
     meta?: { incidentId: string; previousUrls?: string[] | null },
   ) => Promise<void>;
-  /** Désactivé précédemment pour l’urgentiste, maintenant actif pour sélection manuelle. */
-  fetchHospitals: () => Promise<Hospital[]>;
+  /** Récupérant les hôpitaux depuis le snapshot serveur de la mission */
+  fetchHospitals: () => Promise<HospitalSuggestion[]>;
   /** Demande d'affectation à une structure par l'urgentiste */
-  requestHospitalAssignment: (hospitalId: string, hospital: Hospital) => Promise<void>;
+  requestHospitalAssignment: (hospitalId: string, hospital: HospitalSuggestion) => Promise<void>;
 }
 
 const MissionContext = createContext<MissionContextType | undefined>(undefined);
@@ -165,6 +200,10 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         .select(
           `
           *,
+          suggested_hospitals,
+          suggested_hospitals_computed_at,
+          suggested_hospitals_origin_lat,
+          suggested_hospitals_origin_lng,
           incidents!inner(
             id,
             citizen_id,
@@ -203,9 +242,11 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       if (data) {
         const d = data as any;
         console.log(`[MissionContext] 🔍 Mission Detected:`, {
-          dispatch_id: d.id,
-          dispatch_status: d.status,
-          incident_status: d.incidents?.status,
+          id: d.id,
+          status: d.status,
+          has_suggestions: !!d.suggested_hospitals?.length,
+          suggestions_count: d.suggested_hospitals?.length || 0,
+          computed_at: d.suggested_hospitals_computed_at
         });
       }
 
@@ -223,58 +264,58 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         const lng = incident.caller_realtime_lng ?? incident.location_lng;
         console.log(`📍 [POSITION VICTIME] lat: ${lat}, lng: ${lng}, adresse: ${incident.location_address || 'NULL'}`);
 
-        const row = dispatch as unknown as Record<string, unknown>;
+        const row = dispatch as unknown as SupabaseDispatch;
         const hospital_status = normalizeHospitalStatus(row.hospital_status);
-        const hospital_notes =
-          row.hospital_notes === null || typeof row.hospital_notes === 'string'
-            ? (row.hospital_notes as string | null)
-            : null;
-        const hospital_data =
-          row.hospital_data !== null &&
-          typeof row.hospital_data === 'object' &&
-          !Array.isArray(row.hospital_data)
-            ? (row.hospital_data as Record<string, unknown>)
-            : null;
+        const hospital_notes = row.hospital_notes || null;
 
-        const assignedStructure = buildAssignedStructureFromDispatchRow({
-          ...(dispatch as Partial<SupabaseDispatch>),
-          hospital_status: hospital_status ?? undefined,
-        });
-
-        if (assignedStructure) {
-          console.log(
-            `🏥 [STRUCTURE ASSIGNÉE] ${assignedStructure.name} — hospital_status=${hospital_status ?? 'null'} — coords ${assignedStructure.lat != null ? 'visibles' : 'masquées'}`,
-          );
-          logStructureGps('fetchActiveMission', dispatch as unknown as Record<string, unknown>);
+        if (row.assigned_structure_id != null) {
+          logStructureGps('fetchActiveMission', row as unknown as Record<string, unknown>);
         }
 
         const mission: Mission = {
-          id: dispatch.id,
-          incident_id: incident.id,
-          citizen_id: incident.citizen_id != null ? String(incident.citizen_id) : null,
+          id: String(row.id),
+          incident_id: String(row.incident_id),
           reference: incident.reference,
           type: incident.type,
           title: incident.title,
           description: incident.description,
           priority: incident.priority,
           incident_status: incident.status,
-          dispatch_status: dispatch.status as Mission['dispatch_status'],
+          dispatch_status: row.status as Mission['dispatch_status'],
           location: {
-            lat,
-            lng,
+            lat: incident.location_lat,
+            lng: incident.location_lng,
             address: incident.location_address,
             commune: incident.commune,
           },
           caller: {
             name: incident.caller_name || 'Anonyme',
-            phone: incident.caller_phone || '-',
+            phone: incident.caller_phone || '',
           },
-          assigned_structure: assignedStructure,
-          destination: incident.recommended_facility ?? undefined,
-          created_at: incident.created_at,
+          citizen_id: incident.citizen_id,
+          created_at: row.created_at,
+          dispatched_at: row.dispatched_at || undefined,
+          arrived_at: row.arrived_at || undefined,
+          completed_at: row.completed_at || undefined,
+          dispatch_notes: row.dispatch_notes,
+          incident_notes: incident.incident_notes,
+          incident_at: incident.incident_at,
+          incident_updated_at: incident.incident_updated_at,
+          recommended_actions: incident.recommended_actions,
+          caller_realtime_lat: incident.caller_realtime_lat,
+          caller_realtime_lng: incident.caller_realtime_lng,
+          caller_realtime_updated_at: incident.caller_realtime_updated_at,
+          media_urls: incident.media_urls,
           hospital_status,
           hospital_notes,
-          hospital_data,
+          hospital_data: row.hospital_data as Record<string, unknown> | null,
+          suggested_hospitals: normalizeHospitalSuggestions(row.suggested_hospitals),
+          suggested_hospitals_computed_at: row.suggested_hospitals_computed_at || null,
+          suggested_hospitals_origin_lat: row.suggested_hospitals_origin_lat || null,
+          suggested_hospitals_origin_lng: row.suggested_hospitals_origin_lng || null,
+          updated_at: row.updated_at || null,
+          assigned_structure: buildAssignedStructureFromDispatchRow(row),
+          incident,
         };
         setActiveMission(mission);
         void writeMissionCache(unitId, mission);
@@ -301,8 +342,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
   /** Fusion légère : statuts / hôpital : `assigned_structure` est recalculé au `scheduleSilentRefetch` (évite payloads partiels). */
   const mergeDispatchUpdateIntoState = useCallback((payload: { new?: Record<string, unknown> }) => {
-    const n = payload.new;
-    if (!n?.id) return;
+    const n = (payload.new || {}) as any;
+    if (!n.id) return;
     setActiveMission((prev) => {
       if (!prev || String(prev.id) !== String(n.id)) return prev;
       const hospital_status =
@@ -327,7 +368,14 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         dispatch_status,
         hospital_status: hospital_status ?? prev.hospital_status,
         hospital_notes,
-        hospital_data,
+        hospital_data: hospital_data ?? prev.hospital_data,
+        suggested_hospitals: normalizeHospitalSuggestions(n.suggested_hospitals ?? prev.suggested_hospitals),
+        suggested_hospitals_computed_at: (n.suggested_hospitals_computed_at as string) ?? prev.suggested_hospitals_computed_at,
+        dispatched_at: (n.dispatched_at as string) ?? prev.dispatched_at,
+        arrived_at: (n.arrived_at as string) ?? prev.arrived_at,
+        completed_at: (n.completed_at as string) ?? prev.completed_at,
+        dispatch_notes: (n.dispatch_notes as string) ?? prev.dispatch_notes,
+        updated_at: (n.updated_at as string) ?? prev.updated_at,
       };
     });
   }, []);
@@ -575,7 +623,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           en_route_hospital: 'en_route_hospital',
           arrived_hospital: 'arrived_hospital',
           mission_end: 'arrived_hospital', // DO NOT use ended/resolved here
-          mission_finished: 'resolved', 
+          mission_finished: 'resolved',
         };
         const incidentStatus = incidentStatusMap[status];
 
@@ -683,14 +731,14 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         const assessmentFields = Object.entries(details.assessment)
           .filter(([key]) => key !== 'assessment_completed_at' && key !== 'careChecklist')
           .map(([key, val]) => `${key}: ${val === true ? 'Oui' : val === false ? 'Non' : val}`);
-        
+
         const assessmentText = ` [ÉVALUATION] ${assessmentFields.join(', ')}`;
-        
+
         // Exécution en parallèle pour performance
         const p1 = supabase
           .from('incidents')
-          .update({ 
-            description: (activeMission.description || '') + assessmentText 
+          .update({
+            description: (activeMission.description || '') + assessmentText
           })
           .eq('id', activeMission.incident_id);
 
@@ -702,7 +750,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
         const p2 = supabase
           .from('dispatches')
-          .update({ 
+          .update({
             hospital_data: {
               ...(activeMission.hospital_data || {}),
               medicalAssessment
@@ -714,7 +762,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         if (r1.error) console.error('[MissionContext] Legacy description update error:', r1.error.message);
         if (r2.error) console.error('[MissionContext] hospital_data sync error:', r2.error.message);
       }
-      
+
       setActiveMission(prev => prev ? { ...prev, ...details } : null);
     } catch (err: any) {
       console.error('[MissionProvider] Update details error:', err.message);
@@ -759,74 +807,35 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const fetchHospitals = async (): Promise<Hospital[]> => {
-    try {
-      const { data, error } = await supabase
-        .from('health_structures')
-        .select('id, name, lat, lng, type, available_beds, address, phone, is_open')
-        .eq('is_open', true)
-        .order('name');
-
-      if (error) throw error;
-
-      return (data || []).map((h) => ({
-        id: h.id,
-        name: h.name,
-        specialty: h.type,
-        address: h.address,
-        phone: h.phone,
-        capacity: h.available_beds ? String(h.available_beds) : undefined,
-        coords: {
-          latitude: toNullableNumber(h.lat) || 0,
-          longitude: toNullableNumber(h.lng) || 0,
-        }
-      }));
-    } catch (err: any) {
-      console.error('[MissionContext] fetchHospitals error:', err.message);
-      return [];
-    }
+  const fetchHospitals = async (): Promise<HospitalSuggestion[]> => {
+    if (!activeMission) return [];
+    return activeMission.suggested_hospitals || [];
   };
 
-  const requestHospitalAssignment = async (hospitalId: string, hospital: Hospital) => {
+  const requestHospitalAssignment = async (hospitalId: string, hospital: HospitalSuggestion) => {
     if (!activeMission) return;
-    
+
     try {
-      console.log(`[MissionContext] 🏥 Requesting assignment to hospital: ${hospital.name} (${hospitalId})`);
-      
+      console.log(`[MissionContext] 🏥 Finalizing assignment to: ${hospital.name}`);
+
       const { error } = await supabase
         .from('dispatches')
         .update({
-          assigned_structure_id: hospitalId,
-          assigned_structure_name: hospital.name,
-          assigned_structure_lat: hospital.coords.latitude,
-          assigned_structure_lng: hospital.coords.longitude,
-          assigned_structure_phone: hospital.phone,
-          assigned_structure_address: hospital.address,
-          assigned_structure_type: hospital.specialty || 'hopital',
-          hospital_status: 'pending',
-          hospital_notes: null, // Clear any previous refusal notes
-          updated_at: new Date().toISOString()
+          assigned_structure_id:      hospitalId,
+          assigned_structure_name:    hospital.name,
+          assigned_structure_lat:     hospital.lat,
+          assigned_structure_lng:     hospital.lng,
+          assigned_structure_phone:   hospital.phone,
+          assigned_structure_address: hospital.address ?? null,
+          assigned_structure_type:    hospital.type ?? null,
+          hospital_status:            'pending',
+          hospital_notes:             null,
+          updated_at:                 new Date().toISOString(),
         })
         .eq('id', activeMission.id);
 
       if (error) throw error;
-      
-      // Update local state selectively to reflect "Pending" state
-      setActiveMission(prev => prev ? {
-        ...prev,
-        assigned_structure: {
-          id: hospitalId,
-          name: hospital.name,
-          lat: null, // Hide coords until accepted
-          lng: null,
-          phone: hospital.phone || null,
-          address: hospital.address || null,
-          type: hospital.specialty || 'hopital',
-        },
-        hospital_status: 'pending',
-        hospital_notes: null
-      } : null);
-
+      refresh();
     } catch (err: any) {
       console.error('[MissionContext] requestHospitalAssignment error:', err.message);
       throw err;
@@ -841,14 +850,12 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   }, [fetchActiveMission]);
 
   return (
-    <MissionContext.Provider value={{ 
-      activeMission, 
-      isLoading, 
-      error, 
-      refresh, 
+    <MissionContext.Provider value={{
+      activeMission,
+      isLoading,
+      error,
+      refresh,
       updateDispatchStatus,
-      updateMissionDetails,
-      appendIncidentTerrainPhoto,
       updateMissionDetails,
       appendIncidentTerrainPhoto,
       fetchHospitals,

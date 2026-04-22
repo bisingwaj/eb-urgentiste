@@ -30,17 +30,17 @@ const STRUCTURE_TYPES = [
 ];
 
 const COMMON_SPECIALTIES = [
-  "Cardiaque",
-  "Traumatisme",
-  "Brûlure",
-  "Obstétrique",
-  "Pédiatrie",
-  "Intoxication",
-  "Psychiatrie",
-  "Accident de la route",
-  "Agression",
-  "Incendie",
-  "Général",
+  { label: "Cardiaque", value: "cardiaque" },
+  { label: "Traumatisme", value: "traumatisme" },
+  { label: "Brûlure", value: "brulure" },
+  { label: "Obstétrique", value: "obstetrique" },
+  { label: "Pédiatrie", value: "pediatrie" },
+  { label: "Intoxication", value: "intoxication" },
+  { label: "Psychiatrie", value: "psychiatrie" },
+  { label: "Accident de la route", value: "accident_route" },
+  { label: "Agression", value: "agression" },
+  { label: "Incendie", value: "incendie" },
+  { label: "Général", value: "general" },
 ];
 
 export function HospitalProfileEditScreen({ navigation }: any) {
@@ -65,7 +65,7 @@ export function HospitalProfileEditScreen({ navigation }: any) {
       const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const { latitude, longitude } = location.coords;
 
-      const newFormData = { ...formData, latitude, longitude };
+      const newFormData = { ...formData, lat: latitude, lng: longitude };
 
       if (type === 'address') {
         const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
@@ -100,7 +100,7 @@ export function HospitalProfileEditScreen({ navigation }: any) {
       setFormData({
         ...structureInfo,
         specialties: structureInfo.specialties || [],
-        equipments: structureInfo.equipments || [],
+        equipment: structureInfo.equipment || [],
       });
     } else {
       void refreshStructureInfo();
@@ -115,7 +115,7 @@ export function HospitalProfileEditScreen({ navigation }: any) {
       navigation.goBack();
     } catch (err: any) {
       console.error("[ProfileEdit] Save error:", err);
-      Alert.alert("Erreur", "Impossible de mettre à jour le profil. Certaines colonnes sont peut-être manquantes dans votre base de données.");
+      Alert.alert("Erreur de mise à jour", err.message || "Une erreur inconnue est survenue.");
     } finally {
       setLoading(false);
     }
@@ -148,16 +148,16 @@ export function HospitalProfileEditScreen({ navigation }: any) {
   const [newEquipment, setNewEquipment] = useState("");
   const addEquipment = () => {
     if (!newEquipment.trim()) return;
-    const current = formData.equipments || [];
+    const current = formData.equipment || [];
     if (!current.map(e => e.toLowerCase()).includes(newEquipment.trim().toLowerCase())) {
-      setFormData({ ...formData, equipments: [...current, newEquipment.trim()] });
+      setFormData({ ...formData, equipment: [...current, newEquipment.trim()] });
     }
     setNewEquipment("");
   };
 
   const removeEquipment = (eq: string) => {
-    const current = formData.equipments || [];
-    setFormData({ ...formData, equipments: current.filter((e) => e !== eq) });
+    const current = formData.equipment || [];
+    setFormData({ ...formData, equipment: current.filter((e) => e !== eq) });
   };
 
   const isTypeSelected = (typeValue: string) => {
@@ -208,23 +208,37 @@ export function HospitalProfileEditScreen({ navigation }: any) {
             <Text style={styles.sectionTitle}>IDENTITÉ</Text>
             <View style={styles.card}>
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Nom officiel</Text>
+                <View style={styles.labelRow}><Text style={styles.label}>Nom de l'établissement (Lecture seule)</Text><MaterialIcons name="lock" size={14} color="rgba(255,255,255,0.2)" /></View>
                 <TextInput
-                  style={styles.input}
-                  value={formData.name}
-                  onChangeText={(val) => setFormData({ ...formData, name: val })}
-                  placeholder="Ex: Hôpital Général de Kinshasa"
+                  style={[styles.input, { color: 'rgba(255,255,255,0.5)' }]}
+                  value={formData.name || ""}
+                  editable={false}
+                  placeholder="Nom..."
                   placeholderTextColor="rgba(255,255,255,0.2)"
                 />
               </View>
               <View style={styles.divider} />
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Nom court / Code</Text>
+                <View style={styles.labelRow}>
+                  <Text style={styles.label}>Nom Officiel (Lecture seule)</Text>
+                  <MaterialIcons name="lock" size={14} color="rgba(255,255,255,0.2)" />
+                </View>
+                <TextInput
+                  style={[styles.input, { color: 'rgba(255,255,255,0.5)' }]}
+                  value={formData.official_name || ""}
+                  editable={false}
+                  placeholder="Nom complet officiel..."
+                  placeholderTextColor="rgba(255,255,255,0.2)"
+                />
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Sigle / Nom Court (Editable)</Text>
                 <TextInput
                   style={styles.input}
                   value={formData.short_name || ""}
                   onChangeText={(val) => setFormData({ ...formData, short_name: val })}
-                  placeholder="Ex: HGK"
+                  placeholder="Ex: HGR-K..."
                   placeholderTextColor="rgba(255,255,255,0.2)"
                 />
               </View>
@@ -233,13 +247,13 @@ export function HospitalProfileEditScreen({ navigation }: any) {
                 <Text style={styles.label}>Type / Catégorie</Text>
                 <View style={styles.typeGrid}>
                   {(STRUCTURE_TYPES as any[]).map((type) => (
-                    <AppTouchableOpacity
+                    <View
                       key={type.value}
                       style={[
                         styles.typeGridItem,
-                        isTypeSelected(type.value) && styles.typeGridItemActive
+                        isTypeSelected(type.value) && styles.typeGridItemActive,
+                        { opacity: isTypeSelected(type.value) ? 1 : 0.4 }
                       ]}
-                      onPress={() => setFormData({ ...formData, type: type.value })}
                     >
                       <Text style={[
                         styles.typeGridText,
@@ -247,7 +261,7 @@ export function HospitalProfileEditScreen({ navigation }: any) {
                       ]}>
                         {type.label}
                       </Text>
-                    </AppTouchableOpacity>
+                    </View>
                   ))}
                 </View>
               </View>
@@ -260,23 +274,14 @@ export function HospitalProfileEditScreen({ navigation }: any) {
             <View style={styles.card}>
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
-                  <Text style={styles.label}>Adresse</Text>
-                  <AppTouchableOpacity
-                    onPress={() => handleAutoFillLocation('address')}
-                    disabled={locatingAddress}
-                  >
-                    {locatingAddress ? (
-                      <ActivityIndicator size="small" color={colors.secondary} />
-                    ) : (
-                      <MaterialIcons name="my-location" size={20} color={colors.secondary} />
-                    )}
-                  </AppTouchableOpacity>
+                  <Text style={styles.label}>Adresse (Lecture seule)</Text>
+                  <MaterialIcons name="lock" size={14} color="rgba(255,255,255,0.2)" />
                 </View>
                 <TextInput
-                  style={[styles.input, { height: 60 }]}
+                  style={[styles.input, { height: 60, color: 'rgba(255,255,255,0.5)' }]}
                   multiline
                   value={formData.address || ""}
-                  onChangeText={(val) => setFormData({ ...formData, address: val })}
+                  editable={false}
                   placeholder="Avenue, Commune, Ville..."
                   placeholderTextColor="rgba(255,255,255,0.2)"
                 />
@@ -311,8 +316,8 @@ export function HospitalProfileEditScreen({ navigation }: any) {
                 <Text style={styles.label}>Contact de garde (Nom/Titre)</Text>
                 <TextInput
                   style={styles.input}
-                  value={formData.primary_contact || ""}
-                  onChangeText={(val) => setFormData({ ...formData, primary_contact: val })}
+                  value={formData.contact_person || ""}
+                  onChangeText={(val) => setFormData({ ...formData, contact_person: val })}
                   placeholder="Ex: Dr. Joe (Chef de garde)"
                   placeholderTextColor="rgba(255,255,255,0.2)"
                 />
@@ -340,8 +345,8 @@ export function HospitalProfileEditScreen({ navigation }: any) {
                 <Text style={styles.label}>Horaires d'ouverture</Text>
                 <TextInput
                   style={styles.input}
-                  value={formData.opening_hours || ""}
-                  onChangeText={(val) => setFormData({ ...formData, opening_hours: val })}
+                  value={formData.operating_hours || ""}
+                  onChangeText={(val) => setFormData({ ...formData, operating_hours: val })}
                   placeholder="Ex: 24h/24 ou 08:00 - 20:00"
                   placeholderTextColor="rgba(255,255,255,0.2)"
                 />
@@ -379,27 +384,16 @@ export function HospitalProfileEditScreen({ navigation }: any) {
           <View style={[styles.section, { marginBottom: 24 }]} >
             <View style={styles.labelRow}>
               <Text style={styles.sectionTitle}>GÉOLOCALISATION (GPS)</Text>
-              <AppTouchableOpacity
-                onPress={() => handleAutoFillLocation('coords')}
-                disabled={locatingCoords}
-                style={{ paddingRight: 16 }}
-              >
-                {locatingCoords ? (
-                  <ActivityIndicator size="small" color={colors.secondary} />
-                ) : (
-                  <MaterialIcons name="location-searching" size={20} color={colors.secondary} />
-                )}
-              </AppTouchableOpacity>
+              <MaterialIcons name="lock" size={14} color="rgba(255,255,255,0.2)" style={{ marginRight: 16 }} />
             </View>
             <View style={styles.card}>
               <View style={styles.row}>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
                   <Text style={styles.label}>Latitude</Text>
                   <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    value={String(formData.latitude || "")}
-                    onChangeText={(val) => setFormData({ ...formData, latitude: parseFloat(val) || 0 })}
+                    style={[styles.input, { color: 'rgba(255,255,255,0.5)' }]}
+                    editable={false}
+                    value={String(formData.lat || "")}
                     placeholder="-4.30..."
                     placeholderTextColor="rgba(255,255,255,0.2)"
                   />
@@ -408,10 +402,9 @@ export function HospitalProfileEditScreen({ navigation }: any) {
                 <View style={[styles.inputGroup, { flex: 1 }]}>
                   <Text style={styles.label}>Longitude</Text>
                   <TextInput
-                    style={styles.input}
-                    keyboardType="numeric"
-                    value={String(formData.longitude || "")}
-                    onChangeText={(val) => setFormData({ ...formData, longitude: parseFloat(val) || 0 })}
+                    style={[styles.input, { color: 'rgba(255,255,255,0.5)' }]}
+                    editable={false}
+                    value={String(formData.lng || "")}
                     placeholder="15.30..."
                     placeholderTextColor="rgba(255,255,255,0.2)"
                   />
@@ -426,15 +419,15 @@ export function HospitalProfileEditScreen({ navigation }: any) {
             <View style={styles.card}>
               <View style={styles.tagGrid}>
                 {COMMON_SPECIALTIES.map((spec) => {
-                  const isActive = formData.specialties?.some(s => s.toLowerCase() === spec.toLowerCase());
+                  const isActive = formData.specialties?.some(s => s.toLowerCase() === spec.value.toLowerCase());
                   return (
                     <AppTouchableOpacity
-                      key={spec}
+                      key={spec.value}
                       style={[
                         styles.tagGridItem,
                         isActive && styles.tagGridItemActive,
                       ]}
-                      onPress={() => toggleSpecialty(spec)}
+                      onPress={() => toggleSpecialty(spec.value)}
                     >
                       <View style={styles.tagRow}>
                         {isActive ? (
@@ -443,7 +436,7 @@ export function HospitalProfileEditScreen({ navigation }: any) {
                           <View style={styles.emptyCheck} />
                         )}
                         <Text style={[styles.tagGridText, isActive && styles.tagGridTextActive]}>
-                          {spec}
+                          {spec.label}
                         </Text>
                       </View>
                     </AppTouchableOpacity>
@@ -453,7 +446,7 @@ export function HospitalProfileEditScreen({ navigation }: any) {
 
               {/* Extras (Specialties added but not in common list) */}
               {formData.specialties?.filter(s =>
-                !COMMON_SPECIALTIES.some(cs => cs.toLowerCase() === s.toLowerCase())
+                !COMMON_SPECIALTIES.some(cs => cs.value.toLowerCase() === s.toLowerCase())
               ).map(extra => (
                 <View key={extra} style={[styles.equipmentTag, { marginHorizontal: 16, marginBottom: 8 }]}>
                   <Text style={styles.tagText}>{extra}</Text>
@@ -496,9 +489,9 @@ export function HospitalProfileEditScreen({ navigation }: any) {
                   <MaterialIcons name="add" size={24} color="#FFF" />
                 </AppTouchableOpacity>
               </View>
-              {formData.equipments && formData.equipments.length > 0 && (
+              {formData.equipment && formData.equipment.length > 0 && (
                 <View style={[styles.tagContainer, { paddingTop: 0, paddingBottom: 16 }]}>
-                  {formData.equipments.map((eq) => (
+                  {formData.equipment.map((eq) => (
                     <View key={eq} style={styles.equipmentTag}>
                       <Text style={styles.tagText}>{eq}</Text>
                       <AppTouchableOpacity onPress={() => removeEquipment(eq)} style={styles.removeTagBtn}>
@@ -510,6 +503,15 @@ export function HospitalProfileEditScreen({ navigation }: any) {
               )}
             </View>
           </View>
+
+          {/* Administrative Footer */}
+          <View style={styles.footerInfo}>
+            <MaterialIcons name="info-outline" size={16} color="rgba(255,255,255,0.3)" />
+            <Text style={styles.footerInfoText}>
+              Pour modifier les informations administratives (Nom, Adresse, GPS), contactez l'administrateur du Centre Étoile Bleue.
+            </Text>
+          </View>
+          <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -534,7 +536,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   saveBtnText: { color: "#FFF", fontSize: 13, fontWeight: "900" },
   container: { flex: 1 },
@@ -694,5 +696,24 @@ const styles = StyleSheet.create({
   },
   removeTagBtn: {
     marginLeft: 2,
+  },
+  footerInfo: {
+    marginTop: 24,
+    marginHorizontal: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.02)",
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.05)",
+    gap: 12,
+  },
+  footerInfoText: {
+    flex: 1,
+    color: "rgba(255,255,255,0.3)",
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "500",
   },
 });
