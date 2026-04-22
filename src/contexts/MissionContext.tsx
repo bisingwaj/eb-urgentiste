@@ -558,14 +558,14 @@ export function MissionProvider({ children }: { children: ReactNode }) {
               ...prev,
               ...(hasGeo
                 ? {
-                    location: {
-                      ...prev.location,
-                      lat: newLat!,
-                      lng: newLng!,
-                      address: newData.location_address ?? prev.location.address,
-                      commune: newData.commune ?? prev.location.commune,
-                    },
-                  }
+                  location: {
+                    ...prev.location,
+                    lat: newLat!,
+                    lng: newLng!,
+                    address: newData.location_address ?? prev.location.address,
+                    commune: newData.commune ?? prev.location.commune,
+                  },
+                }
                 : {}),
               ...(mediaPatch ? { media_urls: mediaPatch } : {}),
             };
@@ -823,16 +823,16 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase
         .from('dispatches')
         .update({
-          assigned_structure_id:      hospitalId,
-          assigned_structure_name:    hospital.name,
-          assigned_structure_lat:     hospital.lat,
-          assigned_structure_lng:     hospital.lng,
-          assigned_structure_phone:   hospital.phone,
+          assigned_structure_id: hospitalId,
+          assigned_structure_name: hospital.name,
+          assigned_structure_lat: hospital.lat,
+          assigned_structure_lng: hospital.lng,
+          assigned_structure_phone: hospital.phone,
           assigned_structure_address: hospital.address ?? null,
-          assigned_structure_type:    hospital.type ?? null,
-          hospital_status:            'pending',
-          hospital_notes:             null,
-          updated_at:                 new Date().toISOString(),
+          assigned_structure_type: hospital.type ?? null,
+          hospital_status: 'pending',
+          hospital_notes: null,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', activeMission.id);
 
@@ -846,23 +846,23 @@ export function MissionProvider({ children }: { children: ReactNode }) {
 
   const cancelHospitalAssignment = async () => {
     if (!activeMission) return;
-    
+
     try {
       console.log(`[MissionContext] 🚫 Cancelling assignment request for mission: ${activeMission.id}`);
-      
+
       const { error } = await supabase
         .from('dispatches')
         .update({
-          assigned_structure_id:      null,
-          assigned_structure_name:    null,
-          assigned_structure_lat:     null,
-          assigned_structure_lng:     null,
-          assigned_structure_phone:   null,
+          assigned_structure_id: null,
+          assigned_structure_name: null,
+          assigned_structure_lat: null,
+          assigned_structure_lng: null,
+          assigned_structure_phone: null,
           assigned_structure_address: null,
-          assigned_structure_type:    null,
-          hospital_status:            null,
-          hospital_notes:             null,
-          updated_at:                 new Date().toISOString(),
+          assigned_structure_type: null,
+          hospital_status: null,
+          hospital_notes: null,
+          updated_at: new Date().toISOString(),
         })
         .eq('id', activeMission.id);
 

@@ -140,7 +140,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         .select('*')
         .eq('id', structureId)
         .single();
-      
+
       if (!error && data) {
         // Mapping flexible pour s'adapter au schéma réel
         const rawSpecialties = data.specialties || data.specialities || data.specialites || data.specialty || data.hospital_data?.specialties || [];
@@ -172,7 +172,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
           equipment: normalizeList(rawEquipments),
           capacity_status: data.capacity_status,
         };
-        
+
         setStructureInfo(normalized);
         if (normalized.capacity_status) {
           setHospitalCapacity(normalized.capacity_status as HospitalCapacityStatus);
@@ -200,11 +200,11 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       // Si erreur de colonne manquante, on essaie de filtrer
       if (error && (error.code === 'PGRST204' || error.code === '42703')) {
         console.warn('[HospitalContext] Some columns missing, attempting resilient update...');
-        
+
         // On garde uniquement les colonnes "sûres" et on tente le reste une par une
         const safeUpdates: Record<string, any> = {};
         const knownSafe = ['name', 'official_name', 'short_name', 'address', 'phone', 'capacity_status', 'operating_hours', 'contact_person', 'lat', 'lng', 'equipment'];
-        
+
         for (const key of Object.keys(updates)) {
           if (knownSafe.includes(key)) {
             safeUpdates[key] = (updates as any)[key];
@@ -213,8 +213,8 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
 
         // Tenter d'abord le bloc "sûr"
         if (Object.keys(safeUpdates).length > 0) {
-           const { error: safeErr } = await performUpdate(safeUpdates);
-           if (safeErr) console.error('[HospitalContext] Safe update failed:', safeErr);
+          const { error: safeErr } = await performUpdate(safeUpdates);
+          if (safeErr) console.error('[HospitalContext] Safe update failed:', safeErr);
         }
 
         // Tenter les autres un par un pour voir ce qui passe
@@ -223,7 +223,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
             const singleUpdate = { [key]: (updates as any)[key] };
             const { error: singleErr } = await performUpdate(singleUpdate);
             if (singleErr) {
-               console.warn(`[HospitalContext] Column "${key}" likely missing in DB, skipping.`);
+              console.warn(`[HospitalContext] Column "${key}" likely missing in DB, skipping.`);
             }
           }
         }
@@ -347,7 +347,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       console.warn(
         '[HospitalContext] Compte hôpital sans structure liée : health_structures.linked_user_id doit pointer vers users_directory.id de ce compte. ' +
-          'Sans cela, assigned_structure_id ne peut pas être filtré correctement.',
+        'Sans cela, assigned_structure_id ne peut pas être filtré correctement.',
       );
       return;
     }
@@ -439,7 +439,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       const mappedCases = data.map((d) =>
         mapDispatchRowToEmergencyCase(d, profileMap, responsesMap, unitPhoneByUnitId),
       );
-      
+
       const pendingCount = mappedCases.filter(c => c.hospitalStatus === 'pending').length;
       setPendingAlertCount(pendingCount);
 
@@ -549,7 +549,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       if (transition.hospitalStatus) {
         updateObj.hospital_status = transition.hospitalStatus;
         updateObj.hospital_responded_at = new Date().toISOString();
-        
+
         // If hospital accepts, we immediately move to en_route_hospital status
         // Only if we haven't already moved past this stage (safety check)
         const canAdvanceStatus = !['en_route_hospital', 'arrived_hospital', 'completed', 'mission_end'].includes(currentDispatch.status);

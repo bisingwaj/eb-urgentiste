@@ -39,10 +39,10 @@ function getDistanceMeters(lat1: number, lon1: number, lat2: number, lon2: numbe
   const φ2 = lat2 * Math.PI / 180;
   const Δφ = (lat2 - lat1) * Math.PI / 180;
   const Δλ = (lon2 - lon1) * Math.PI / 180;
-  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-            Math.cos(φ1) * Math.cos(φ2) *
-            Math.sin(Δλ/2) * Math.sin(Δλ/2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+    Math.cos(φ1) * Math.cos(φ2) *
+    Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
 
@@ -55,7 +55,7 @@ export function MissionActiveScreen({ navigation }: any) {
   }, []);
   const { activeMission, updateDispatchStatus } = useActiveMission();
   const { minimized: activeCall } = useCallSession();
-  
+
   const [myLocation, setMyLocation] = useState<Location.LocationObject | null>(null);
   const myHeadingDeg = useMapPuckHeading(myLocation);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -64,13 +64,13 @@ export function MissionActiveScreen({ navigation }: any) {
   const [isAddressExpanded, setIsAddressExpanded] = useState(false);
   const [mapMode, setMapMode] = useState<'2D' | '3D'>('2D');
   const [zoomLevel, setZoomLevel] = useState(15);
-  
+
   const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
   const [showCallModal, setShowCallModal] = useState(false);
-  
+
   const lastRouteCoords = useRef<number[][]>([]);
   const lastFetchPos = useRef<[number, number] | null>(null);
   const initialFetchDone = useRef(false);
@@ -108,10 +108,10 @@ export function MissionActiveScreen({ navigation }: any) {
 
   // Safety check: if mission is already on_scene, redirect to Signalement
   useEffect(() => {
-    if (activeMission?.dispatch_status === 'on_scene' || 
-        activeMission?.dispatch_status === 'arrived_hospital' ||
-        activeMission?.dispatch_status === 'mission_end' ||
-        activeMission?.dispatch_status === 'completed') {
+    if (activeMission?.dispatch_status === 'on_scene' ||
+      activeMission?.dispatch_status === 'arrived_hospital' ||
+      activeMission?.dispatch_status === 'mission_end' ||
+      activeMission?.dispatch_status === 'completed') {
       console.log('[MissionActive] Status is already', activeMission.dispatch_status, '-> Redirecting to Signalement');
       navigation.replace('Signalement', { mission: activeMission });
     }
@@ -134,11 +134,11 @@ export function MissionActiveScreen({ navigation }: any) {
   const fetchRoute = async (force = false) => {
     if (!myLocation || !missionCoords) return;
     const currentPos: [number, number] = [myLocation.coords.longitude, myLocation.coords.latitude];
-    
+
     // Deviation check
     if (!force && lastRouteCoords.current.length > 0) {
       let minD = Infinity;
-      for (let i=0; i < lastRouteCoords.current.length; i+=5) { // Sample every 5 pts for perf
+      for (let i = 0; i < lastRouteCoords.current.length; i += 5) { // Sample every 5 pts for perf
         const d = getDistanceMeters(currentPos[1], currentPos[0], lastRouteCoords.current[i][1], lastRouteCoords.current[i][0]);
         if (d < minD) minD = d;
       }
@@ -157,12 +157,12 @@ export function MissionActiveScreen({ navigation }: any) {
     } catch (e) { console.error('Route error', e); }
   };
 
-  useEffect(() => { 
+  useEffect(() => {
     if (myLocation && !initialFetchDone.current) {
       initialFetchDone.current = true;
       fetchRoute(true);
     } else if (myLocation) {
-      fetchRoute(); 
+      fetchRoute();
     }
   }, [myLocation?.coords.latitude, missionCoords]);
 
@@ -184,14 +184,14 @@ export function MissionActiveScreen({ navigation }: any) {
   };
 
   const handleNextStatus = async () => {
-    const nextStatuses: Record<string, string> = { 
-      dispatched: 'en_route', 
-      en_route: 'on_scene', 
+    const nextStatuses: Record<string, string> = {
+      dispatched: 'en_route',
+      en_route: 'on_scene',
       en_route_hospital: 'arrived_hospital',
-      on_scene: 'mission_end' 
+      on_scene: 'mission_end'
     };
     const next = nextStatuses[activeMission?.dispatch_status || ''];
-    
+
     // Safety check for hospital arrival
     if (activeMission?.dispatch_status === 'en_route_hospital') {
       console.log("[Navigation] Arrivée à l'hôpital déclenchée");
@@ -200,16 +200,15 @@ export function MissionActiveScreen({ navigation }: any) {
     setIsUpdating(true);
     try {
       await updateDispatchStatus(next as any);
-      
+
       if (next === 'on_scene' || next === 'arrived_hospital') {
         const targetStatus = next;
-        // If arriving at hospital, we skip assessment and go straight to closure.
-        const forcedStep = next === 'arrived_hospital' ? 'closure' : 'assessment';
-        
+        // Step 1: Force Mapbox to unmount by setting transitioning state
         setIsTransitioning(true);
-        navigation.replace('Signalement', { 
+        // Step 3: Navigate - pass the updated status and force the 'assessment' step
+        navigation.replace('Signalement', {
           mission: { ...activeMission, dispatch_status: targetStatus },
-          forcedStep: forcedStep
+          forcedStep: 'assessment'
         });
       }
     } catch (err) {
@@ -227,7 +226,7 @@ export function MissionActiveScreen({ navigation }: any) {
 
   const formatDistanceValue = (m: number | null) => {
     if (m === null) return '--';
-    return m < 1000 ? `${Math.round(m)} M` : `${(m/1000).toFixed(1)} KM`;
+    return m < 1000 ? `${Math.round(m)} M` : `${(m / 1000).toFixed(1)} KM`;
   };
 
   const formatTimeValue = (seconds: number | null) => {
@@ -277,8 +276,8 @@ export function MissionActiveScreen({ navigation }: any) {
             myLocation={myLocation ? [myLocation.coords.longitude, myLocation.coords.latitude] : undefined}
             myHeading={myHeadingDeg}
             cameraConfig={{
-               zoom: zoomLevel,
-               center: missionCoords || undefined,
+              zoom: zoomLevel,
+              center: missionCoords || undefined,
             }}
             showControls={true}
             style={styles.map}
@@ -291,23 +290,23 @@ export function MissionActiveScreen({ navigation }: any) {
         <View style={styles.hospitalOverlay}>
           {/* HEADER BAR */}
           <View style={[styles.hospitalHeader, { paddingTop: insets.top + 10 }]}>
-            <AppTouchableOpacity 
-              style={styles.headerBackBtn} 
+            <AppTouchableOpacity
+              style={styles.headerBackBtn}
               onPress={() => navigation.goBack()}
             >
               <MaterialIcons name="arrow-back" size={24} color="#FFF" />
             </AppTouchableOpacity>
-            
+
             <View style={styles.headerTitleBox}>
-               <Text style={styles.headerLabel}>NAVIGATION</Text>
-               <Text style={styles.headerMainTitle}>{activeMission.assigned_structure?.name || "HÔPITAL"}</Text>
+              <Text style={styles.headerLabel}>NAVIGATION</Text>
+              <Text style={styles.headerMainTitle}>{activeMission.assigned_structure?.name || "HÔPITAL"}</Text>
             </View>
             <View style={{ width: 44 }} />
           </View>
 
           {/* TOP TACTICAL INFO BAR (Below Header) */}
           <View style={styles.hospitalTopInfoLayer}>
-            <AppTouchableOpacity 
+            <AppTouchableOpacity
               style={styles.tacticalInfoPill}
               onPress={() => setIsAddressExpanded(!isAddressExpanded)}
             >
@@ -323,14 +322,14 @@ export function MissionActiveScreen({ navigation }: any) {
                   )}
                 </View>
                 <View style={styles.tacticalStatsRowCompact}>
-                   <View style={styles.tacticalStat}>
-                      <MaterialIcons name="schedule" size={14} color={colors.secondary} />
-                      <Text style={styles.tacticalStatVal}>{formatTimeValue(routeDuration)}</Text>
-                   </View>
-                   <View style={styles.tacticalStat}>
-                      <MaterialIcons name="straighten" size={14} color={colors.secondary} />
-                      <Text style={styles.tacticalStatVal}>{formatDistanceValue(routeDistance)}</Text>
-                   </View>
+                  <View style={styles.tacticalStat}>
+                    <MaterialIcons name="schedule" size={14} color={colors.secondary} />
+                    <Text style={styles.tacticalStatVal}>{formatTimeValue(routeDuration)}</Text>
+                  </View>
+                  <View style={styles.tacticalStat}>
+                    <MaterialIcons name="straighten" size={14} color={colors.secondary} />
+                    <Text style={styles.tacticalStatVal}>{formatDistanceValue(routeDistance)}</Text>
+                  </View>
                 </View>
               </View>
             </AppTouchableOpacity>
@@ -351,30 +350,30 @@ export function MissionActiveScreen({ navigation }: any) {
             {/* HERO ACTIONS ROW */}
             <View style={styles.heroActionRow}>
               <View style={styles.heroTimeBox}>
-                  <Text style={styles.heroLabel}>TEMPS ÉCOULÉ</Text>
-                  <Text style={styles.heroTimeVal}>{elapsedTime}</Text>
+                <Text style={styles.heroLabel}>TEMPS ÉCOULÉ</Text>
+                <Text style={styles.heroTimeVal}>{elapsedTime}</Text>
               </View>
-              
-              <AppTouchableOpacity 
-                  style={styles.heroArrivalBtn}
-                  onPress={handleNextStatus}
-                  loading={isUpdating}
+
+              <AppTouchableOpacity
+                style={styles.heroArrivalBtn}
+                onPress={handleNextStatus}
+                loading={isUpdating}
               >
-                  <Text style={styles.heroArrivalBtnText}>ARRIVÉ À L'HÔPITAL</Text>
+                <Text style={styles.heroArrivalBtnText}>ARRIVÉ À L'HÔPITAL</Text>
               </AppTouchableOpacity>
             </View>
 
             {/* COMMUNICATION ROW */}
             <View style={styles.commActionRow}>
-              <AppTouchableOpacity 
+              <AppTouchableOpacity
                 style={styles.commBtn}
                 onPress={() => navigation.navigate('CallCenter', { target: 'central' })}
               >
                 <MaterialIcons name="headset-mic" size={18} color={colors.secondary} />
                 <Text style={styles.commBtnText}>CENTRALE</Text>
               </AppTouchableOpacity>
-              
-              <AppTouchableOpacity 
+
+              <AppTouchableOpacity
                 style={styles.commBtn}
                 onPress={() => {
                   const phone = activeMission.assigned_structure?.phone;
@@ -406,8 +405,8 @@ export function MissionActiveScreen({ navigation }: any) {
             </View>
 
             {/* ONE ROW INFO PILL: Address | Time | Distance */}
-            <AppTouchableOpacity 
-              style={styles.unifiedPill} 
+            <AppTouchableOpacity
+              style={styles.unifiedPill}
               activeOpacity={0.9}
               onPress={() => {
                 LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
@@ -452,14 +451,14 @@ export function MissionActiveScreen({ navigation }: any) {
                 <Text style={styles.tLabel}>TEMPS ÉCOULÉ</Text>
                 <Text style={styles.tValue}>{elapsedTime}</Text>
               </View>
-              <AppTouchableOpacity 
-                style={[styles.bigBtn, isUpdating && { opacity: 0.6 }]} 
-                onPress={handleNextStatus} 
+              <AppTouchableOpacity
+                style={[styles.bigBtn, isUpdating && { opacity: 0.6 }]}
+                onPress={handleNextStatus}
                 disabled={isUpdating}
               >
                 <Text style={styles.bigBtnText}>
-                  {activeMission.dispatch_status === 'dispatched' ? 'DÉPART ROUTE' : 
-                   activeMission.dispatch_status === 'en_route' ? 'ARRIVÉ SUR SITE' : 'TERMINER'}
+                  {activeMission.dispatch_status === 'dispatched' ? 'DÉPART ROUTE' :
+                    activeMission.dispatch_status === 'en_route' ? 'ARRIVÉ SUR SITE' : 'TERMINER'}
                 </Text>
                 <MaterialIcons name="chevron-right" size={24} color="#000" />
               </AppTouchableOpacity>
@@ -467,10 +466,10 @@ export function MissionActiveScreen({ navigation }: any) {
 
             <View style={styles.callRow}>
               <AppTouchableOpacity style={[styles.callBtn, isPhonePulseActive && { opacity: 0.4 }]} onPress={() => {
-                 if (isPhonePulseActive) return;
-                 setIsCalling(true);
-                 setTimeout(() => setIsCalling(false), 3000);
-                 navigation.navigate('CallCenter', { target: 'central' });
+                if (isPhonePulseActive) return;
+                setIsCalling(true);
+                setTimeout(() => setIsCalling(false), 3000);
+                navigation.navigate('CallCenter', { target: 'central' });
               }} disabled={isPhonePulseActive}>
                 <MaterialIcons name="headset-mic" size={20} color={colors.secondary} />
                 <Text style={styles.callBtnText}>CENTRALE</Text>
@@ -519,16 +518,16 @@ export function MissionActiveScreen({ navigation }: any) {
             </View>
 
             <View style={styles.modalBody}>
-              <AppTouchableOpacity 
-                style={[styles.modalBtn, styles.primaryBtn]} 
+              <AppTouchableOpacity
+                style={[styles.modalBtn, styles.primaryBtn]}
                 onPress={async () => {
                   setShowCallModal(false);
                   if (!activeMission.caller?.phone) {
                     Alert.alert('Erreur', 'Numéro de téléphone non disponible.');
                     return;
                   }
-                  navigation.navigate('CallCenter', { 
-                    target: 'pbx', 
+                  navigation.navigate('CallCenter', {
+                    target: 'pbx',
                     phoneNumber: activeMission.caller.phone,
                     patientName: activeMission.caller.name
                   });
@@ -541,8 +540,8 @@ export function MissionActiveScreen({ navigation }: any) {
                 </View>
               </AppTouchableOpacity>
 
-              <AppTouchableOpacity 
-                style={[styles.modalBtn, styles.secondaryBtn]} 
+              <AppTouchableOpacity
+                style={[styles.modalBtn, styles.secondaryBtn]}
                 onPress={async () => {
                   setShowCallModal(false);
                   setIsCalling(true);
@@ -571,8 +570,8 @@ export function MissionActiveScreen({ navigation }: any) {
                 </View>
               </AppTouchableOpacity>
 
-              <AppTouchableOpacity 
-                style={styles.cancelBtn} 
+              <AppTouchableOpacity
+                style={styles.cancelBtn}
                 onPress={() => setShowCallModal(false)}
               >
                 <Text style={styles.cancelText}>ANNULER L'APPEL</Text>
@@ -589,11 +588,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   map: { flex: 1 },
   topControls: { position: 'absolute', top: 0, left: 16, right: 16, zIndex: 10 },
-  
+
   // Step Bar
-  glassStepBar: { 
-    flexDirection: 'row', backgroundColor: 'rgba(20,20,20,0.85)', 
-    paddingVertical: 12, paddingHorizontal: 8, borderRadius: 18, marginBottom: 16, 
+  glassStepBar: {
+    flexDirection: 'row', backgroundColor: 'rgba(20,20,20,0.85)',
+    paddingVertical: 12, paddingHorizontal: 8, borderRadius: 18, marginBottom: 16,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)',
     shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 10, elevation: 5
   },
@@ -601,48 +600,48 @@ const styles = StyleSheet.create({
   stepIcon: { width: 22, height: 22, borderRadius: 7, justifyContent: 'center', alignItems: 'center', zIndex: 2, marginBottom: 4 },
   stepLabel: { color: '#888', fontSize: 9, fontWeight: '700', opacity: 0.7 },
   stepLink: { position: 'absolute', top: 11, left: '50%', right: '-50%', height: 2, backgroundColor: '#333', zIndex: 1 },
-  
+
   // ONE ROW INFO PILL
-  unifiedPill: { 
-    width: '100%', backgroundColor: 'rgba(15,15,15,0.95)', 
+  unifiedPill: {
+    width: '100%', backgroundColor: 'rgba(15,15,15,0.95)',
     borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
     shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 15, elevation: 8,
     minHeight: 52, justifyContent: 'center'
   },
-  pillRow: { 
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12 
+  pillRow: {
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12
   },
   addrSection: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   pillAddr: { color: '#FFF', fontSize: 13, fontWeight: '700', flex: 1 },
   statSection: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   statVal: { color: colors.secondary, fontSize: 12, fontWeight: '900' },
   pillSep: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 12 },
-  
+
   // Vertical Button Stack
   actionStack: { alignItems: 'flex-end', gap: 10, marginTop: 12 },
-  sqBtn: { 
-    width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(30,30,30,0.95)', 
+  sqBtn: {
+    width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(30,30,30,0.95)',
     justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10, elevation: 6
   },
 
-  bottomPanel: { 
-    position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#0A0A0A', 
-    padding: 20, borderTopLeftRadius: 30, borderTopRightRadius: 30, borderTopWidth: 1, borderTopColor: '#222' 
+  bottomPanel: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#0A0A0A',
+    padding: 20, borderTopLeftRadius: 30, borderTopRightRadius: 30, borderTopWidth: 1, borderTopColor: '#222'
   },
   mainRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, gap: 15 },
   timeBlock: { flex: 0.8 },
   tLabel: { color: '#666', fontSize: 10, fontWeight: '900' },
   tValue: { color: '#FFF', fontSize: 24, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  bigBtn: { 
-    flex: 1.2, height: 56, backgroundColor: colors.success, borderRadius: 16, 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15 
+  bigBtn: {
+    flex: 1.2, height: 56, backgroundColor: colors.success, borderRadius: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15
   },
   bigBtnText: { fontWeight: '900', fontSize: 13 },
   callRow: { flexDirection: 'row', gap: 10 },
-  callBtn: { 
-    flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: '#333', 
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 
+  callBtn: {
+    flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: '#333',
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8
   },
   callBtnText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
 
@@ -654,11 +653,11 @@ const styles = StyleSheet.create({
 
   // Modal Styles
   modalOverlay: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', 
-    justifyContent: 'center', alignItems: 'center', padding: 20 
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center', alignItems: 'center', padding: 20
   },
   modalContent: {
-    width: '100%', maxWidth: 340, backgroundColor: '#1A1A1A', 
+    width: '100%', maxWidth: 340, backgroundColor: '#1A1A1A',
     borderRadius: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     padding: 24, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 30, elevation: 15
   },
@@ -666,32 +665,32 @@ const styles = StyleSheet.create({
   modalTitle: { color: '#FFF', fontSize: 22, fontWeight: '900', marginTop: 12 },
   patientNum: { color: colors.secondary, fontSize: 18, fontWeight: '900', marginTop: 4, letterSpacing: 1 },
   modalBody: { gap: 14 },
-  modalBtn: { 
-    flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, gap: 16 
+  modalBtn: {
+    flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, gap: 16
   },
   primaryBtn: { backgroundColor: colors.success },
   secondaryBtn: { backgroundColor: 'rgba(68, 138, 255, 0.15)', borderWidth: 1, borderColor: 'rgba(68, 138, 255, 0.3)' },
   btnTextSet: { flex: 1 },
   btnTitle: { fontSize: 16, fontWeight: '900', color: '#000' },
   btnSub: { fontSize: 12, color: 'rgba(0,0,0,0.7)', fontWeight: '700', marginTop: 1 },
-  cancelBtn: { 
-    paddingVertical: 14, alignItems: 'center', marginTop: 8, 
-    borderRadius: 16, backgroundColor: 'rgba(211, 47, 47, 0.12)', borderWidth: 1, borderColor: 'rgba(211, 47, 47, 0.3)' 
+  cancelBtn: {
+    paddingVertical: 14, alignItems: 'center', marginTop: 8,
+    borderRadius: 16, backgroundColor: 'rgba(211, 47, 47, 0.12)', borderWidth: 1, borderColor: 'rgba(211, 47, 47, 0.3)'
   },
   cancelText: { color: '#FF5252', fontSize: 13, fontWeight: '900', letterSpacing: 2, opacity: 0.9 },
 
   // HOSPITAL NAVIGATION SPECIFIC
   hospitalOverlay: { flex: 1 },
-  hospitalHeader: { 
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', 
+  hospitalHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
     paddingHorizontal: 20, zIndex: 10, paddingBottom: 12,
-    backgroundColor: 'rgba(0,0,0,0.8)', borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.08)' 
+    backgroundColor: 'rgba(0,0,0,0.8)', borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.08)'
   },
-  headerBackBtn: { 
+  headerBackBtn: {
     width: 44, height: 44, borderRadius: 22,
     backgroundColor: 'rgba(255,255,255,0.08)',
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' 
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)'
   },
   headerTitleBox: { alignItems: 'center' },
   headerLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
@@ -700,47 +699,47 @@ const styles = StyleSheet.create({
   hospitalTopInfoLayer: { paddingHorizontal: 16, marginTop: 8, zIndex: 10 },
   hospitalActionStack: { position: 'absolute', right: 0, top: 62, gap: 8 },
 
-  heroActionRow: { 
+  heroActionRow: {
     flexDirection: 'row', gap: 10, marginTop: 2
   },
-  heroTimeBox: { 
-    flex: 0.8, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, 
+  heroTimeBox: {
+    flex: 0.8, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8,
     paddingVertical: 6, paddingHorizontal: 8, justifyContent: 'center', alignItems: 'center',
     borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.1)'
   },
   heroLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 8, fontWeight: '700', marginBottom: 1 },
   heroTimeVal: { color: '#FFF', fontSize: 18, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  heroArrivalBtn: { 
-    flex: 1.2, backgroundColor: colors.success, borderRadius: 8, 
+  heroArrivalBtn: {
+    flex: 1.2, backgroundColor: colors.success, borderRadius: 8,
     height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center'
   },
   heroArrivalBtnText: { color: '#000', fontSize: 13, fontWeight: '900' },
 
-  commActionRow: { 
-    flexDirection: 'row', gap: 8, marginTop: 8 
+  commActionRow: {
+    flexDirection: 'row', gap: 8, marginTop: 8
   },
-  commBtn: { 
+  commBtn: {
     flex: 1, height: 40, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-    backgroundColor: 'rgba(255,255,255,0.03)', flexDirection: 'row', justifyContent: 'center', 
+    backgroundColor: 'rgba(255,255,255,0.03)', flexDirection: 'row', justifyContent: 'center',
     alignItems: 'center', gap: 6, borderStyle: 'dashed'
   },
   commBtnText: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800' },
 
-  hospitalBottomPanel: { 
-    position: 'absolute', bottom: 0, left: 0, right: 0, 
+  hospitalBottomPanel: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: 'rgba(0,0,0,0.96)',
     paddingHorizontal: 16, paddingTop: 12,
     borderRadius: 0,
     borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-    zIndex: 10 
+    zIndex: 10
   },
   miniMapActions: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
-  sqBtnMini: { 
-    width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(15,15,15,0.9)', 
-    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' 
+  sqBtnMini: {
+    width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(15,15,15,0.9)',
+    justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)'
   },
-  tacticalInfoPill: { 
-    backgroundColor: 'rgba(15,15,15,0.95)', borderRadius: 20, padding: 12, 
+  tacticalInfoPill: {
+    backgroundColor: 'rgba(15,15,15,0.95)', borderRadius: 20, padding: 12,
     borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
     shadowColor: '#000', shadowOpacity: 1, shadowRadius: 20, elevation: 12
   },

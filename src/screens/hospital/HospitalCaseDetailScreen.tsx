@@ -369,9 +369,9 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
     <View style={{ flex: 1, backgroundColor: colors.mainBackground }}>
       <HospitalHeader showBack={true} title="Détails Admission" />
 
-      <ScrollView 
-        style={styles.mainScroll} 
-        showsVerticalScrollIndicator={false} 
+      <ScrollView
+        style={styles.mainScroll}
+        showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 220 }}
       >
 
@@ -588,7 +588,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
 
         {/* FULL-WIDTH INTEGRATED MAP (OUTSIDE CARD) */}
         {showAmbulanceTracking && (
-          <AppTouchableOpacity 
+          <AppTouchableOpacity
             activeOpacity={0.9}
             style={styles.fullWidthMapContainer}
             onPress={() => setMapFullscreenOpen(true)}
