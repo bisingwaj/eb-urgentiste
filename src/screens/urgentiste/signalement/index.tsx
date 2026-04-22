@@ -252,6 +252,7 @@ export default function SignalementScreen(props: any) {
                      urgencyCategory={selectedMission?.type}
                      onOpenFullscreenMap={() => setMapFullscreenOpen(true)}
                      renderStepInlineHeader={renderStepInlineHeader}
+                     onCancelAssignment={logic.handleCancelHospitalAssignment}
                   />
                )}
 

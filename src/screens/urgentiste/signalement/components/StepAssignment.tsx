@@ -27,6 +27,7 @@ interface StepAssignmentProps {
    urgencyCategory?: string;
    onOpenFullscreenMap: () => void;
    renderStepInlineHeader: () => React.ReactNode;
+   onCancelAssignment?: () => void;
 }
 
 export const StepAssignment: React.FC<StepAssignmentProps> = ({
@@ -48,7 +49,8 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
     onSelectHospital,
     urgencyCategory,
     onOpenFullscreenMap,
-    renderStepInlineHeader
+    renderStepInlineHeader,
+    onCancelAssignment
  }) => {
    const [callModalVisible, setCallModalVisible] = useState(false);
 
@@ -250,6 +252,25 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                Nous attendons leur confirmation pour vous transmettre les coordonnées GPS.
             </Text>
             <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 32 }} />
+
+            <AppTouchableOpacity 
+               onPress={onCancelAssignment}
+               style={{ 
+                  marginTop: 48, 
+                  paddingVertical: 12, 
+                  paddingHorizontal: 24, 
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.2)',
+                  backgroundColor: 'rgba(255,59,48,0.1)' 
+               }}
+            >
+               <Text style={{ color: '#FF3B30', fontWeight: '700', fontSize: 15 }}>Annuler la demande</Text>
+            </AppTouchableOpacity>
+            
+            <Text style={{ color: 'rgba(255,255,255,0.3)', marginTop: 12, fontSize: 12 }}>
+               Choisissez un autre établissement si celui-ci tarde à répondre
+            </Text>
          </View>
       );
    } else {

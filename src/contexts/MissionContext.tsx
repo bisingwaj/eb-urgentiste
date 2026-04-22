@@ -165,6 +165,8 @@ interface MissionContextType {
   fetchHospitals: () => Promise<HospitalSuggestion[]>;
   /** Demande d'affectation à une structure par l'urgentiste */
   requestHospitalAssignment: (hospitalId: string, hospital: HospitalSuggestion) => Promise<void>;
+  /** Annule la demande d'affectation en cours */
+  cancelHospitalAssignment: () => Promise<void>;
 }
 
 const MissionContext = createContext<MissionContextType | undefined>(undefined);
@@ -842,6 +844,36 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const cancelHospitalAssignment = async () => {
+    if (!activeMission) return;
+    
+    try {
+      console.log(`[MissionContext] 🚫 Cancelling assignment request for mission: ${activeMission.id}`);
+      
+      const { error } = await supabase
+        .from('dispatches')
+        .update({
+          assigned_structure_id:      null,
+          assigned_structure_name:    null,
+          assigned_structure_lat:     null,
+          assigned_structure_lng:     null,
+          assigned_structure_phone:   null,
+          assigned_structure_address: null,
+          assigned_structure_type:    null,
+          hospital_status:            null,
+          hospital_notes:             null,
+          updated_at:                 new Date().toISOString(),
+        })
+        .eq('id', activeMission.id);
+
+      if (error) throw error;
+      refresh();
+    } catch (err: any) {
+      console.error('[MissionContext] cancelHospitalAssignment error:', err.message);
+      throw err;
+    }
+  };
+
   useEffect(() => {
     const sub = DeviceEventEmitter.addListener(APP_FOREGROUND_SYNC, () => {
       void fetchActiveMission({ silent: true });
@@ -859,7 +891,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       updateMissionDetails,
       appendIncidentTerrainPhoto,
       fetchHospitals,
-      requestHospitalAssignment
+      requestHospitalAssignment,
+      cancelHospitalAssignment
     }}>
       {children}
     </MissionContext.Provider>

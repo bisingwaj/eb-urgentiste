@@ -18,7 +18,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export function useSignalementLogic(navigation: any, route: any) {
    const { activeMission, isLoading: missionLoading, updateDispatchStatus, refresh } = useActiveMission();
-   const { updateMissionDetails, appendIncidentTerrainPhoto, fetchHospitals, requestHospitalAssignment } = useMission();
+   const { updateMissionDetails, appendIncidentTerrainPhoto, fetchHospitals, requestHospitalAssignment, cancelHospitalAssignment } = useMission();
    const initialMission = route?.params?.mission || activeMission;
 
    const getInitialStep = (): MissionStep => {
@@ -544,6 +544,15 @@ export function useSignalementLogic(navigation: any, route: any) {
       }
    };
 
+   const handleCancelHospitalAssignment = async () => {
+      try {
+         await cancelHospitalAssignment();
+         addTimelineEvent("Demande d'affectation annulée par l'unite", "cancel");
+      } catch (err) {
+         Alert.alert("Erreur", "Impossible d'annuler la demande.");
+      }
+   };
+
    const handleArrivedAtHospital = async () => {
       try {
          await updateDispatchStatus('arrived_hospital');
@@ -722,7 +731,7 @@ export function useSignalementLogic(navigation: any, route: any) {
       isRecalculating, handleRecalculateHospitals,
       handleStartMission, handleArrivalOnScene, handleConfirmAssessment, handleToggleCare, handleConfirmAid,
       handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure, handleCompleteMission,
-      handleSelectHospital, fetchNearbyHospitals,
+      handleSelectHospital, fetchNearbyHospitals, handleCancelHospitalAssignment,
       pickAndUploadTerrainPhoto, runVictimVoip, runVictimPstn,
       pan, panResponder,
       transitionTo,
