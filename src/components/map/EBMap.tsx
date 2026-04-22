@@ -106,6 +106,24 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
     pitch: 0,
   });
 
+  // Sync camera when config props change
+  useEffect(() => {
+    if (cameraConfig?.bounds) {
+      cameraRef.current?.setCamera({
+        bounds: cameraConfig.bounds,
+        animationDuration: 1000,
+        animationMode: 'flyTo',
+      });
+    } else if (cameraConfig?.center) {
+      cameraRef.current?.setCamera({
+        centerCoordinate: cameraConfig.center,
+        zoomLevel: cameraConfig.zoom || cameraState.zoom,
+        animationDuration: 1000,
+        animationMode: 'flyTo',
+      });
+    }
+  }, [cameraConfig?.center, cameraConfig?.zoom, cameraConfig?.bounds]);
+
   const handleRecenter = useCallback(() => {
     setIsFollowingPosition(true);
     setIsFollowingHeading(true);

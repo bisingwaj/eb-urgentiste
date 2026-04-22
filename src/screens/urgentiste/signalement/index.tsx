@@ -68,16 +68,16 @@ export default function SignalementScreen(props: any) {
             <View style={styles.stepInlineTextCol}>
                <Text style={styles.stepInlineTitle}>{getStepTitle()}</Text>
                <Text style={styles.stepInlineSub}>
-                  {selectedMission?.victim_name || "Patient inconnu"}
+                  {selectedMission.caller?.name || "Patient inconnu"}
                </Text>
             </View>
             {step !== "standby" && step !== "closure" && (
-            <AppTouchableOpacity
-               onPress={() => setToolsMenuVisible(true)}
-               style={[styles.stepInlineBack, { backgroundColor: 'transparent', borderColor: 'transparent' }]}
-            >
-               <MaterialIcons name="more-vert" color="#FFF" size={28} />
-            </AppTouchableOpacity>
+               <AppTouchableOpacity
+                  onPress={() => setToolsMenuVisible(true)}
+                  style={[styles.stepInlineBack, { backgroundColor: 'transparent', borderColor: 'transparent' }]}
+               >
+                  <MaterialIcons name="more-vert" color="#FFF" size={28} />
+               </AppTouchableOpacity>
             )}
          </View>
       );
@@ -104,7 +104,7 @@ export default function SignalementScreen(props: any) {
 
       // Map to the unified EBMapMarker format
       const markers: EBMapMarker[] = [];
-      
+
       // Destination marker
       markers.push({
          id: 'fs-dest',
@@ -191,6 +191,7 @@ export default function SignalementScreen(props: any) {
                      assessment={assessment}
                      setAssessment={setAssessment}
                      assessmentSchema={logic.assessmentSchema}
+                     setManualSchemaType={logic.setManualSchemaType}
                      renderStepInlineHeader={renderStepInlineHeader}
                      onConfirmAssessment={handleConfirmAssessment}
                   />

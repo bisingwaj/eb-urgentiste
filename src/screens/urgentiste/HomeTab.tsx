@@ -146,8 +146,11 @@ export function HomeTab({ navigation }: any) {
   useEffect(() => {
     if (!activeMission || activeMission.dispatch_status === 'completed') {
       setIsModalMinimized(false);
-    } else if (activeMission.dispatch_status !== 'dispatched') {
-      // If mission is already accepted (en_route, on_scene, etc.), minimize the popup by default
+    } else if (activeMission.dispatch_status === 'dispatched') {
+      // NEW MISSION: Always show the popup
+      setIsModalMinimized(false);
+    } else {
+      // ALREADY ACCEPTED: Minimize by default to not block the map/navigation
       setIsModalMinimized(true);
     }
   }, [activeMission?.id, activeMission?.dispatch_status]);
@@ -260,7 +263,7 @@ export function HomeTab({ navigation }: any) {
         confirmProgress.setValue(0);
         setIsModalMinimized(true);
         // Stop any active alarm sound as the user has interacted
-        DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+        DeviceEventEmitter.emit('STOP_URGENTIST_ALARM');
         // CRITICAL: Mark mission as in-progress in Supabase
         void updateDispatchStatus('en_route');
         navigation.navigate('MissionActive', { mission: activeMission });
@@ -615,7 +618,7 @@ export function HomeTab({ navigation }: any) {
                     }
                   } else {
                     // STOP THE ALARM ONLY WHEN THE USER CLICKS TO SEE THE ALERT
-                    DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+                    DeviceEventEmitter.emit('STOP_URGENTIST_ALARM');
                     setIsModalMinimized(false);
                   }
                 }}

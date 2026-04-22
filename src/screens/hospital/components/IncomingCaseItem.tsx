@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform, ActivityIndicator } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { AppTouchableOpacity } from '../../../components/ui/AppTouchableOpacity';
 import { colors } from '../../../theme/colors';
@@ -14,6 +14,7 @@ interface IncomingCaseItemProps {
   onRefuse: (id: string) => void;
   onPress: (id: string) => void;
   displayTime?: string;
+  isAccepting?: boolean;
 }
 
 export const IncomingCaseItem: React.FC<IncomingCaseItemProps> = ({
@@ -22,6 +23,7 @@ export const IncomingCaseItem: React.FC<IncomingCaseItemProps> = ({
   onRefuse,
   onPress,
   displayTime,
+  isAccepting = false,
 }) => {
   const lCfg = getLevelConfig(caseItem.level);
 
@@ -89,10 +91,15 @@ export const IncomingCaseItem: React.FC<IncomingCaseItemProps> = ({
               <Text style={styles.refuseBtnText}>REFUSER</Text>
             </AppTouchableOpacity>
             <AppTouchableOpacity
-              style={styles.acceptBtn}
+              style={[styles.acceptBtn, isAccepting && { opacity: 0.7 }]}
               onPress={handleAccept}
+              disabled={isAccepting}
             >
-              <Text style={styles.acceptBtnText}>ACCEPTER</Text>
+               {isAccepting ? (
+                  <ActivityIndicator size="small" color="#000" />
+               ) : (
+                  <Text style={styles.acceptBtnText}>ACCEPTER</Text>
+               )}
             </AppTouchableOpacity>
           </View>
         </View>
@@ -106,7 +113,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1A1A1A',
     marginHorizontal: 16,
     marginBottom: 12,
-    borderRadius: 20,
+    borderRadius: 12,
     flexDirection: 'row',
     overflow: 'hidden',
     borderWidth: 1,
@@ -171,12 +178,12 @@ const styles = StyleSheet.create({
   },
   actionRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 4,
   },
   refuseBtn: {
     paddingHorizontal: 12,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "rgba(255, 82, 82, 0.2)",
     justifyContent: "center",
@@ -191,7 +198,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.secondary,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 12,
+    borderRadius: 8,
     justifyContent: "center",
     alignItems: "center",
     minWidth: 80,

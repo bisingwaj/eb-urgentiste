@@ -11,7 +11,7 @@ import { useMapPuckHeading } from "../../../hooks/useMapPuckHeading";
 import { alertVoipError, startRescuerToCitizenVoipCall } from "../../../lib/rescuerCallCitizen";
 import { formatMissionAddress, formatIncidentType } from "../../../utils/missionAddress";
 import { MissionStep, TimelineEvent, AlertData, STEP_ORDER, AssessmentSchema } from "./types";
-import { getAssessmentSchema } from "./constants/assessmentSchemas";
+import { getAssessmentSchema, ASSESSMENT_SCHEMAS } from "./constants/assessmentSchemas";
 import { HospitalSuggestion } from "../../../types/mission";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -100,6 +100,16 @@ export function useSignalementLogic(navigation: any, route: any) {
             resetStates();
             // Re-fill assessment if provided by backend
             setAssessment(activeMission.medical_assessment || { conscious: null, breathing: null, severity: null });
+         } else {
+            // ID is same, but check if status moved beyond current step
+            const status = activeMission.dispatch_status;
+            const isCompleted = status === 'mission_end' || status === 'completed';
+            const isAtHospital = status === 'arrived_hospital';
+            
+            if ((isCompleted || isAtHospital) && step !== 'closure') {
+               console.log("[Signalement] Mission advanced to final stages. Jumping to closure.");
+               setStep('closure');
+            }
          }
       } else if (prevMissionIdRef.current !== null) {
          // Mission disappeared (completed or cancelled)
@@ -107,7 +117,7 @@ export function useSignalementLogic(navigation: any, route: any) {
          prevMissionIdRef.current = null;
          resetStates();
       }
-   }, [activeMission?.id, getInitialStep, resetStates]);
+   }, [activeMission?.id, activeMission?.dispatch_status, resetStates, step]);
 
    useEffect(() => {
       if (activeMission?.type || initialMission?.type) {
@@ -115,10 +125,27 @@ export function useSignalementLogic(navigation: any, route: any) {
       }
    }, [activeMission?.type, initialMission?.type]);
 
+   const setManualSchemaType = useCallback((type: string) => {
+      const newSchema = ASSESSMENT_SCHEMAS[type];
+      if (newSchema) {
+         setAssessmentSchema(newSchema);
+         // Important: Clear data that might not be relevant to the new schema
+         // setAssessment({ conscious: null, breathing: null, severity: "Stable" }); 
+      }
+   }, []);
+
    // Core Mission States
    const [assessment, setAssessment] = useState<any>(() => {
       // Try to pre-fill from mission data if available
-      return activeMission?.medical_assessment || { conscious: null, breathing: null, severity: null };
+      const initialType = activeMission?.type || initialMission?.type;
+      const detectedSchema = getAssessmentSchema(initialType);
+      
+      return activeMission?.medical_assessment || { 
+         conscious: null, 
+         breathing: null, 
+         severity: null,
+         nature: detectedSchema.incident_type 
+      };
    });
    const [careChecklist, setCareChecklist] = useState<string[]>([]);
    const [decision, setDecision] = useState<string | null>(null);
@@ -783,6 +810,7 @@ export function useSignalementLogic(navigation: any, route: any) {
       pan, panResponder,
       transitionTo,
       assessmentSchema,
+      setManualSchemaType,
       formatTime: (s: number) => {
          const h = Math.floor(s / 3600);
          const m = Math.floor((s % 3600) / 60);

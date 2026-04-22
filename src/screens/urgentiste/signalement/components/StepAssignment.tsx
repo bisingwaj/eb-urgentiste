@@ -58,8 +58,8 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
    const isRefused = pendingStructureInfo?.refused;
    const isPending = !!pendingStructureInfo && !targetHospital;
    
-   // If no hospital is assigned OR if the current one refused, we show the list
-   const showHospitalList = !currentHospital || isRefused;
+   // We show the list unless a request is explicitly pending
+   const showHospitalList = !isPending || isRefused;
 
    const handleCall = (mode: 'pstn' | 'voip') => {
       setCallModalVisible(false);
@@ -156,83 +156,62 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                </View>
 
                {nearbyHospitals.map((h) => {
-                  const bedsInfo = (() => {
-                     const beds = h.availableBeds ?? 0;
-                     if (beds > 5) return { color: '#30D158', text: `${beds} lits` };
-                     if (beds > 0) return { color: '#FF9F0A', text: `${beds} lits` };
-                     return { color: '#FF3B30', text: 'PLEIN' };
-                  })();
-
                   const isRecommended = h.rank === 1;
-                  const isCentralePick = h.isSelected; // spec §2: isSelected = confirmed by operator
+                  const isCentralePick = h.isSelected;
 
                   return (
-                     <AppTouchableOpacity 
+                     <View 
                         key={h.id} 
-                        style={[styles.hospitalCard, isCentralePick && { borderColor: 'rgba(175, 82, 222, 0.4)', borderWidth: 1.5 }]}
-                        onPress={() => onSelectHospital(h)}
+                        style={[
+                           styles.hospitalCard, 
+                           isRecommended && styles.hospitalCardRecommended,
+                           isCentralePick && styles.hospitalCardActive, 
+                           { paddingVertical: 12 }
+                        ]}
                      >
-                        <View style={{ flex: 1 }}>
-                           <View style={styles.hospitalCardHeader}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-                                 <Text style={styles.hospitalCardName}>{h.name}</Text>
-                                 <View style={styles.hospitalTypeBadge}>
-                                    <Text style={styles.hospitalTypeText}>{h.type || 'Hopital'}</Text>
+                        <View style={styles.hospitalCardInfo}>
+                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={[styles.hospitalCardName, { marginBottom: 0 }]} numberOfLines={1}>
+                                 {h.name}
+                              </Text>
+                              {isCentralePick && (
+                                 <View style={[styles.hospitalTypeBadge, styles.badgeCentrale, { marginLeft: 0 }]}>
+                                    <Text style={styles.badgeTextCentrale}>CENTRALE</Text>
                                  </View>
-                                 
-                                 {isCentralePick && (
-                                    <View style={[styles.hospitalTypeBadge, styles.badgeCentrale]}>
-                                       <Text style={styles.badgeTextCentrale}>CHOISIE PAR CENTRALE</Text>
-                                    </View>
-                                 )}
-                                 {isRecommended && !isCentralePick && (
-                                    <View style={[styles.hospitalTypeBadge, styles.badgeRecommended]}>
-                                       <Text style={styles.badgeTextRecommended}>RECOMMANDÉE</Text>
-                                    </View>
-                                 )}
-                              </View>
-                              <View style={[styles.bedIndicator, { backgroundColor: bedsInfo.color + '15' }]}>
-                                 <MaterialIcons name="airline-seat-flat" size={12} color={bedsInfo.color} />
-                                 <Text style={[styles.bedIndicatorText, { color: bedsInfo.color }]}>{bedsInfo.text}</Text>
-                              </View>
+                              )}
+                              {isRecommended && !isCentralePick && (
+                                 <View style={[styles.hospitalTypeBadge, styles.badgeRecommended, { marginLeft: 0 }]}>
+                                    <Text style={styles.badgeTextRecommended}>PROCHE</Text>
+                                 </View>
+                              )}
                            </View>
-
-                           <View style={styles.hospitalCardStats}>
-                              <View style={styles.hospitalStatItem}>
-                                 <Navigation size={12} color="rgba(255,255,255,0.4)" />
-                                 <Text style={styles.hospitalStatText}>{h.distanceKm} km</Text>
-                              </View>
-                              <View style={styles.hospitalStatItem}>
-                                 <MaterialIcons name="access-time" size={14} color="rgba(255,255,255,0.4)" />
-                                 <Text style={styles.hospitalStatText}>{h.etaMin} min</Text>
-                              </View>
-                              <View style={styles.hospitalStatItem}>
-                                 <MaterialIcons name="score" size={12} color="rgba(255,255,255,0.2)" />
-                                 <Text style={[styles.hospitalStatText, { color: 'rgba(255,255,255,0.2)' }]}>{h.score}</Text>
-                              </View>
-                           </View>
-
-                           {h.specialties && h.specialties.length > 0 && (
-                              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.specialtyScroll}>
-                                 {h.specialties.map((s, idx) => {
-                                    const normS = (s || "").toLowerCase().trim();
-                                    const normCat = (urgencyCategory || "").toLowerCase().trim();
-                                    const isMatch = normS === normCat || normS === 'general' || normS.includes(normCat) || normCat.includes(normS);
-                                    
-                                    return (
-                                       <View key={idx} style={[styles.specialtyChip, isMatch && styles.specialtyChipActive]}>
-                                          <Text style={[styles.specialtyText, isMatch && styles.specialtyTextActive]}>{s}</Text>
-                                       </View>
-                                    );
-                                 })}
-                              </ScrollView>
+                           
+                           {h.address && (
+                              <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 1 }} numberOfLines={1}>
+                                 {h.address}
+                              </Text>
                            )}
+
+                           <View style={[styles.hospitalCardStats, { marginTop: 6 }]}>
+                              <View style={styles.hospitalStatItem}>
+                                 <Navigation size={12} color={colors.secondary} />
+                                 <Text style={[styles.hospitalStatText, { color: '#FFF' }]}>{h.distanceKm} km</Text>
+                              </View>
+                              <View style={{ width: 1, height: 10, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 4 }} />
+                              <View style={styles.hospitalStatItem}>
+                                 <MaterialIcons name="access-time" size={14} color={colors.secondary} />
+                                 <Text style={[styles.hospitalStatText, { color: '#FFF' }]}>{h.etaMin} min</Text>
+                              </View>
+                           </View>
                         </View>
                         
-                        <View style={styles.selectHospBtn}>
-                           <MaterialIcons name="chevron-right" size={24} color="#FFF" />
-                        </View>
-                     </AppTouchableOpacity>
+                        <AppTouchableOpacity 
+                           style={[styles.selectHospBtn, { paddingVertical: 10, paddingHorizontal: 14 }]}
+                           onPress={() => onSelectHospital(h)}
+                        >
+                           <Text style={[styles.selectHospBtnText, { fontSize: 13 }]}>DEMANDER</Text>
+                        </AppTouchableOpacity>
+                     </View>
                   );
                })}
             </ScrollView>
@@ -273,103 +252,7 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
             </Text>
          </View>
       );
-   } else if (targetHospital) {
-      content = (
-         <View style={{ flex: 1, paddingVertical: 10 }}>
-            <View style={{ 
-               backgroundColor: 'rgba(48,209,88,0.1)', 
-               padding: 20, 
-               borderRadius: 20, 
-               borderWidth: 1, 
-               borderColor: 'rgba(48,209,88,0.2)',
-               alignItems: 'center',
-               marginBottom: 24
-            }}>
-               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: 'rgba(48,209,88,0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 16 }}>
-                  <MaterialIcons name="check-circle" size={40} color="#30D158" />
-               </View>
-               <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900', textAlign: 'center' }}>Hôpital Confirmé</Text>
-               <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 14, textAlign: 'center', marginTop: 4 }}>
-                  La structure a accepté votre demande de prise en charge.
-               </Text>
-            </View>
 
-            <View style={[styles.hospitalCard, { borderColor: '#30D158', borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.03)' }]}>
-               <View style={styles.hospitalCardHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                     <HospitalIcon size={20} color="#30D158" />
-                     <Text style={styles.hospitalCardName}>{targetHospital.name}</Text>
-                  </View>
-                  <View style={[styles.hospitalTypeBadge, { backgroundColor: 'rgba(255,255,255,0.1)' }]}>
-                     <Text style={styles.hospitalTypeText}>{targetHospital.specialty || 'Hôpital'}</Text>
-                  </View>
-               </View>
-
-               <View style={[styles.hospitalCardStats, { marginTop: 12 }]}>
-                  <View style={styles.hospitalStatItem}>
-                     <Navigation size={14} color="rgba(255,255,255,0.4)" />
-                     <Text style={styles.hospitalStatText}>{hospitalRouteDistance ? (hospitalRouteDistance / 1000).toFixed(1) : '--'} km</Text>
-                  </View>
-                  <View style={styles.hospitalStatItem}>
-                     <MaterialIcons name="access-time" size={16} color="rgba(255,255,255,0.4)" />
-                     <Text style={styles.hospitalStatText}>{hospitalRouteDuration ? Math.ceil(hospitalRouteDuration / 60) : '--'} min</Text>
-                  </View>
-               </View>
-
-               {targetHospital.address && (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 6 }}>
-                     <MaterialIcons name="place" size={14} color="rgba(255,255,255,0.3)" />
-                     <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 12, flex: 1 }} numberOfLines={1}>
-                        {targetHospital.address}
-                     </Text>
-                  </View>
-               )}
-            </View>
-
-            <View style={{ marginTop: 'auto', gap: 12 }}>
-               <AppTouchableOpacity 
-                  onPress={onDepartVersStructure}
-                  disabled={departingEnRoute}
-                  style={{ 
-                     backgroundColor: '#30D158', 
-                     paddingVertical: 18, 
-                     borderRadius: 16, 
-                     flexDirection: 'row', 
-                     justifyContent: 'center', 
-                     alignItems: 'center',
-                     shadowColor: '#30D158',
-                     shadowOffset: { width: 0, height: 4 },
-                     shadowOpacity: 0.3,
-                     shadowRadius: 8,
-                     elevation: 5
-                  }}
-               >
-                  {departingEnRoute ? (
-                     <ActivityIndicator size="small" color="#FFF" />
-                  ) : (
-                     <>
-                        <Navigation size={20} color="#FFF" style={{ marginRight: 10 }} />
-                        <Text style={{ color: '#FFF', fontSize: 18, fontWeight: '900' }}>DÉMARRER L'ITINÉRAIRE</Text>
-                     </>
-                  )}
-               </AppTouchableOpacity>
-
-               <AppTouchableOpacity 
-                  onPress={onCancelAssignment}
-                  style={{ 
-                     paddingVertical: 14, 
-                     borderRadius: 16, 
-                     borderWidth: 1,
-                     borderColor: 'rgba(255,255,255,0.1)',
-                     justifyContent: 'center', 
-                     alignItems: 'center'
-                  }}
-               >
-                  <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 14, fontWeight: '600' }}>Changer de structure</Text>
-               </AppTouchableOpacity>
-            </View>
-         </View>
-      );
    } else {
       content = (
          <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingBottom: 100 }}>

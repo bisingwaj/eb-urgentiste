@@ -1,9 +1,9 @@
-import { AssessmentSchema } from "../types";
+import { AssessmentSchema, AssessmentStep } from "../types";
 import { colors } from "../../../../theme/colors";
 
 export const ASSESSMENT_SCHEMAS: Record<string, AssessmentSchema> = {
-   default: {
-      incident_type: "default",
+   medical: {
+      incident_type: "medical",
       version: "1.0.0",
       steps: [
          {
@@ -155,13 +155,19 @@ export const ASSESSMENT_SCHEMAS: Record<string, AssessmentSchema> = {
  * Helper to select the best schema based on incident type string.
  */
 export function getAssessmentSchema(type?: string): AssessmentSchema {
-   if (!type) return ASSESSMENT_SCHEMAS.default;
+   if (!type) return ASSESSMENT_SCHEMAS.medical;
    const key = type.toLowerCase();
+   
    if (ASSESSMENT_SCHEMAS[key]) return ASSESSMENT_SCHEMAS[key];
 
-   // Handle common mappings
-   if (key.includes("trauma") || key.includes("accident")) return ASSESSMENT_SCHEMAS.trauma;
-   if (key.includes("pedia") || key.includes("enfant")) return ASSESSMENT_SCHEMAS.pediatrie;
+   // Handle common mappings with priority
+   if (key.includes("trauma") || key.includes("accident") || key.includes("chute") || key.includes("fracture") || key.includes("plaie")) {
+      return ASSESSMENT_SCHEMAS.trauma;
+   }
+   
+   if (key.includes("pedia") || key.includes("enfant") || key.includes("bébé") || key.includes("accouch")) {
+      return ASSESSMENT_SCHEMAS.pediatrie;
+   }
 
-   return ASSESSMENT_SCHEMAS.default;
+   return ASSESSMENT_SCHEMAS.medical;
 }

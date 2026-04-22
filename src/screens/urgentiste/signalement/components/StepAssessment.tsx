@@ -10,6 +10,7 @@ interface StepAssessmentProps {
    assessment: any;
    setAssessment: (a: any) => void;
    assessmentSchema: AssessmentSchema;
+   setManualSchemaType: (type: string) => void;
    renderStepInlineHeader: () => React.ReactNode;
    onConfirmAssessment: () => void;
 }
@@ -18,6 +19,7 @@ export const StepAssessment: React.FC<StepAssessmentProps> = ({
    assessment,
    setAssessment,
    assessmentSchema,
+   setManualSchemaType,
    renderStepInlineHeader,
    onConfirmAssessment
 }) => {
@@ -30,6 +32,7 @@ export const StepAssessment: React.FC<StepAssessmentProps> = ({
             assessment={assessment}
             setAssessment={setAssessment}
             onConfirmAssessment={onConfirmAssessment}
+            onSchemaChange={setManualSchemaType}
          />
       </View>
    );

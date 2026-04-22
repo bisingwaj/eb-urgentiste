@@ -248,10 +248,17 @@ export default function App() {
                 <View
                   style={{ flex: 1 }}
                   onTouchStart={() => {
-                    // Silencer n'importe quelle alarme en cours sur interaction locale
+                    // Silencer l'alarme sur interaction, mais avec un délai de sécurité
+                    // pour éviter que l'affichage du popup ne déclenche un arrêt immédiat.
                     if (AlarmService.isPlaying()) {
-                      console.log('[App] 🔇 Interaction detected — silencing alarms');
-                      DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+                      const startTime = AlarmService.getStartTime();
+                      const now = Date.now();
+                      if (now - startTime > 800) { 
+                        console.log('[App] 🔇 User interaction detected — silencing alarms');
+                        DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+                      } else {
+                        console.log('[App] 🛡️ Ignoring early touch interaction to prevent alarm flash');
+                      }
                     }
                   }}
                 >

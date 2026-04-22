@@ -50,8 +50,8 @@ export function MissionActiveScreen({ navigation }: any) {
   const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    // Dès qu'on arrive sur le suivi de mission, on stoppe l'alarme
-    DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+    // Dès qu'on arrive sur le suivi de mission, on stoppe l'alarme via l'événement spécifique
+    DeviceEventEmitter.emit('STOP_URGENTIST_ALARM');
   }, []);
   const { activeMission, updateDispatchStatus } = useActiveMission();
   const { minimized: activeCall } = useCallSession();
@@ -203,12 +203,12 @@ export function MissionActiveScreen({ navigation }: any) {
 
       if (next === 'on_scene' || next === 'arrived_hospital') {
         const targetStatus = next;
-        // Step 1: Force Mapbox to unmount by setting transitioning state
+        const targetStep = next === 'arrived_hospital' ? 'closure' : 'assessment';
+        
         setIsTransitioning(true);
-        // Step 3: Navigate - pass the updated status and force the 'assessment' step
         navigation.replace('Signalement', {
           mission: { ...activeMission, dispatch_status: targetStatus },
-          forcedStep: 'assessment'
+          forcedStep: targetStep
         });
       }
     } catch (err) {
@@ -260,6 +260,22 @@ export function MissionActiveScreen({ navigation }: any) {
     };
   }, [routeGeoJSON, routeDuration, routeDistance]);
 
+  const cameraBounds = useMemo(() => {
+    if (!myLocation || !missionCoords) return undefined;
+    const uLat = myLocation.coords.latitude;
+    const uLng = myLocation.coords.longitude;
+    const [pLng, pLat] = missionCoords;
+    const padding = 100;
+    return {
+      ne: [Math.max(pLng, uLng), Math.max(pLat, uLat)] as [number, number],
+      sw: [Math.min(pLng, uLng), Math.min(pLat, uLat)] as [number, number],
+      paddingTop: padding + 150, // More space for top overlays
+      paddingBottom: padding + 100, // Space for bottom panel
+      paddingLeft: padding,
+      paddingRight: padding,
+    };
+  }, [myLocation, missionCoords, insets]);
+
   if (!activeMission) return null;
 
   return (
@@ -276,8 +292,7 @@ export function MissionActiveScreen({ navigation }: any) {
             myLocation={myLocation ? [myLocation.coords.longitude, myLocation.coords.latitude] : undefined}
             myHeading={myHeadingDeg}
             cameraConfig={{
-              zoom: zoomLevel,
-              center: missionCoords || undefined,
+              bounds: cameraBounds,
             }}
             showControls={true}
             style={styles.map}
@@ -389,19 +404,21 @@ export function MissionActiveScreen({ navigation }: any) {
         </View>
       ) : (
         <>
-          <View style={[styles.topControls, { paddingTop: insets.top + 10 }]}>
-            <View style={styles.glassStepBar}>
-              {STATUS_STEPS.map((step, idx) => (
-                <View key={step.key} style={styles.stepCell}>
-                  <View style={[styles.stepIcon, idx <= currentStepIndex ? { backgroundColor: colors.secondary } : { backgroundColor: '#333' }]}>
-                    <MaterialIcons name={step.icon} size={13} color="#FFF" />
-                  </View>
-                  <Text style={[styles.stepLabel, idx <= currentStepIndex && { color: '#FFF', opacity: 1 }]} numberOfLines={1}>
-                    {step.label}
-                  </Text>
-                  {idx < STATUS_STEPS.length - 1 && <View style={[styles.stepLink, idx < currentStepIndex && { backgroundColor: colors.secondary }]} />}
-                </View>
-              ))}
+          <View style={styles.topControls}>
+            {/* UNIFORM HEADER */}
+            <View style={[styles.stepInlineHeader, { paddingTop: insets.top + 16, paddingBottom: 20 }]}>
+              <AppTouchableOpacity
+                onPress={() => navigation.goBack()}
+                style={styles.stepInlineBack}
+              >
+                <MaterialIcons name="arrow-back" color="#FFF" size={24} />
+              </AppTouchableOpacity>
+              <View style={styles.stepInlineTextCol}>
+                <Text style={styles.stepInlineTitle}>Navigation</Text>
+                <Text style={styles.stepInlineSub}>
+                  {activeMission.caller?.name || "Patient inconnu"}
+                </Text>
+              </View>
             </View>
 
             {/* ONE ROW INFO PILL: Address | Time | Distance */}
@@ -432,16 +449,6 @@ export function MissionActiveScreen({ navigation }: any) {
                 </View>
               </View>
             </AppTouchableOpacity>
-
-            {/* ACTION BUTTONS: X above 2D/3D - ALIGNED RIGHT */}
-            <View style={styles.actionStack}>
-              <AppTouchableOpacity style={styles.sqBtn} onPress={() => navigation.goBack()}>
-                <MaterialIcons name="close" size={22} color="#FFF" />
-              </AppTouchableOpacity>
-              <AppTouchableOpacity style={[styles.sqBtn, mapMode === '3D' && { backgroundColor: colors.secondary }]} onPress={toggleMapMode}>
-                <MaterialIcons name={mapMode === '3D' ? 'view-in-ar' : 'map'} size={22} color="#FFF" />
-              </AppTouchableOpacity>
-            </View>
           </View>
 
           {/* BOTTOM ACTION PANEL */}
@@ -587,9 +594,45 @@ export function MissionActiveScreen({ navigation }: any) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   map: { flex: 1 },
-  topControls: { position: 'absolute', top: 0, left: 16, right: 16, zIndex: 10 },
+  topControls: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+  stepInlineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 16,
+    paddingHorizontal: 16,
+    gap: 12,
+    backgroundColor: 'rgba(10, 10, 10, 0.95)',
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  stepInlineBack: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  stepInlineTextCol: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingTop: 4,
+  },
+  stepInlineTitle: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  stepInlineSub: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 1,
+  },
 
-  // Step Bar
+  // ONE ROW INFO PILL
   glassStepBar: {
     flexDirection: 'row', backgroundColor: 'rgba(20,20,20,0.85)',
     paddingVertical: 12, paddingHorizontal: 8, borderRadius: 18, marginBottom: 16,
@@ -603,7 +646,9 @@ const styles = StyleSheet.create({
 
   // ONE ROW INFO PILL
   unifiedPill: {
-    width: '100%', backgroundColor: 'rgba(15,15,15,0.95)',
+    marginHorizontal: 16,
+    marginTop: 8,
+    backgroundColor: 'rgba(15,15,15,0.95)',
     borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
     shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 15, elevation: 8,
     minHeight: 52, justifyContent: 'center'
@@ -618,7 +663,7 @@ const styles = StyleSheet.create({
   pillSep: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.2)', marginHorizontal: 12 },
 
   // Vertical Button Stack
-  actionStack: { alignItems: 'flex-end', gap: 10, marginTop: 12 },
+  actionStack: { alignItems: 'flex-end', gap: 10, marginTop: 12, marginRight: 16 },
   sqBtn: {
     width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(30,30,30,0.95)',
     justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
@@ -638,7 +683,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15
   },
   bigBtnText: { fontWeight: '900', fontSize: 13 },
-  callRow: { flexDirection: 'row', gap: 10 },
+  callRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
   callBtn: {
     flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: '#333',
     flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8

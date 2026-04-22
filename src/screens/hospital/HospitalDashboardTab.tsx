@@ -236,6 +236,7 @@ export function HospitalDashboardTab({ navigation }: any) {
   const { profile, refreshProfile } = useAuth();
   const { activeCases, isLoading, listBlocker, lastFetchError, refresh, updateCaseStatus } = useHospital();
   const [refreshing, setRefreshing] = useState(false);
+  const [acceptingId, setAcceptingId] = useState<string | null>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -319,11 +320,13 @@ export function HospitalDashboardTab({ navigation }: any) {
   }), [requestCases.length, enRouteCases.length, admissionCases.length]);
 
   const handleQuickAccept = async (caseId: string) => {
+    setAcceptingId(caseId);
     try {
       await updateCaseStatus(caseId, { hospitalStatus: 'accepted' });
-      // On ne navigue plus vers le détail pour rester sur le dashboard (stay on dashboard)
     } catch (err) {
       console.error("[Dashboard] Error accepting case:", err);
+    } finally {
+      setAcceptingId(null);
     }
   };
 
@@ -401,6 +404,7 @@ export function HospitalDashboardTab({ navigation }: any) {
                     onRefuse={handleQuickRefuse}
                     onPress={() => navigation.navigate("HospitalCaseDetail", { caseData: caseItem })}
                     displayTime={formatCaseTime(caseItem.dispatchCreatedAt)}
+                    isAccepting={acceptingId === caseItem.id}
                   />
                 ))
               ) : (

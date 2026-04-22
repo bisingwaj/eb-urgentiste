@@ -26,7 +26,7 @@ export function AlertAlarmManager() {
   // ── Écouter l'événement 'NEW_MISSION_ALERT' émis par MissionContext ──
   useEffect(() => {
     const subscription = DeviceEventEmitter.addListener('NEW_MISSION_ALERT', () => {
-      console.log('[AlertAlarmManager] 🚨 NEW_MISSION_ALERT — alarm + notification');
+      console.log('[AlertAlarmManager] 🚨 NEW_MISSION_ALERT received');
       AlarmService.startAlarm();
       NotificationService.sendMissionAlert({
         title: '🚨 NOUVELLE MISSION URGENTE',
@@ -35,9 +35,11 @@ export function AlertAlarmManager() {
       });
     });
 
-    const stopSub = DeviceEventEmitter.addListener(ALARM_STOP_EVENT, () => {
+    // On garde un moyen d'arrêter l'alarme manuellement via le bouton "Accepter" ou "Voir"
+    // mais on utilise un événement dédié pour ne pas interférer avec le toucher global de App.tsx
+    const stopSub = DeviceEventEmitter.addListener('STOP_URGENTIST_ALARM', () => {
       if (AlarmService.isPlaying()) {
-        console.log('[AlertAlarmManager] 🛑 STOP_ALARM_EVENT received — stopping alarm');
+        console.log('[AlertAlarmManager] 🔇 Manual stop requested');
         AlarmService.stopAlarm();
         NotificationService.dismissAll();
       }
@@ -49,25 +51,20 @@ export function AlertAlarmManager() {
     };
   }, []);
 
-  // ── Stopper l'alarme si la mission change ──
+  // ── Arrêt automatique basé sur le changement de statut de la mission ──
   useEffect(() => {
     const currentId = activeMission?.id ?? null;
-    const prevId = prevMissionRef.current;
-
-    // On ne stoppe l'alarme que si la mission est supprimée (currentId === null)
-    // ou si on a explicitement changé de mission.
-    // On ne stoppe plus l'alarme juste parce que le statut n'est plus 'dispatched',
-    // car le passage à 'en_route' peut être automatique ou rapide.
-    if (
-      (!activeMission && AlarmService.isPlaying()) ||
-      (currentId !== prevId && prevId !== null && AlarmService.isPlaying())
-    ) {
-      console.log('[AlertAlarmManager] 🔇 Mission cleared or changed — stopping alarm');
-      AlarmService.stopAlarm();
-      NotificationService.dismissAll();
+    const currentStatus = activeMission?.dispatch_status ?? null;
+    
+    // Si la mission n'est plus en attente (dispatched) ou si elle a disparu, on coupe
+    // Cela permet d'arrêter la sonnerie dès que l'urgentiste clique sur "Accepter" (statut -> en_route)
+    if (AlarmService.isPlaying()) {
+      if (!activeMission || currentStatus !== 'dispatched') {
+        console.log('[AlertAlarmManager] 📉 Mission accepted or cleared — stopping alarm');
+        AlarmService.stopAlarm();
+        NotificationService.dismissAll();
+      }
     }
-
-    prevMissionRef.current = currentId;
   }, [activeMission?.id, activeMission?.dispatch_status]);
 
   return null;

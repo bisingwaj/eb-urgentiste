@@ -15,6 +15,7 @@ class AlarmServiceClass {
   private isAlarmPlaying = false;
   private vibrationInterval: ReturnType<typeof setInterval> | null = null;
   private autoStopTimeout: ReturnType<typeof setTimeout> | null = null;
+  private startTime = 0;
   private readonly AUTO_STOP_MS = 10 * 60 * 1000; // 10 minutes
 
   /**
@@ -48,6 +49,7 @@ class AlarmServiceClass {
 
     console.log('[AlarmService] 🚨 Starting alarm...');
     this.isAlarmPlaying = true;
+    this.startTime = Date.now();
 
     try {
       // 1. Configurer le mode audio
@@ -161,6 +163,10 @@ class AlarmServiceClass {
    */
   isPlaying(): boolean {
     return this.isAlarmPlaying;
+  }
+
+  getStartTime(): number {
+    return this.startTime;
   }
 }
 
