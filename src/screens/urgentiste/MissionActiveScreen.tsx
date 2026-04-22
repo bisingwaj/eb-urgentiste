@@ -203,12 +203,13 @@ export function MissionActiveScreen({ navigation }: any) {
       
       if (next === 'on_scene' || next === 'arrived_hospital') {
         const targetStatus = next;
-        // Step 1: Force Mapbox to unmount by setting transitioning state
+        // If arriving at hospital, we skip assessment and go straight to closure.
+        const forcedStep = next === 'arrived_hospital' ? 'closure' : 'assessment';
+        
         setIsTransitioning(true);
-        // Step 3: Navigate - pass the updated status and force the 'assessment' step
         navigation.replace('Signalement', { 
           mission: { ...activeMission, dispatch_status: targetStatus },
-          forcedStep: 'assessment'
+          forcedStep: forcedStep
         });
       }
     } catch (err) {
