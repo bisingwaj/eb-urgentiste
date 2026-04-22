@@ -69,6 +69,8 @@ export interface Mission {
   caller: {
     name: string;
     phone: string;
+    age?: number | null;
+    sex?: string | null;
   };
   assigned_structure?: AssignedStructure | null;
   destination?: string;
@@ -96,7 +98,7 @@ export interface Mission {
   hospital_data?: Record<string, unknown> | null;
   /** Bilan médical structuré (JSONB). À terme, synchronisé avec le backend. */
   medical_assessment?: Record<string, any> | null;
-  
+
   // NOUVEAU : Snapshots hôpitaux suggérés (§2)
   suggested_hospitals?: HospitalSuggestion[] | null;
   suggested_hospitals_computed_at?: string | null;

@@ -337,20 +337,28 @@ export function HomeTab({ navigation }: any) {
     if (!activeMission) return { age: null, gender: null, height: null };
 
     const findResp = (keys: string[], textMatch: string) =>
-      activeMission.sos_responses?.find(r =>
-        keys.includes(r.question_key) ||
-        r.question_text?.toLowerCase().includes(textMatch.toLowerCase())
-      )?.answer;
+      activeMission.sos_responses?.find(r => {
+        const k = r.question_key?.toLowerCase() || '';
+        const t = r.question_text?.toLowerCase() || '';
+        return keys.some(key => k.includes(key)) || t.includes(textMatch.toLowerCase());
+      })?.answer;
 
-    const age = findResp(['age', 'age_approx', 'Tranche d’âge'], 'âge');
-    const gender = findResp(['sexe', 'gender', 'Sexe'], 'sexe');
-    const height = findResp(['taille', 'height', 'Taille'], 'taille');
+    // More aggressive detection
+    const age = findResp(['age', 'ans', 'old'], 'âge') || activeMission.caller?.age;
+    const gender = findResp(['sexe', 'gender', 'genre'], 'sexe') || activeMission.caller?.gender || activeMission.incident?.caller_gender;
+    const height = findResp(['taille', 'height'], 'taille');
 
     return {
-      age: age && age !== '—' ? age : null,
+      age: age && age !== '—' ? age : (activeMission.incident?.age_approx || null),
       gender: gender && gender !== '—' ? gender : null,
       height: height && height !== '—' ? height : null
     };
+  };
+
+  const getMotifDAppel = () => {
+    if (!activeMission) return '---';
+    const typeLabel = activeMission.type ? activeMission.type.toUpperCase().replace(/_/g, ' ') : 'URGENCE MÉDICALE';
+    return typeLabel;
   };
 
   const capitalize = (str?: string) => {
@@ -506,41 +514,42 @@ export function HomeTab({ navigation }: any) {
               </View>
             </View>
 
-            {/* CARD 3: WHY (Incident Motif) */}
-            <View style={[styles.dashboardCard, { paddingVertical: 16 }]}>
+            {/* CARD 3: WHY (Type & Symptoms) */}
+            <View style={styles.dashboardCard}>
               <View style={styles.cardHeaderRow}>
-                <MaterialIcons name="medical-services" size={18} color="rgba(255,255,255,0.4)" />
-                <Text style={[styles.cardLabel, { color: 'rgba(255,255,255,0.2)' }]}>MOTIF D'APPEL</Text>
+                <MaterialIcons name="medical-services" size={18} color={colors.secondary} />
+                <Text style={styles.cardLabel}>TYPE D'URGENCE & SYMPTÔMES</Text>
               </View>
-              <Text style={styles.incidentMotifTxtSmall}>{activeMission?.title}</Text>
 
-              <AppTouchableOpacity
-                style={styles.symptomsToggle}
-                onPress={() => setShowSymptoms(!showSymptoms)}
-              >
-                <Text style={styles.symptomsToggleTxt}>
-                  {showSymptoms ? "Masquer les détails" : "Détails & Symptômes"}
-                </Text>
-                <MaterialIcons name={showSymptoms ? "expand-less" : "expand-more"} size={20} color={colors.secondary} />
-              </AppTouchableOpacity>
+              <Text style={[styles.incidentMotifTxtSmall, { color: colors.secondary, fontSize: 20, fontWeight: '900', marginBottom: 2 }]}>
+                {getMotifDAppel()}
+              </Text>
 
-              {showSymptoms && (
-                <View style={styles.symptomsList}>
-                  {activeMission?.sos_responses && activeMission.sos_responses.length > 0 ? (
-                    activeMission.sos_responses.map((resp, i) => (
-                      <View key={i} style={styles.symptomItem}>
-                        <Text style={styles.symptomQuest}>{resp.question_text || resp.question_key}:</Text>
-                        <Text style={styles.symptomAns}>{resp.answer || '---'}</Text>
-                      </View>
-                    ))
-                  ) : (
-                    <Text style={styles.noSymptomsTxt}>Aucune donnée supplémentaire.</Text>
-                  )}
-                  {activeMission?.description && (
-                    <Text style={styles.incidentDescTxt}>Note: {activeMission.description}</Text>
-                  )}
-                </View>
-              )}
+              <View style={styles.symptomsList}>
+                {activeMission?.incident_notes && (
+                  <View style={[styles.symptomItem, { backgroundColor: 'rgba(52, 199, 89, 0.08)', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(52, 199, 89, 0.2)' }]}>
+                    <Text style={[styles.symptomQuest, { color: colors.success, fontSize: 11 }]}>NOTES PRIORITAIRES CENTRALE :</Text>
+                    <Text style={[styles.symptomAns, { color: '#FFF', fontSize: 15 }]}>{activeMission.incident_notes}</Text>
+                  </View>
+                )}
+
+                {activeMission?.sos_responses && activeMission.sos_responses.length > 0 ? (
+                  activeMission.sos_responses.map((resp, i) => (
+                    <View key={i} style={[styles.symptomItem, { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', marginBottom: 4 }]}>
+                      <Text style={[styles.symptomQuest, { marginBottom: 0, marginRight: 6 }]}>{resp.question_text || resp.question_key} :</Text>
+                      <Text style={styles.symptomAns}>{resp.answer || '---'}</Text>
+                    </View>
+                  ))
+                ) : (
+                  !activeMission?.incident_notes && (
+                    <Text style={styles.noSymptomsTxt}>Aucune donnée supplémentaire disponible.</Text>
+                  )
+                )}
+
+                {activeMission?.description && (
+                  <Text style={[styles.incidentDescTxt, { marginTop: 8 }]}>Commentaire Opérateur: {activeMission.description}</Text>
+                )}
+              </View>
             </View>
           </ScrollView>
 
@@ -923,14 +932,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    marginVertical: 24, // ADDED MARGIN
+    marginVertical: 10,
   },
   urgentTitle: {
     color: colors.primary,
-    fontSize: 22,
+    fontSize: 26,
     fontWeight: '900',
-    letterSpacing: 2,
+    letterSpacing: 1.5,
     textAlign: 'center',
+    textTransform: 'uppercase',
   },
   dashboardScroll: {
     flex: 1,
@@ -938,7 +948,8 @@ const styles = StyleSheet.create({
   dashboardCard: {
     backgroundColor: '#111',
     borderRadius: 24,
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     marginBottom: 16,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.06)',
@@ -947,7 +958,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 12,
+    marginBottom: 6,
   },
   cardLabel: {
     color: 'rgba(255,255,255,0.3)',
@@ -1012,7 +1023,7 @@ const styles = StyleSheet.create({
   },
   symptomQuest: {
     color: 'rgba(255,255,255,0.4)',
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '600',
     marginBottom: 2,
   },

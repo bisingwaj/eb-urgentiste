@@ -3,7 +3,7 @@ import { Alert, Vibration, DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { uploadIncidentTerrainPhotoToStorage } from '../lib/incidentTerrainPhotos';
 import { useAuth } from './AuthContext';
-import { Mission, normalizeHospitalStatus, HospitalSuggestion } from '../types/mission';
+import { Mission, normalizeHospitalStatus, HospitalSuggestion, SosResponseItem } from '../types/mission';
 import { readMissionCache, writeMissionCache } from '../lib/localAppCache';
 import { APP_FOREGROUND_SYNC } from '../lib/syncEvents';
 import { haversineMeters } from '../lib/mapbox';
@@ -49,8 +49,9 @@ interface SupabaseIncident {
   media_urls?: string[] | null;
   incident_at?: string | null;
   incident_updated_at?: string | null;
-  incident_notes?: string | null;
+  notes?: string | null;
   recommended_actions?: string | null;
+  sos_responses?: SosResponseItem[] | null;
 }
 
 interface SupabaseDispatch {
@@ -226,7 +227,9 @@ export function MissionProvider({ children }: { children: ReactNode }) {
             commune,
             recommended_facility,
             created_at,
-            media_urls
+            media_urls,
+            sos_responses(*),
+            notes
           )
         `.trim()
         )
@@ -293,6 +296,9 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           caller: {
             name: incident.caller_name || 'Anonyme',
             phone: incident.caller_phone || '',
+            age: (incident as any).age || null,
+            gender: (incident as any).gender || (incident as any).caller_gender || null,
+            height: (incident as any).height || null,
           },
           citizen_id: incident.citizen_id,
           created_at: row.created_at,
@@ -300,13 +306,14 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           arrived_at: row.arrived_at || undefined,
           completed_at: row.completed_at || undefined,
           dispatch_notes: row.dispatch_notes,
-          incident_notes: incident.incident_notes,
+          incident_notes: incident.notes,
           incident_at: incident.incident_at,
           incident_updated_at: incident.incident_updated_at,
           recommended_actions: incident.recommended_actions,
           caller_realtime_lat: incident.caller_realtime_lat,
           caller_realtime_lng: incident.caller_realtime_lng,
           caller_realtime_updated_at: incident.caller_realtime_updated_at,
+          sos_responses: incident.sos_responses || [],
           media_urls: incident.media_urls,
           hospital_status,
           hospital_notes,
