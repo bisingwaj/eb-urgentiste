@@ -232,22 +232,43 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
             </Text>
             <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 32 }} />
 
-            <AppTouchableOpacity 
-               onPress={onCancelAssignment}
-               style={{ 
-                  marginTop: 48, 
-                  paddingVertical: 12, 
-                  paddingHorizontal: 24, 
-                  borderRadius: 12,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.2)',
-                  backgroundColor: 'rgba(255,59,48,0.1)' 
-               }}
-            >
-               <Text style={{ color: '#FF3B30', fontWeight: '700', fontSize: 15 }}>Annuler la demande</Text>
-            </AppTouchableOpacity>
+            <View style={{ flexDirection: 'row', gap: 12, marginTop: 48 }}>
+               <AppTouchableOpacity 
+                  onPress={() => setCallModalVisible(true)}
+                  style={{ 
+                     flex: 1,
+                     paddingVertical: 14, 
+                     borderRadius: 14,
+                     backgroundColor: 'rgba(48,209,88,0.1)',
+                     borderWidth: 1,
+                     borderColor: 'rgba(48,209,88,0.2)',
+                     flexDirection: 'row',
+                     alignItems: 'center',
+                     justifyContent: 'center',
+                     gap: 8
+                  }}
+               >
+                  <Phone size={18} color="#30D158" />
+                  <Text style={{ color: '#30D158', fontWeight: '800', fontSize: 15 }}>Appeler l'établissement</Text>
+               </AppTouchableOpacity>
+
+               <AppTouchableOpacity 
+                  onPress={onCancelAssignment}
+                  style={{ 
+                     paddingVertical: 14, 
+                     paddingHorizontal: 20, 
+                     borderRadius: 14,
+                     borderWidth: 1,
+                     borderColor: 'rgba(255,59,48,0.3)',
+                     backgroundColor: 'rgba(255,59,48,0.05)',
+                     justifyContent: 'center'
+                  }}
+               >
+                  <Text style={{ color: '#FF3B30', fontWeight: '700', fontSize: 14 }}>Annuler</Text>
+               </AppTouchableOpacity>
+            </View>
             
-            <Text style={{ color: 'rgba(255,255,255,0.3)', marginTop: 12, fontSize: 12 }}>
+            <Text style={{ color: 'rgba(255,255,255,0.3)', marginTop: 16, fontSize: 12, textAlign: 'center' }}>
                Choisissez un autre établissement si celui-ci tarde à répondre
             </Text>
          </View>

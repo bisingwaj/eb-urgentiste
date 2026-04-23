@@ -372,7 +372,7 @@ export function HospitalCaseDetailScreen({ route, navigation }: any) {
       <ScrollView
         style={styles.mainScroll}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 220 }}
+        contentContainerStyle={{ paddingBottom: 120 }}
       >
 
         {/* SECTION 1: PATIENT IDENTITY CARD */}
@@ -905,8 +905,8 @@ const styles = StyleSheet.create({
   },
   fullWidthMapContainer: {
     height: 450,
-    marginTop: 24,
-    marginBottom: 0,
+    marginTop: 12,
+    marginBottom: 20,
     position: 'relative',
     backgroundColor: '#000',
   },

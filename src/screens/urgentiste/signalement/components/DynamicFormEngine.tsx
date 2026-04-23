@@ -270,20 +270,30 @@ export const DynamicFormEngine: React.FC<DynamicFormEngineProps> = ({
                   {currentValue <= 3 ? "FAIBLE" : currentValue <= 5 ? "MODÉRÉE" : currentValue <= 7 ? "SÉVÈRE" : "CRITIQUE"}
                </Text>
             </View>
-            <View style={{ height: 10, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 5, marginHorizontal: 10, position: 'relative' }}>
-               <View style={{ width: `${currentValue * 10}%`, height: '100%', backgroundColor: rangeColor, borderRadius: 5 }} />
-               <View style={{ position: 'absolute', top: -15, left: -10, right: -10, flexDirection: 'row', justifyContent: 'space-between' }}>
+            <View style={{ height: 12, justifyContent: 'center', marginHorizontal: 10, position: 'relative', marginTop: 10 }}>
+               <View style={{ height: 6, backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 3, width: '100%', position: 'absolute' }} />
+               <View style={{ width: `${currentValue * 10}%`, height: 6, backgroundColor: rangeColor, borderRadius: 3 }} />
+               
+               <View style={{ position: 'absolute', top: -20, left: -10, right: -10, flexDirection: 'row', justifyContent: 'space-between' }}>
                   {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(val => {
                      const isSelected = currentValue === val;
                      return (
-                        <AppTouchableOpacity key={val} onPress={() => updateValue(step.id, val)} style={{ alignItems: 'center', width: 28, height: 40 }}>
+                        <AppTouchableOpacity key={val} onPress={() => updateValue(step.id, val)} style={{ alignItems: 'center', width: 30, height: 45 }}>
                            <View style={{ 
-                              width: 14, height: 14, borderRadius: 7, 
-                              backgroundColor: isSelected ? '#FFF' : 'rgba(255,255,255,0.1)',
+                              width: 12, height: 12, borderRadius: 6, 
+                              backgroundColor: isSelected ? '#FFF' : 'rgba(255,255,255,0.12)',
                               borderWidth: isSelected ? 3 : 0, borderColor: rangeColor,
-                              marginTop: isSelected ? -2 : 0
                            }} />
-                           {val % 2 === 0 && <Text style={{ color: isSelected ? '#FFF' : 'rgba(255,255,255,0.2)', fontSize: 10, marginTop: 6, fontWeight: isSelected ? '900' : '400' }}>{val}</Text>}
+                           {val % 2 === 0 && (
+                              <Text style={{ 
+                                 color: isSelected ? '#FFF' : 'rgba(255,255,255,0.25)', 
+                                 fontSize: 11, 
+                                 marginTop: 10, 
+                                 fontWeight: isSelected ? '900' : '600' 
+                              }}>
+                                 {val}
+                              </Text>
+                           )}
                         </AppTouchableOpacity>
                      );
                   })}

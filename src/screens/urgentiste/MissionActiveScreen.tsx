@@ -406,7 +406,7 @@ export function MissionActiveScreen({ navigation }: any) {
         <>
           <View style={styles.topControls}>
             {/* UNIFORM HEADER */}
-            <View style={[styles.stepInlineHeader, { paddingTop: insets.top + 16, paddingBottom: 20 }]}>
+            <View style={[styles.stepInlineHeader, { paddingTop: insets.top + 12, paddingBottom: 8 }]}>
               <AppTouchableOpacity
                 onPress={() => navigation.goBack()}
                 style={styles.stepInlineBack}
@@ -598,7 +598,7 @@ const styles = StyleSheet.create({
   stepInlineHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingBottom: 16,
+    paddingBottom: 8,
     paddingHorizontal: 16,
     gap: 12,
     backgroundColor: 'rgba(10, 10, 10, 0.95)',
@@ -629,7 +629,7 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     fontSize: 12,
     fontWeight: '700',
-    marginTop: 1,
+    marginTop: 0,
   },
 
   // ONE ROW INFO PILL
@@ -646,15 +646,14 @@ const styles = StyleSheet.create({
 
   // ONE ROW INFO PILL
   unifiedPill: {
-    marginHorizontal: 16,
-    marginTop: 8,
-    backgroundColor: 'rgba(15,15,15,0.95)',
-    borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)',
+    backgroundColor: 'rgba(10,10,10,0.95)',
+    borderTopWidth: StyleSheet.hairlineWidth, 
+    borderColor: 'rgba(255,255,255,0.08)',
     shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 15, elevation: 8,
     minHeight: 52, justifyContent: 'center'
   },
   pillRow: {
-    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 12
+    flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 6
   },
   addrSection: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 },
   pillAddr: { color: '#FFF', fontSize: 13, fontWeight: '700', flex: 1 },
@@ -672,23 +671,23 @@ const styles = StyleSheet.create({
 
   bottomPanel: {
     position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#0A0A0A',
-    padding: 20, borderTopLeftRadius: 30, borderTopRightRadius: 30, borderTopWidth: 1, borderTopColor: '#222'
+    padding: 12, borderTopLeftRadius: 12, borderTopRightRadius: 12, borderTopWidth: 1, borderTopColor: '#222'
   },
-  mainRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15, gap: 15 },
-  timeBlock: { flex: 0.8 },
-  tLabel: { color: '#666', fontSize: 10, fontWeight: '900' },
-  tValue: { color: '#FFF', fontSize: 24, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  mainRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, gap: 10 },
+  timeBlock: { flex: 1, alignItems: 'center', height: 44, justifyContent: 'center' },
+  tLabel: { color: '#666', fontSize: 9, fontWeight: '900', marginBottom: 1 },
+  tValue: { color: '#FFF', fontSize: 22, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   bigBtn: {
-    flex: 1.2, height: 56, backgroundColor: colors.success, borderRadius: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 15
+    flex: 1, height: 44, backgroundColor: colors.success, borderRadius: 8,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 10
   },
-  bigBtnText: { fontWeight: '900', fontSize: 13 },
-  callRow: { flexDirection: 'row', gap: 10, marginBottom: 10 },
+  bigBtnText: { fontWeight: '900', fontSize: 14, letterSpacing: 0.5 },
+  callRow: { flexDirection: 'row', gap: 10, marginBottom: 4 },
   callBtn: {
-    flex: 1, height: 48, borderRadius: 14, borderWidth: 1, borderColor: '#333',
-    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8
+    flex: 1, height: 40, borderRadius: 8, borderWidth: 1, borderColor: '#333',
+    flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 6
   },
-  callBtnText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
+  callBtnText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
 
   incidentMarkerPulse: {
     width: 14, height: 14, borderRadius: 7, backgroundColor: colors.primary,
@@ -728,7 +727,7 @@ const styles = StyleSheet.create({
   hospitalOverlay: { flex: 1 },
   hospitalHeader: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, zIndex: 10, paddingBottom: 12,
+    paddingHorizontal: 20, zIndex: 10, paddingBottom: 6,
     backgroundColor: 'rgba(0,0,0,0.8)', borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.08)'
   },
   headerBackBtn: {
@@ -741,34 +740,34 @@ const styles = StyleSheet.create({
   headerLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
   headerMainTitle: { color: '#FFF', fontSize: 15, fontWeight: '800', marginTop: 1 },
 
-  hospitalTopInfoLayer: { paddingHorizontal: 16, marginTop: 8, zIndex: 10 },
-  hospitalActionStack: { position: 'absolute', right: 0, top: 62, gap: 8 },
+  hospitalTopInfoLayer: { marginHorizontal: 0, marginTop: 0, zIndex: 10 },
+  hospitalActionStack: { position: 'absolute', right: 16, top: 120, gap: 12 },
 
   heroActionRow: {
-    flexDirection: 'row', gap: 10, marginTop: 2
+    flexDirection: 'row', gap: 4, marginTop: 1
   },
   heroTimeBox: {
-    flex: 0.8, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8,
-    paddingVertical: 6, paddingHorizontal: 8, justifyContent: 'center', alignItems: 'center',
+    flex: 0.7, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 6,
+    paddingVertical: 4, paddingHorizontal: 8, justifyContent: 'center', alignItems: 'center',
     borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.1)'
   },
-  heroLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 8, fontWeight: '700', marginBottom: 1 },
-  heroTimeVal: { color: '#FFF', fontSize: 18, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+  heroLabel: { color: 'rgba(255,255,255,0.4)', fontSize: 7, fontWeight: '700', marginBottom: 1 },
+  heroTimeVal: { color: '#FFF', fontSize: 15, fontWeight: '900', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
   heroArrivalBtn: {
-    flex: 1.2, backgroundColor: colors.success, borderRadius: 8,
-    height: 44, flexDirection: 'row', alignItems: 'center', justifyContent: 'center'
+    flex: 1.3, backgroundColor: colors.success, borderRadius: 6,
+    height: 38, flexDirection: 'row', alignItems: 'center', justifyContent: 'center'
   },
-  heroArrivalBtnText: { color: '#000', fontSize: 13, fontWeight: '900' },
+  heroArrivalBtnText: { color: '#000', fontSize: 12, fontWeight: '900' },
 
   commActionRow: {
-    flexDirection: 'row', gap: 8, marginTop: 8
+    flexDirection: 'row', gap: 2, marginTop: 4
   },
   commBtn: {
-    flex: 1, height: 40, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    flex: 1, height: 36, borderRadius: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
     backgroundColor: 'rgba(255,255,255,0.03)', flexDirection: 'row', justifyContent: 'center',
     alignItems: 'center', gap: 6, borderStyle: 'dashed'
   },
-  commBtnText: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '800' },
+  commBtnText: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '800' },
 
   hospitalBottomPanel: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -784,8 +783,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)'
   },
   tacticalInfoPill: {
-    backgroundColor: 'rgba(15,15,15,0.95)', borderRadius: 20, padding: 12,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(10,10,10,0.95)', 
+    padding: 12,
+    borderTopWidth: StyleSheet.hairlineWidth, 
+    borderColor: 'rgba(255,255,255,0.08)',
     shadowColor: '#000', shadowOpacity: 1, shadowRadius: 20, elevation: 12
   },
   tacticalPillMain: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },

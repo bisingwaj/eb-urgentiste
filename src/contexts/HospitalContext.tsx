@@ -7,6 +7,7 @@ import {
   CaseStatus,
   HospitalStatus,
   HealthStructure,
+  isCaseClosed,
 } from '../screens/hospital/hospitalTypes';
 import { mergeHospitalDataPartial } from '../lib/hospitalMerge';
 import { mapDispatchRowToEmergencyCase } from '../lib/hospitalCaseMapping';
@@ -440,7 +441,7 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         mapDispatchRowToEmergencyCase(d, profileMap, responsesMap, unitPhoneByUnitId),
       );
 
-      const pendingCount = mappedCases.filter(c => c.hospitalStatus === 'pending').length;
+      const pendingCount = mappedCases.filter(c => c.hospitalStatus === 'pending' && !isCaseClosed(c)).length;
       setPendingAlertCount(pendingCount);
 
       setActiveCases(mappedCases);
@@ -597,6 +598,21 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         console.warn('[HospitalContext] completed_at missing; retrying without.');
         updateError = await performUpdate(stripped);
       }
+
+      // Optimistic update
+      setActiveCases(prev => {
+        const next = prev.map(c => {
+          if (c.id !== caseId) return c;
+          const updated = { ...c };
+          if (transition.hospitalStatus) updated.hospitalStatus = transition.hospitalStatus;
+          // Note: we don't update c.status here for complexity, 
+          // but hospitalStatus change is enough to flip the pendingCount filter.
+          return updated;
+        });
+        const pendingCount = next.filter(c => c.hospitalStatus === 'pending' && !isCaseClosed(c)).length;
+        setPendingAlertCount(pendingCount);
+        return next;
+      });
 
       if (updateError) throw updateError;
 
