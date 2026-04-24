@@ -243,39 +243,7 @@ export const MePuck = memo(function MePuck({
   );
 });
 
-/** Hospital Marker (Map Pin with Plus) */
-export const HospitalPin = memo(function HospitalPin({
-  onPress,
-}: {
-  onPress?: () => void;
-}) {
-  return (
-    <MarkerHost>
-      <Pressable onPress={onPress} style={styles.hospitalPinContainer}>
-        <MaterialCommunityIcons name="map-marker-plus" size={38} color="#EA4335" />
-      </Pressable>
-    </MarkerHost>
-  );
-});
 
-/** Generic Incident Pin (Classic Destination) */
-export const DestinationPin = memo(function DestinationPin({
-  onPress,
-}: {
-  onPress?: () => void;
-}) {
-  return (
-    <MarkerHost>
-      <Pressable onPress={onPress}>
-        <View style={styles.pinContainer}>
-          <View style={styles.pinCircle} />
-          <View style={styles.pinStem} />
-          <View style={styles.pinPoint} />
-        </View>
-      </Pressable>
-    </MarkerHost>
-  );
-});
 
 /** ETA Badge for Route */
 export const RouteETABadge = memo(function RouteETABadge({

@@ -9,7 +9,6 @@ import {
 } from '../lib/localAppCache';
 import { runSessionBootstrap } from '../lib/sessionBootstrap';
 
-export type { UserProfile };
 
 interface AuthState {
   session: Session | null;
@@ -18,7 +17,7 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
-export type AuthPortal = 'urgentiste' | 'hopital';
+type AuthPortal = 'urgentiste' | 'hopital';
 
 interface AuthContextType extends AuthState {
   signInWithAgent: (agentLoginId: string, pinCode: string) => Promise<{ success: boolean; error?: string; mustChangePassword?: boolean }>;
