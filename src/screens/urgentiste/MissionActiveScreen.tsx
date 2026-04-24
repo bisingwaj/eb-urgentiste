@@ -8,7 +8,7 @@ import { ALARM_STOP_EVENT } from '../../services/AlarmService';
 import { DeviceEventEmitter } from 'react-native';
 import { useActiveMission } from '../../hooks/useActiveMission';
 import * as Location from 'expo-location';
-import { getRoute, buildRouteFeature, geometryToCameraBounds } from '../../lib/mapbox';
+import { getRouteWithAlternatives, buildRouteFeature, geometryToCameraBounds, type RouteResult } from '../../lib/mapbox';
 import { EBMap, EBMapMarker } from '../../components/map/EBMap';
 import { useMapPuckHeading } from '../../hooks/useMapPuckHeading';
 import { openExternalDirections } from '../../utils/navigation';
@@ -65,7 +65,9 @@ export function MissionActiveScreen({ navigation }: any) {
   const [mapMode, setMapMode] = useState<'2D' | '3D'>('2D');
   const [zoomLevel, setZoomLevel] = useState(15);
 
-  const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [allRoutes, setAllRoutes] = useState<RouteResult[]>([]);
+  const [selectedRouteIndex, setSelectedRouteIndex] = useState(0);
+  const [preferredProfile, setPreferredProfile] = useState<'driving' | 'driving-traffic'>('driving-traffic');
   const [routeDuration, setRouteDuration] = useState<number | null>(null);
   const [routeDistance, setRouteDistance] = useState<number | null>(null);
   const [elapsedTime, setElapsedTime] = useState('00:00:00');
@@ -146,12 +148,15 @@ export function MissionActiveScreen({ navigation }: any) {
     }
 
     try {
-      const result = await getRoute(currentPos, missionCoords, { profile: 'driving-traffic' });
-      if (result) {
-        setRouteGeoJSON(buildRouteFeature(result.geometry));
-        setRouteDuration(result.duration);
-        setRouteDistance(result.distance);
-        lastRouteCoords.current = result.geometry.coordinates;
+      const result = await getRouteWithAlternatives(currentPos, missionCoords, { 
+        profile: preferredProfile, 
+        alternatives: true,
+      });
+      if (result && result.routes.length > 0) {
+        setAllRoutes(result.routes);
+        setRouteDuration(result.primary.duration);
+        setRouteDistance(result.primary.distance);
+        lastRouteCoords.current = result.primary.geometry.coordinates;
         lastFetchPos.current = currentPos;
       }
     } catch (e) { console.error('Route error', e); }
@@ -239,8 +244,9 @@ export function MissionActiveScreen({ navigation }: any) {
     if (missionCoords) {
       m.push({
         id: 'incident-target',
-        type: activeMission?.dispatch_status === 'en_route_hospital' ? 'hospital' : 'incident',
+        type: 'hospital', // User requested hospital icon instead of exclamation (!)
         coordinate: missionCoords as [number, number],
+        label: activeMission?.dispatch_status === 'en_route_hospital' ? 'HÔPITAL' : 'VICTIME',
         priority: activeMission?.priority,
       });
     }
@@ -248,33 +254,44 @@ export function MissionActiveScreen({ navigation }: any) {
   }, [activeMission?.id, missionCoords, myLocation, myHeadingDeg, activeMission?.dispatch_status]);
 
   const mapRouteData = useMemo(() => {
-    if (!routeGeoJSON) return undefined;
+    if (allRoutes.length === 0) return undefined;
     return {
-      routes: [{
-        geometry: routeGeoJSON.features[0].geometry as GeoJSON.LineString,
-        duration: routeDuration || 0,
-        distance: routeDistance || 0,
-        steps: [],
-      }],
-      selectedIndex: 0,
+      routes: allRoutes,
+      selectedIndex: selectedRouteIndex,
+      showAlternatives: true,
     };
-  }, [routeGeoJSON, routeDuration, routeDistance]);
+  }, [allRoutes, selectedRouteIndex]);
 
   const cameraBounds = useMemo(() => {
-    if (!myLocation || !missionCoords) return undefined;
-    const uLat = myLocation.coords.latitude;
-    const uLng = myLocation.coords.longitude;
-    const [pLng, pLat] = missionCoords;
-    const padding = 100;
-    return {
-      ne: [Math.max(pLng, uLng), Math.max(pLat, uLat)] as [number, number],
-      sw: [Math.min(pLng, uLng), Math.min(pLat, uLat)] as [number, number],
-      paddingTop: padding + 150, // More space for top overlays
-      paddingBottom: padding + 100, // Space for bottom panel
-      paddingLeft: padding,
-      paddingRight: padding,
-    };
-  }, [myLocation, missionCoords, insets]);
+    // 1. If we have routes, use the geometry-based bounds (precise)
+    if (allRoutes.length > 0) {
+      const primaryGeometry = allRoutes[selectedRouteIndex].geometry;
+      return geometryToCameraBounds(primaryGeometry, 80); 
+    }
+    
+    // 2. Fallback: simple bounds between me and victim to avoid starting at continent level
+    if (myLocation && missionCoords) {
+      const uLat = myLocation.coords.latitude;
+      const uLng = myLocation.coords.longitude;
+      const [pLng, pLat] = missionCoords;
+      
+      const minLng = Math.min(uLng, pLng);
+      const maxLng = Math.max(uLng, pLng);
+      const minLat = Math.min(uLat, pLat);
+      const maxLat = Math.max(uLat, pLat);
+      
+      return {
+        ne: [maxLng, maxLat] as [number, number],
+        sw: [minLng, minLat] as [number, number],
+        paddingTop: 100,
+        paddingBottom: 100,
+        paddingLeft: 80,
+        paddingRight: 80,
+      };
+    }
+
+    return undefined;
+  }, [allRoutes, selectedRouteIndex, myLocation, missionCoords]);
 
   if (!activeMission) return null;
 
@@ -291,11 +308,13 @@ export function MissionActiveScreen({ navigation }: any) {
             routeData={mapRouteData}
             myLocation={myLocation ? [myLocation.coords.longitude, myLocation.coords.latitude] : undefined}
             myHeading={myHeadingDeg}
+            mySpeed={myLocation?.coords.speed ?? 0}
             cameraConfig={{
               bounds: cameraBounds,
             }}
             showControls={true}
             style={styles.map}
+            onRoutePress={(idx) => setSelectedRouteIndex(idx)}
           />
         )}
       </View>

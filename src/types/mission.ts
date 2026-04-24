@@ -70,7 +70,8 @@ export interface Mission {
     name: string;
     phone: string;
     age?: number | null;
-    sex?: string | null;
+    gender?: string | null;
+    height?: number | null;
   };
   assigned_structure?: AssignedStructure | null;
   destination?: string;

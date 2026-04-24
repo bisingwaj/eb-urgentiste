@@ -18,6 +18,8 @@ export interface DirectionsOptions {
   profile?: DirectionsProfile;
   /** Demander des itinéraires alternatifs (défaut : true pour getRouteWithAlternatives). */
   alternatives?: boolean;
+  /** Points de passage intermédiaires [lng, lat][] */
+  waypoints?: [number, number][];
 }
 
 export interface RouteStep {
@@ -30,6 +32,8 @@ export interface RouteStep {
 
 export interface RouteResult {
   geometry: GeoJSON.LineString;
+  walkingGeometryBefore?: GeoJSON.LineString;
+  walkingGeometryAfter?: GeoJSON.LineString;
   duration: number;
   distance: number;
   steps: RouteStep[];
@@ -98,13 +102,53 @@ function parseStepsFromRoute(raw: any): RouteStep[] {
   return out;
 }
 
-function mapRawRoute(raw: any): RouteResult {
-  return {
+function mapRawRoute(raw: any, targetOrigin?: [number, number], targetDest?: [number, number]): RouteResult {
+  const result: RouteResult = {
     geometry: raw.geometry as GeoJSON.LineString,
     duration: raw.duration,
     distance: raw.distance,
     steps: parseStepsFromRoute(raw),
   };
+
+  const coords = result.geometry.coordinates;
+
+  // 1. Walk segment BEFORE (Origin)
+  if (targetOrigin) {
+    const firstPoint = coords[0] as [number, number];
+    const distOrigin = haversineMeters(targetOrigin, firstPoint);
+    if (distOrigin > 30) {
+      result.walkingGeometryBefore = {
+        type: 'LineString',
+        coordinates: [targetOrigin, firstPoint],
+      };
+      result.distance += distOrigin;
+      result.duration += Math.round(distOrigin / 1.4);
+    }
+  }
+
+  // 2. Walk segment AFTER (Destination)
+  if (targetDest) {
+    const lastPoint = coords[coords.length - 1] as [number, number];
+    const distDest = haversineMeters(lastPoint, targetDest);
+    
+    if (distDest > 30) {
+      result.walkingGeometryAfter = {
+        type: 'LineString',
+        coordinates: [lastPoint, targetDest],
+      };
+      result.distance += distDest;
+      result.duration += Math.round(distDest / 1.4);
+      
+      result.steps.push({
+        instruction: 'Suivez le chemin piétonnier jusqu’à la cible exacte.',
+        distance: distDest,
+        duration: Math.round(distDest / 1.4),
+        coordinate: lastPoint,
+      });
+    }
+  }
+
+  return result;
 }
 
 function straightLineRoute(origin: [number, number], dest: [number, number], distM: number): RouteResult {
@@ -132,12 +176,21 @@ function buildDirectionsUrl(
   destination: [number, number],
   profile: DirectionsProfile,
   alternatives: boolean,
+  waypoints: [number, number][] = [],
 ): string {
   const path = `mapbox/${profile}`;
   const alt = alternatives ? '&alternatives=true' : '';
+  
+  // Format: origin;waypoint1;waypoint2;destination
+  const coords = [
+    origin,
+    ...waypoints,
+    destination
+  ].map(c => `${c[0]},${c[1]}`).join(';');
+
   return (
     `https://api.mapbox.com/directions/v5/${path}/` +
-    `${origin[0]},${origin[1]};${destination[0]},${destination[1]}` +
+    `${coords}` +
     `?geometries=geojson&overview=full&continue_straight=true&language=fr${alt}` +
     `&access_token=${getMapboxToken()}`
   );
@@ -148,8 +201,9 @@ async function fetchDirections(
   destination: [number, number],
   profile: DirectionsProfile,
   alternatives: boolean,
+  waypoints: [number, number][] = [],
 ): Promise<any | null> {
-  const url = buildDirectionsUrl(origin, destination, profile, alternatives);
+  const url = buildDirectionsUrl(origin, destination, profile, alternatives, waypoints);
   const res = await fetch(url);
   const data = await res.json();
   if (!data.routes || data.routes.length === 0) return null;
@@ -166,24 +220,14 @@ export async function getRouteWithAlternatives(
 ): Promise<RoutesResult | null> {
   const alternatives = options?.alternatives !== false;
   const preferredProfile = options?.profile ?? 'driving-traffic';
-
-  const dist = haversineMeters(origin, destination);
-  if (dist < SHORT_ROUTE_THRESHOLD_M) {
-    const line = straightLineRoute(origin, destination, dist);
-    return {
-      primary: line,
-      alternatives: [],
-      routes: [line],
-    };
-  }
-
-  let data = await fetchDirections(origin, destination, preferredProfile, alternatives);
+  const waypoints = options?.waypoints ?? [];
+  let data = await fetchDirections(origin, destination, preferredProfile, alternatives, waypoints);
   if (!data && preferredProfile === 'driving-traffic') {
-    data = await fetchDirections(origin, destination, 'driving', alternatives);
+    data = await fetchDirections(origin, destination, 'driving', alternatives, waypoints);
   }
   if (!data) return null;
 
-  const routes: RouteResult[] = data.routes.map(mapRawRoute);
+  const routes: RouteResult[] = data.routes.map((r: any) => mapRawRoute(r, origin, destination));
 
   return {
     primary: routes[0],
@@ -203,24 +247,43 @@ export async function getRoute(
   }
 
   const preferredProfile = options?.profile ?? 'driving-traffic';
-  let data = await fetchDirections(origin, destination, preferredProfile, false);
+  const waypoints = options?.waypoints ?? [];
+  let data = await fetchDirections(origin, destination, preferredProfile, false, waypoints);
   if (!data && preferredProfile === 'driving-traffic') {
-    data = await fetchDirections(origin, destination, 'driving', false);
+    data = await fetchDirections(origin, destination, 'driving', false, waypoints);
   }
   if (!data) return null;
-  return mapRawRoute(data.routes[0]);
+  return mapRawRoute(data.routes[0], origin, destination);
 }
 
-export function buildRouteFeature(geometry: GeoJSON.LineString): GeoJSON.FeatureCollection {
+export function buildRouteFeature(route: RouteResult): GeoJSON.FeatureCollection {
+  const features: GeoJSON.Feature[] = [
+    {
+      type: 'Feature',
+      properties: { routeType: 'main' },
+      geometry: route.geometry,
+    },
+  ];
+
+  if (route.walkingGeometryBefore) {
+    features.push({
+      type: 'Feature',
+      properties: { routeType: 'walking-before' },
+      geometry: route.walkingGeometryBefore,
+    });
+  }
+
+  if (route.walkingGeometryAfter) {
+    features.push({
+      type: 'Feature',
+      properties: { routeType: 'walking-after' },
+      geometry: route.walkingGeometryAfter,
+    });
+  }
+
   return {
     type: 'FeatureCollection',
-    features: [
-      {
-        type: 'Feature',
-        properties: {},
-        geometry,
-      },
-    ],
+    features,
   };
 }
 

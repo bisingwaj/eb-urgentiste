@@ -267,7 +267,7 @@ export function useSignalementLogic(navigation: any, route: any) {
          { profile: "driving-traffic" },
       ).then((result) => {
          if (result) {
-            setRouteGeoJSON(buildRouteFeature(result.geometry));
+            setRouteGeoJSON(buildRouteFeature(result));
             setRouteDuration(result.duration);
             setRouteDistance(result.distance);
          }
@@ -317,7 +317,7 @@ export function useSignalementLogic(navigation: any, route: any) {
             const end: [number, number] = [targetHospital.coords.longitude, targetHospital.coords.latitude];
             const result = await getRoute(start, end);
             if (result) {
-               setHospitalRouteGeoJSON(buildRouteFeature(result.geometry));
+               setHospitalRouteGeoJSON(buildRouteFeature(result));
                setHospitalRouteDuration(result.duration);
                setHospitalRouteDistance(result.distance);
             }
