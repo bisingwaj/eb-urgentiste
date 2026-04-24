@@ -1,0 +1,82 @@
+agora/agoraRtc.ts:74 - ensureCallPermissions
+agora/agoraRtc.ts:89 - setAgoraRtcCallbacks
+agora/agoraRtc.ts:97 - joinAgoraChannel
+agora/agoraRtc.ts:156 - leaveAgoraChannel
+agora/agoraRtc.ts:165 - setLocalAudioMuted
+agora/agoraRtc.ts:169 - setLocalVideoMuted
+agora/agoraRtc.ts:173 - setSpeakerphoneOn
+agora/agoraRtc.ts:178 - setVideoPublishingEnabled
+agora/agoraRtc.ts:202 - getAgoraEngine
+agora/agoraRtc.ts:17 - AgoraRtcCallbacks
+agora/agoraToken.ts:20 - fetchAgoraToken
+agora/agoraToken.ts:49 - getAgoraAppIdFromEnv
+agora/agoraToken.ts:3 - AgoraTokenPayload
+agora/agoraToken.ts:10 - AgoraTokenResult
+agora/CallCenterScreen.tsx:2 - CallCenterScreen
+src/contexts/AuthContext.tsx:12 - UserProfile (used in module)
+src/contexts/AuthContext.tsx:21 - AuthPortal (used in module)
+src/contexts/CallSessionContext.tsx:6 - MinimizedCallSnapshot (used in module)
+src/contexts/HospitalContext.tsx:59 - HospitalListBlocker (used in module)
+src/hooks/useResolveHeadingFromLocation.ts:33 - RemotePosition (used in module)
+src/lib/bloodPressureInput.ts:11 - digitsOnlyBloodPressure (used in module)
+src/lib/bloodPressureInput.ts:18 - formatBloodPressureDigits (used in module)
+src/lib/hospitalCaseMapping.ts:48 - resolveCaseStatusFromRow (used in module)
+src/lib/hospitalCaseMapping.ts:66 - dischargeTypeToLegacyOutcome (used in module)
+src/lib/hospitalReportPayload.ts:3 - LovableDischargeType (used in module)
+src/lib/hospitalStats.ts:54 - formatDurationMinutes (used in module)
+src/lib/hospitalStats.ts:65 - Rolling30dKpis (used in module)
+src/lib/incomingCallFcmContract.ts:47 - INCOMING_CALL_FCM_DATA_KEYS
+src/lib/localAppCache.ts:18 - CachedMissionPayload (used in module)
+src/lib/localAppCache.ts:23 - CachedMissionHistoryPayload (used in module)
+src/lib/localAppCache.ts:29 - CachedHospitalCasesPayload (used in module)
+src/lib/localAppCache.ts:34 - CachedUserProfilePayload (used in module)
+src/lib/localAppCache.ts:39 - CachedNotificationsPayload (used in module)
+src/lib/mapbox.ts:10 - SHORT_ROUTE_THRESHOLD_M (used in module)
+src/lib/mapbox.ts:12 - DirectionsProfile (used in module)
+src/lib/mapbox.ts:16 - DirectionsOptions (used in module)
+src/lib/mapbox.ts:25 - RouteStep (used in module)
+src/lib/mapbox.ts:44 - RoutesResult (used in module)
+src/lib/mapHeading.ts:4 - isHeadingValid (used in module)
+src/lib/mapHeading.ts:17 - bearingDeg (used in module)
+src/lib/mapHeading.ts:30 - ResolveHeadingInput (used in module)
+src/lib/parseIncomingCallPayload.ts:61 - parseIncomingCallFromFlatData (used in module)
+src/lib/parseIncomingCallPayload.ts:95 - parseIncomingCallFromContent (used in module)
+src/lib/parseIncomingCallPayload.ts:4 - IncomingCallPayload (used in module)
+src/lib/sipCall.ts:86 - SipSessionState
+src/lib/sipCall.ts:88 - getSipCallState
+src/lib/transportMode.ts:4 - TRANSPORT_MODE_CODES (used in module)
+src/lib/transportMode.ts:7 - TransportModeAccent (used in module)
+src/lib/transportMode.ts:9 - TransportModeOption (used in module)
+src/navigation/navigationRef.ts:22 - RootStackParamList (used in module)
+src/navigation/tabBarLayout.ts:9 - TAB_SCREEN_CONTENT_GAP (used in module)
+src/screens/ChangePasswordScreen.tsx:12 - ChangePasswordScreen
+src/services/notifeeIncomingCall.ts:9 - NOTIFEE_INCOMING_CHANNEL_ID (used in module)
+src/services/notifeeIncomingCall.ts:36 - IncomingCallNotifeeParams (used in module)
+src/theme/fonts.ts:39 - marianneFamilyForWeight
+src/theme/typography.ts:56 - satisfies
+src/theme/typography.ts:56 - Record
+src/types/firstAid.ts:1 - CareAction (used in module)
+src/types/mission.ts:10 - canShowHospitalCoordinates
+src/types/mission.ts:2 - HospitalStatus (used in module)
+src/types/mission.ts:14 - AssignedStructure (used in module)
+src/utils/mapMarkerLayout.ts:8 - MarkerDisplay (used in module)
+src/utils/missionHistoryTime.ts:10 - startOfDayLocal (used in module)
+src/utils/missionHistoryTime.ts:16 - endOfDayLocal (used in module)
+src/utils/missionHistoryTime.ts:101 - MissionHistoryFilterOptions (used in module)
+src/components/icons/TabIcons.tsx:20 - CallOutgoingIcon
+src/components/icons/TabIcons.tsx:28 - FirstAidBriefcaseIcon
+src/components/icons/TabIcons.tsx:34 - EmergencyBellIcon
+src/components/map/EBMap.tsx:21 - EBMapMode (used in module)
+src/components/map/EBMap.tsx:45 - EBMapProps (used in module)
+src/components/map/mapMarkers.tsx:247 - HospitalPin (used in module)
+src/components/map/mapMarkers.tsx:262 - DestinationPin (used in module)
+src/components/shared/TelegramTabBarIcon.tsx:10 - TelegramTabBarIcon
+src/screens/hospital/HospitalDashboardTab.tsx:43 - MOCK_CASES
+src/screens/urgentiste/CallHistoryCallsScreen.tsx:18 - CallHistoryRow (used in module)
+src/screens/urgentiste/RadarTab.tsx:7 - RadarTab
+src/screens/urgentiste/SignalementScreen.tsx:8 - default
+src/screens/hospital/components/QuickDecisionTile.tsx:18 - QuickDecisionTile
+src/screens/urgentiste/signalement/types.ts:37 - STEP_LABELS
+src/screens/urgentiste/signalement/components/StepReception.tsx:28 - StepReception
+src/screens/urgentiste/signalement/components/StepTransport.tsx:25 - StepTransport
+src/screens/urgentiste/signalement/components/StepTransportMode.tsx:14 - StepTransportMode

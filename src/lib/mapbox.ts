@@ -116,7 +116,7 @@ function mapRawRoute(raw: any, targetOrigin?: [number, number], targetDest?: [nu
   if (targetOrigin) {
     const firstPoint = coords[0] as [number, number];
     const distOrigin = haversineMeters(targetOrigin, firstPoint);
-    if (distOrigin > 30) {
+    if (distOrigin > 5) {
       result.walkingGeometryBefore = {
         type: 'LineString',
         coordinates: [targetOrigin, firstPoint],
@@ -131,7 +131,7 @@ function mapRawRoute(raw: any, targetOrigin?: [number, number], targetDest?: [nu
     const lastPoint = coords[coords.length - 1] as [number, number];
     const distDest = haversineMeters(lastPoint, targetDest);
     
-    if (distDest > 30) {
+    if (distDest > 5) {
       result.walkingGeometryAfter = {
         type: 'LineString',
         coordinates: [lastPoint, targetDest],

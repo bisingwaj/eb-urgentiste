@@ -317,11 +317,12 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
             visible={mode === 'NAVIGATION' || mode === 'TRACKING'}
             minDisplacement={1}
             androidRenderMode="compass"
+            showsUserHeadingIndicator={true}
           >
             <Mapbox.LocationPuck
               puckBearingEnabled={true}
               puckBearing={speedKmh > 5 ? 'course' : 'heading'}
-              pulsing={{ isEnabled: true, color: colors.secondary, radius: 25 }}
+              pulsing={{ isEnabled: true, color: colors.secondary, radius: 15 }}
             />
           </Mapbox.UserLocation>
         ) : null) as any}
