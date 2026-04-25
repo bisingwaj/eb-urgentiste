@@ -1,5 +1,6 @@
 import React, { forwardRef, useMemo, useCallback, useState, useEffect, useRef } from 'react';
-import { StyleSheet, View, Text } from 'react-native';
+import { StyleSheet, View, Text, useColorScheme } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Mapbox, { UserTrackingMode, UserLocationRenderMode } from '@rnmapbox/maps';
 import { MapboxMapView, MapboxMapViewProps } from './MapboxMapView';
@@ -99,10 +100,73 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
   } = props;
 
   const insets = useSafeAreaInsets();
+  const systemColorScheme = useColorScheme();
   const mapRef = useRef<Mapbox.MapView>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
-  const [mapStyle, setMapStyle] = useState<string>(Mapbox.StyleURL.Street);
+
+  // ── Route draw animation ──
+  const [routeDrawProgress, setRouteDrawProgress] = useState(1.0);
+  const animFrameRef = useRef<number | null>(null);
+  const animStartRef = useRef<number>(0);
+  const ROUTE_ANIM_DURATION = 1400; // ms
+
+  // Key that changes whenever a genuinely new primary route is loaded
+  const primaryRouteKey = routeData?.routes?.[routeData.selectedIndex]?.distance ?? null;
+
+  useEffect(() => {
+    if (!primaryRouteKey) { setRouteDrawProgress(1.0); return; }
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    setRouteDrawProgress(0);
+    animStartRef.current = Date.now();
+    const step = () => {
+      const p = Math.min((Date.now() - animStartRef.current) / ROUTE_ANIM_DURATION, 1.0);
+      setRouteDrawProgress(p);
+      if (p < 1.0) animFrameRef.current = requestAnimationFrame(step);
+    };
+    animFrameRef.current = requestAnimationFrame(step);
+    return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
+  }, [primaryRouteKey]);
+
+  // Map theme: 'system' | 'dark' | 'light'
+  const MAP_THEME_KEY = 'eb_map_theme_pref';
+  const [themePreference, setThemePreference] = useState<'system' | 'dark' | 'light'>('system');
+
+  // Load persisted theme preference
+  useEffect(() => {
+    AsyncStorage.getItem(MAP_THEME_KEY).then((val) => {
+      if (val === 'dark' || val === 'light' || val === 'system') {
+        setThemePreference(val);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const resolvedTheme = themePreference === 'system'
+    ? (systemColorScheme ?? 'dark')
+    : themePreference;
+
+  // Satellite toggle
+  const [isSatellite, setIsSatellite] = useState(false);
+
+  const mapStyle = useMemo(() => {
+    if (isSatellite) return Mapbox.StyleURL.Satellite;
+    // dark-v10: warm dark style, no green roads, not as monochrome as dark-v11
+    return resolvedTheme === 'dark'
+      ? 'mapbox://styles/mapbox/dark-v10'
+      : 'mapbox://styles/mapbox/streets-v12';
+  }, [isSatellite, resolvedTheme]);
+
+  // Simple dark/light toggle (no tristate)
+  const toggleTheme = useCallback(() => {
+    setThemePreference(prev => {
+      const next = prev === 'dark' ? 'light' : 'dark';
+      AsyncStorage.setItem(MAP_THEME_KEY, next).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const toggleSatellite = useCallback(() => setIsSatellite(v => !v), []);
+
   const [cameraState, setCameraState] = useState({
     center: cameraConfig?.center || markers[0]?.coordinate || undefined,
     zoom: cameraConfig?.zoom || 13,
@@ -153,8 +217,8 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
   }, []);
 
   const toggleMapStyle = useCallback(() => {
-    setMapStyle(prev => prev === Mapbox.StyleURL.Light ? Mapbox.StyleURL.Satellite : Mapbox.StyleURL.Light);
-  }, []);
+    toggleSatellite();
+  }, [toggleSatellite]);
 
   const [showSheet, setShowSheet] = useState(mode === 'NAVIGATION');
   // Initial state logic: if bounds are provided, start in Overview (no following)
@@ -219,7 +283,25 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
     }).filter((b): b is any => b !== null);
   }, [routeData]);
 
-  // Split markers by type to handle clustering vs individual rendering
+  // Hospital markers as GeoJSON for native Mapbox rendering (avoids duplicate with OSM POIs)
+  const hospitalGeoJSON = useMemo(() => ({
+    type: 'FeatureCollection' as const,
+    features: markers
+      .filter(m => m.type === 'hospital')
+      .map(m => ({
+        type: 'Feature' as const,
+        id: m.id,
+        properties: {
+          id: m.id,
+          label: m.label || '',
+          beds: m.beds ?? -1,
+          isSelected: m.id === selectedMarkerId,
+        },
+        geometry: { type: 'Point' as const, coordinates: m.coordinate },
+      }))
+  }), [markers, selectedMarkerId]);
+
+  // Non-hospital markers for MarkerView rendering
   const { pointMarkers, symbolMarkers } = useMemo(() => {
     const processed: EBMapMarker[] = [];
     const groupedIds = new Set<string>();
@@ -256,7 +338,8 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
     });
 
     return { pointMarkers: processed, symbolMarkers: [] as EBMapMarker[] };
-  }, [markers, mode]);
+    // Note: hospitals are rendered separately via ShapeSource
+  }, [markers, mode, selectedMarkerId]);
 
   return (
     <View style={styles.container}>
@@ -310,7 +393,7 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
           animationDuration={1000}
         />
 
-        {/* Native User Location (The Puck) */}
+        {/* User location tracking (camera follow + native position) */}
         {(!useClustering ? (
           <Mapbox.UserLocation
             renderMode={UserLocationRenderMode.Normal}
@@ -321,18 +404,30 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
           >
             <Mapbox.LocationPuck
               puckBearingEnabled={true}
-              puckBearing={speedKmh > 5 ? 'course' : 'heading'}
-              pulsing={{ isEnabled: true, color: colors.secondary, radius: 15 }}
+              puckBearing={'heading'}
+              pulsing={{ isEnabled: false }}
             />
           </Mapbox.UserLocation>
         ) : null) as any}
 
-        {/* Custom Water Color (Custom clinical blue) */}
+        {/* MePuck: custom compass cone rendered via MarkerView (cross-platform) */}
+        {(myLocation && (mode === 'TRACKING' || mode === 'NAVIGATION')) ? (
+          <Mapbox.MarkerView
+            id="eb-me-puck-cone"
+            coordinate={myLocation}
+            anchor={{ x: 0.5, y: 0.7 }}
+          >
+            <MePuck headingDeg={myHeading} />
+          </Mapbox.MarkerView>
+        ) : (null as any)}
+
+
+        {/* Water color override */}
         <Mapbox.FillLayer
           id="eb-water-custom"
           sourceLayerID="water"
           style={{
-            fillColor: '#AADAFF', // A premium, vibrant clinical blue for water
+            fillColor: '#AADAFF',
             fillOpacity: 1,
           }}
         />
@@ -345,19 +440,30 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
           const layerId = `route-layer-${i}`;
           const glowId = `route-glow-${i}`;
 
+          // Animated shape: slice coordinates for smooth drawing on primary route
+          let routeShape = buildRouteFeature(r);
+          if (isPrimary && routeDrawProgress < 1.0) {
+            const allCoords = r.geometry.coordinates;
+            const sliceCount = Math.max(2, Math.floor(allCoords.length * routeDrawProgress));
+            routeShape = buildRouteFeature({
+              ...r,
+              geometry: { ...r.geometry, coordinates: allCoords.slice(0, sliceCount) }
+            });
+          }
+
           return (
             <Mapbox.ShapeSource
               key={`route-src-${i}`}
               id={`route-source-${i}`}
-              shape={buildRouteFeature(r)}
+              shape={routeShape}
               onPress={() => onRoutePress?.(i)}
             >
               <Mapbox.LineLayer
                 id={glowId}
                 style={{
                   lineColor: colors.secondary,
-                  lineWidth: 10,
-                  lineOpacity: isPrimary ? 0.25 : 0,
+                  lineWidth: 7,
+                  lineOpacity: isPrimary ? 0.2 : 0,
                   lineCap: 'round',
                   lineJoin: 'round',
                 }}
@@ -369,7 +475,7 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
                 filter={['==', ['get', 'routeType'], 'walking-before']}
                 style={{
                   lineColor: '#9CA3AF',
-                  lineWidth: 3,
+                  lineWidth: 2,
                   lineDasharray: [2, 2],
                   lineCap: 'round',
                 }}
@@ -380,12 +486,12 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
                 id={layerId}
                 filter={['==', ['get', 'routeType'], 'main']}
                 style={{
-                  lineColor: isPrimary ? colors.secondary : 'rgba(100, 180, 255, 0.6)',
-                  lineWidth: isPrimary ? 6 : 4,
-                  lineOpacity: isPrimary ? 1 : 0.7,
+                  lineColor: isPrimary ? colors.secondary : 'rgba(100, 180, 255, 0.5)',
+                  lineWidth: isPrimary ? 4 : 2.5,
+                  lineOpacity: isPrimary ? 1 : 0.65,
                   lineCap: 'round',
                   lineJoin: 'round',
-                  lineDasharray: isPrimary ? [1, 0] : [2, 1],
+                  lineDasharray: isPrimary ? [1, 0] : [3, 1.5],
                 }}
               />
 
@@ -395,7 +501,7 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
                 filter={['==', ['get', 'routeType'], 'walking-after']}
                 style={{
                   lineColor: '#9CA3AF',
-                  lineWidth: 3,
+                  lineWidth: 2,
                   lineDasharray: [2, 2],
                   lineCap: 'round',
                 }}
@@ -459,8 +565,8 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
           </Mapbox.ShapeSource>
         ) : (null as any)}
 
-        {/* Markers rendered individually */}
-        {pointMarkers.map(m => (
+        {/* Markers rendered individually — hospitals excluded (rendered via ShapeSource) */}
+        {pointMarkers.filter(m => m.type !== 'hospital').map(m => (
           <Mapbox.MarkerView
             id={`mv-${m.id}`}
             key={`mv-${m.id}`}
@@ -469,11 +575,7 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
             {m.type === 'me' ? (
               <MePuck headingDeg={m.headingDeg ?? myHeading} />
             ) : m.type === 'hospital' ? (
-              <HospitalMarker
-                label={m.label}
-                beds={m.beds}
-                onPress={() => handleMarkerPressLocal(m)}
-              />
+              <View /> // unreachable — hospitals filtered out above
             ) : m.type === 'incident' ? (
               <IncidentMarker
                 priority={m.priority || 'medium'}
@@ -496,6 +598,44 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
             )}
           </Mapbox.MarkerView>
         ))}
+
+        {/* ── Hospital markers via native Mapbox ShapeSource ── */}
+        <Mapbox.ShapeSource
+          id="eb-hospitals"
+          shape={hospitalGeoJSON}
+          onPress={(e) => {
+            const feature = e.features?.[0];
+            if (!feature) return;
+            const hospId = String(feature.properties?.id);
+            const found = markers.find(m => m.id === hospId);
+            if (found) handleMarkerPressLocal(found);
+          }}
+        >
+          <Mapbox.CircleLayer
+            id="eb-hospital-circles"
+            style={{
+              circleRadius: 7,
+              circleColor: ['case', ['==', ['get', 'isSelected'], true], '#D32F2F', '#9E9E9E'] as any,
+              circleStrokeWidth: 1.5,
+              circleStrokeColor: ['case', ['==', ['get', 'isSelected'], true], 'rgba(255,82,82,0.6)', 'rgba(255,255,255,0.55)'] as any,
+            }}
+          />
+          <Mapbox.SymbolLayer
+            id="eb-hospital-labels"
+            style={{
+              textField: ['get', 'label'] as any,
+              textSize: 10,
+              textFont: ['DIN Offc Pro Medium', 'Arial Unicode MS Regular'],
+              textOffset: [0, 1.5] as any,
+              textAnchor: 'top' as any,
+              textColor: ['case', ['==', ['get', 'isSelected'], true], '#FF5252', '#555555'] as any,
+              textHaloColor: 'rgba(255,255,255,0.92)',
+              textHaloWidth: 1.5,
+              textOptional: true,
+              textAllowOverlap: false,
+            }}
+          />
+        </Mapbox.ShapeSource>
 
         {routeBadges.map(rb => rb ? (
           <Mapbox.MarkerView 
@@ -521,14 +661,7 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
           </Mapbox.MarkerView>
         ) : null)}
 
-        {(myLocation && mode !== 'NAVIGATION') ? (
-          <Mapbox.PointAnnotation
-            id="eb-my-puck"
-            coordinate={myLocation}
-          >
-            <MePuck headingDeg={myHeading} />
-          </Mapbox.PointAnnotation>
-        ) : (null as any)}
+        {/* PointAnnotation fallback removed — MePuck now rendered via MarkerView above */}
 
         {!isMapReady && (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: '#0A0A0A', justifyContent: 'center', alignItems: 'center', zIndex: 100 }]}>
@@ -555,9 +688,24 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
           )}
 
           <View style={styles.mainControlsStack}>
-            {/* Map Style */}
-            <AppTouchableOpacity style={styles.stackBtn} onPress={toggleMapStyle}>
-              <MaterialCommunityIcons name="layers-outline" size={24} color="#FFF" />
+            {/* Theme Toggle (Dark/Light) */}
+            <AppTouchableOpacity style={styles.stackBtn} onPress={toggleTheme}>
+              <MaterialCommunityIcons
+                name={resolvedTheme === 'dark' ? 'weather-night' : 'weather-sunny'}
+                size={22}
+                color={colors.secondary}
+              />
+            </AppTouchableOpacity>
+
+            <View style={styles.separator} />
+
+            {/* Satellite toggle */}
+            <AppTouchableOpacity style={styles.stackBtn} onPress={toggleSatellite}>
+              <MaterialCommunityIcons
+                name={isSatellite ? 'map' : 'satellite-variant'}
+                size={22}
+                color={isSatellite ? colors.secondary : '#FFF'}
+              />
             </AppTouchableOpacity>
 
             <View style={styles.separator} />

@@ -1,4 +1,4 @@
-import type { Mission } from "../hooks/useActiveMission";
+import type { Mission } from "../types/mission";
 import { formatIncidentType } from "./missionAddress";
 
 /** Horodatage principal pour tri / filtre historique (missions terminées). */

@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../theme/colors';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import type { Mission, SosResponseItem } from '../../hooks/useActiveMission';
+import type { Mission, SosResponseItem } from '../../types/mission';
 import { formatIncidentType, formatDescriptionLines } from '../../utils/missionAddress';
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
 
@@ -322,7 +322,7 @@ export function MissionDetailScreen({ navigation, route }: any) {
           <>
             <Text style={styles.sectionHeading}>MÉDIAS</Text>
             <View style={styles.sectionCard}>
-              {mission.media_urls.map((url, i) => (
+              {mission.media_urls.map((url: string, i: number) => (
                 <Text key={i} style={[styles.descriptionText, i > 0 && { marginTop: 8 }]} selectable>
                   {url}
                 </Text>

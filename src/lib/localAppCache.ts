@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Mission } from '../hooks/useActiveMission';
-import type { EmergencyCase } from '../screens/hospital/HospitalDashboardTab';
+import type { Mission } from '../types/mission';
+import type { EmergencyCase } from '../screens/hospital/hospitalTypes';
 import type { UserProfile } from '../types/userProfile';
 
 const PREFIX = '@eb_urgentiste/v1';

@@ -1,4 +1,4 @@
-import type { EmergencyCase, LovableDischargeType } from '../screens/hospital/HospitalDashboardTab';
+import type { EmergencyCase, LovableDischargeType } from "../screens/hospital/hospitalTypes";
 
 export type { LovableDischargeType };
 

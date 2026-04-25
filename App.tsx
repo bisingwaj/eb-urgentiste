@@ -59,7 +59,6 @@ import { IncomingCallSubscriber } from './src/components/calls/IncomingCallSubsc
 import { IncomingCallNotificationHandler } from './src/components/calls/IncomingCallNotificationHandler';
 import { usePushTokenRegistration } from './src/hooks/usePushTokenRegistration';
 import { FloatingCallBar } from './src/components/calls/FloatingCallBar';
-import { SignalementScreen } from './src/screens/urgentiste/SignalementScreen';
 import { ProtocolesScreen } from './src/screens/urgentiste/ProtocolesScreen';
 import { SignalerProblemeScreen } from './src/screens/urgentiste/SignalerProblemeScreen';
 import { MissionActiveScreen } from './src/screens/urgentiste/MissionActiveScreen';
@@ -184,7 +183,6 @@ function RootNavigator() {
             options={{ gestureEnabled: false, animation: 'slide_from_bottom' }}
           />
           <Stack.Screen name="CallHistoryCalls" component={CallHistoryCallsScreen} />
-          <Stack.Screen name="Signalement" component={SignalementScreen} />
           <Stack.Screen name="Protocoles" component={ProtocolesScreen} />
           <Stack.Screen name="SignalerProbleme" component={SignalerProblemeScreen} />
           <Stack.Screen name="SignalementHub" component={SignalementHubScreen} />

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Mission } from '../hooks/useActiveMission';
+import type { Mission } from "../types/mission";
 
 /**
  * Charge l’historique des missions terminées pour une unité (même logique que useMissionHistory).

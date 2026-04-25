@@ -1,6 +1,6 @@
 import React, { memo, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, Platform, Animated } from 'react-native';
-import { Navigation2, TriangleAlert, Hospital, Ambulance } from 'lucide-react-native';
+import { Navigation2, TriangleAlert, Target } from 'lucide-react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Svg, { Path, Defs, RadialGradient, Stop } from 'react-native-svg';
 import { colors } from '../../theme/colors';
@@ -57,8 +57,15 @@ const PulseRing = ({ color, size, active = true }: { color: string, size: number
 
 /** Évite la suppression de la vue Android dans les MarkerView Mapbox (icônes invisibles). */
 function MarkerHost({ children }: { children: React.ReactNode }) {
-  if (Platform.OS !== 'android') return <>{children}</>;
-  return <View collapsable={false} style={{ alignItems: 'center', justifyContent: 'center' }}>{children}</View>;
+  // box-none: outer container passes touches through (allows map scroll),
+  // but children (Pressable icons) still receive taps.
+  if (Platform.OS !== 'android') return <View pointerEvents="box-none">{children}</View>;
+  return (
+    <View collapsable={false} pointerEvents="box-none"
+      style={{ alignItems: 'center', justifyContent: 'center' }}>
+      {children}
+    </View>
+  );
 }
 
 
@@ -92,27 +99,32 @@ export const HospitalMarker = memo(function HospitalMarker({
   onPress,
   label,
   beds,
+  isSelected = false,
 }: {
   label?: string;
   beds?: number;
   onPress?: () => void;
+  isSelected?: boolean;
 }) {
+  const dotColor = isSelected ? '#D32F2F' : '#757575';
   return (
     <MarkerHost>
-      <PulseRing color="#E53935" size={32} />
-      <Pressable onPress={onPress} style={styles.hospital}>
-        <Hospital size={16} color="#E53935" strokeWidth={2.5} />
-        {beds != null && (
-          <View style={styles.bedsBadge}>
-            <Text style={styles.bedsText}>{beds}</Text>
+      <View style={styles.hospitalContainer}>
+        <Pressable
+          onPress={onPress}
+          style={[
+            styles.hospitalDot, 
+            { backgroundColor: dotColor, borderColor: isSelected ? '#FF5252' : 'rgba(255,255,255,0.6)' }
+          ]}
+        />
+        {label && (
+          <View style={styles.hospitalLabelWrap} pointerEvents="none">
+            <Text style={[styles.hospitalLabelText, isSelected && { color: '#FF5252', fontWeight: '800' }]} numberOfLines={1}>
+              {label}
+            </Text>
           </View>
         )}
-      </Pressable>
-      {label && (
-        <View style={styles.topLabel}>
-          <Text style={styles.topLabelText}>{label.toUpperCase()}</Text>
-        </View>
-      )}
+      </View>
     </MarkerHost>
   );
 });
@@ -174,7 +186,7 @@ export const ProximityCluster = memo(function ProximityCluster({
       <Pressable onPress={onPress} style={styles.proximityContainer}>
         <View style={[styles.proximityRing, { borderColor: bg }]}>
           <View style={[styles.proximityInner, { backgroundColor: bg }]}>
-            <Hospital size={20} color="#FFFFFF" strokeWidth={2.5} />
+            <Target size={20} color="#FFFFFF" strokeWidth={2.5} />
           </View>
           {count > 1 && (
             <View style={styles.proximityBadge}>
@@ -286,19 +298,23 @@ const styles = StyleSheet.create({
   },
   topLabel: {
     position: 'absolute',
-    top: -32,
+    top: -28,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 120, // Wide enough to center the text
+    width: 120,
   },
   topLabelText: {
     color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '900',
-    backgroundColor: 'transparent',
-    textShadowColor: 'rgba(0, 0, 0, 0.8)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    overflow: 'hidden',
+    textShadowColor: 'rgba(0,0,0,0)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 0,
   },
   meContainer: {
     alignItems: 'center',
@@ -403,20 +419,34 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 7,
   },
-  hospital: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
+  // ── Hospital marker styles ──
+  hospitalContainer: {
     alignItems: 'center',
+  },
+  hospitalDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     borderWidth: 1.5,
-    borderColor: '#E53935',
     shadowColor: '#000',
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 5,
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1.5 },
+    elevation: 4,
+  },
+  hospitalLabelWrap: {
+    marginTop: 2,
+    maxWidth: 100,
+    alignItems: 'center',
+  },
+  hospitalLabelText: {
+    color: 'rgba(40,40,40,0.9)',
+    fontSize: 9.5,
+    fontWeight: '600',
+    textShadowColor: 'rgba(255,255,255,0.95)',
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 3,
+    letterSpacing: 0.1,
   },
   bedsBadge: {
     backgroundColor: colors.success,
