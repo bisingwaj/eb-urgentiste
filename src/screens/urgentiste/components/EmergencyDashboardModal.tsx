@@ -19,6 +19,9 @@ interface EmergencyDashboardModalProps {
   handleConfirmPressIn: () => void;
   handleConfirmPressOut: () => void;
   confirmProgress: Animated.Value;
+  handleRefusePressIn: () => void;
+  handleRefusePressOut: () => void;
+  refuseProgress: Animated.Value;
   navigation: any;
 }
 
@@ -35,6 +38,9 @@ export function EmergencyDashboardModal({
   handleConfirmPressIn,
   handleConfirmPressOut,
   confirmProgress,
+  handleRefusePressIn,
+  handleRefusePressOut,
+  refuseProgress,
   navigation
 }: EmergencyDashboardModalProps) {
   const metadata = getVictimMetadata();
@@ -160,10 +166,11 @@ export function EmergencyDashboardModal({
 
         <View style={styles.missionModalFooter}>
           <View style={styles.emergencyActionsRow}>
-            <Text style={styles.actionHintTextModal}>Maintenez appuyé pour accepter</Text>
+            <Text style={styles.actionHintTextModal}>Maintenez appuyé pour confirmer</Text>
+            
             <AppTouchableOpacity
               activeOpacity={1}
-              style={styles.btnDashboardPrimary}
+              style={styles.btnAcceptLong}
               onPressIn={handleConfirmPressIn}
               onPressOut={handleConfirmPressOut}
             >
@@ -171,8 +178,9 @@ export function EmergencyDashboardModal({
                 style={[
                   styles.confirmButtonProgress,
                   {
+                    backgroundColor: colors.success,
                     transform: [
-                      { translateX: - (width - 48) }, // Start off-screen left
+                      { translateX: - (width - 48) },
                       {
                         translateX: confirmProgress.interpolate({
                           inputRange: [0, 1],
@@ -183,19 +191,35 @@ export function EmergencyDashboardModal({
                   }
                 ]}
               />
-              <Text style={styles.btnDashboardPrimaryTxt}>ACCEPTER LA MISSION</Text>
+              <Text style={styles.btnAcceptTxt}>ACCEPTER LA MISSION</Text>
+            </AppTouchableOpacity>
+
+            <AppTouchableOpacity
+              activeOpacity={1}
+              style={styles.btnRefuseLong}
+              onPressIn={handleRefusePressIn}
+              onPressOut={handleRefusePressOut}
+            >
+              <Animated.View
+                style={[
+                  styles.confirmButtonProgress,
+                  {
+                    backgroundColor: colors.primary,
+                    transform: [
+                      { translateX: - (width - 48) },
+                      {
+                        translateX: refuseProgress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, width - 48]
+                        })
+                      }
+                    ]
+                  }
+                ]}
+              />
+              <Text style={styles.btnRefuseTxt}>REFUSER LA MISSION</Text>
             </AppTouchableOpacity>
           </View>
-
-          <AppTouchableOpacity
-            style={styles.refuseBtn}
-            onPress={() => {
-              setIsModalMinimized(true);
-              navigation.navigate('CallCenter');
-            }}
-          >
-            <Text style={styles.refuseBtnTxtLabel}>APPELER LA CENTRALE / REFUSER</Text>
-          </AppTouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -340,16 +364,19 @@ const styles = StyleSheet.create({
   mapPreviewBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    backgroundColor: 'rgba(68, 138, 255, 0.15)', // secondary blue with opacity
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(68, 138, 255, 0.3)',
   },
   mapPreviewBtnTxt: {
-    color: '#FFF',
-    fontSize: 13,
-    fontWeight: '800',
+    color: colors.secondary,
+    fontSize: 14,
+    fontWeight: '900',
     marginLeft: 8,
+    letterSpacing: 0.5,
   },
   incidentMotifTxtSmall: {
     color: '#FFF',
@@ -389,33 +416,56 @@ const styles = StyleSheet.create({
   },
   missionModalFooter: {
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 40,
+    paddingTop: 12,
+    paddingBottom: 32,
     backgroundColor: '#050505',
     borderTopWidth: 1,
     borderTopColor: 'rgba(255,255,255,0.05)',
   },
   emergencyActionsRow: {
-    marginBottom: 16,
+    marginBottom: 8,
+    gap: 8,
   },
   actionHintTextModal: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: 12,
-    fontWeight: '600',
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: 10,
+    fontWeight: '800',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 8,
     textTransform: 'uppercase',
-    letterSpacing: 1,
+    letterSpacing: 2,
   },
-  btnDashboardPrimary: {
-    height: 64,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    borderRadius: 16,
+  btnAcceptLong: {
+    height: 56,
+    backgroundColor: 'rgba(105, 240, 174, 0.05)',
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(105, 240, 174, 0.25)',
+  },
+  btnAcceptTxt: {
+    color: colors.success,
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 1.2,
+  },
+  btnRefuseLong: {
+    height: 56,
+    backgroundColor: 'rgba(255, 82, 82, 0.05)',
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 82, 82, 0.25)',
+  },
+  btnRefuseTxt: {
+    color: colors.primary,
+    fontSize: 15,
+    fontWeight: '900',
+    letterSpacing: 1.2,
   },
   confirmButtonProgress: {
     position: 'absolute',
@@ -423,25 +473,6 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     width: '100%',
-    backgroundColor: colors.primary,
-  },
-  btnDashboardPrimaryTxt: {
-    color: '#FFF',
-    fontSize: 16,
-    fontWeight: '900',
-    letterSpacing: 1.5,
-  },
-  refuseBtn: {
-    height: 56,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderRadius: 16,
-  },
-  refuseBtnTxtLabel: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    opacity: 0.3,
   },
 });

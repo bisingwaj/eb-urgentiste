@@ -67,6 +67,7 @@ import { NotificationsScreen } from './src/screens/urgentiste/NotificationsScree
 import { SignalementHubScreen } from './src/screens/urgentiste/SignalementHubScreen';
 import { SuiviSignalementsScreen } from './src/screens/urgentiste/SuiviSignalementsScreen';
 import { SignalementDetailScreen } from './src/screens/urgentiste/SignalementDetailScreen';
+import SignalementScreen from './src/screens/urgentiste/signalement';
 
 const Stack = createNativeStackNavigator();
 
@@ -188,6 +189,7 @@ function RootNavigator() {
           <Stack.Screen name="SignalementHub" component={SignalementHubScreen} />
           <Stack.Screen name="SuiviSignalements" component={SuiviSignalementsScreen} />
           <Stack.Screen name="SignalementDetail" component={SignalementDetailScreen} />
+          <Stack.Screen name="Signalement" component={SignalementScreen} />
           <Stack.Screen name="MissionActive" component={MissionActiveScreen} />
           <Stack.Screen name="MissionDetail" component={MissionDetailScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />

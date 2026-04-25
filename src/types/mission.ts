@@ -105,6 +105,8 @@ export interface Mission {
   suggested_hospitals_computed_at?: string | null;
   suggested_hospitals_origin_lat?: number | null;
   suggested_hospitals_origin_lng?: number | null;
+  admission_recorded_at?: string | null;
+  admission_recorded_by?: string | null;
   updated_at?: string | null;
   /** Données brutes de l'incident (accessoires ou logs) */
   incident?: any;

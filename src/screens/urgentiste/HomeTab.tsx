@@ -47,17 +47,24 @@ export function HomeTab({ navigation }: any) {
   const { isDutyActive, unitName, isHolding, holdProgress, handlePressIn, handlePressOut } = useHomeDuty(profile, isConnected, showDialog, refreshProfile);
   const {
     confirmProgress,
+    refuseProgress,
     isModalMinimized,
     setIsModalMinimized,
     userLocation,
     showMapPreview,
     setShowMapPreview,
+    allRoutes,
+    selectedRouteIndex,
+    setSelectedRouteIndex,
     activeRoute,
     routeBounds,
+    isRouteLoading,
     hasActiveAlert,
     isMissionAccepted,
     handleConfirmPressIn,
     handleConfirmPressOut,
+    handleRefusePressIn,
+    handleRefusePressOut,
     calculateDistance,
     getVictimMetadata,
     getMotifDAppel,
@@ -139,12 +146,13 @@ export function HomeTab({ navigation }: any) {
   }, [activeMission?.id, userLocation]);
 
   const mapPreviewRouteData = useMemo(() => {
-    if (!activeRoute) return undefined;
+    if (allRoutes.length === 0) return undefined;
     return {
-      routes: [activeRoute],
-      selectedIndex: 0,
+      routes: allRoutes,
+      selectedIndex: selectedRouteIndex,
+      showAlternatives: allRoutes.length > 1,
     };
-  }, [activeRoute]);
+  }, [allRoutes, selectedRouteIndex]);
 
   const mapPreviewCameraConfig = useMemo(() => {
     return {
@@ -158,15 +166,26 @@ export function HomeTab({ navigation }: any) {
 
       {/* MAP PREVIEW MODAL */}
       <Modal visible={showMapPreview} animationType="slide" transparent={false}>
-        <View style={{ flex: 1, backgroundColor: '#FFF' }}>
-          <EBMap
-            mode="NAVIGATION"
-            markers={mapPreviewMarkers}
-            routeData={mapPreviewRouteData}
-            cameraConfig={mapPreviewCameraConfig}
-            showControls={true}
-            style={{ flex: 1 }}
-          />
+        <View style={{ flex: 1, backgroundColor: '#050505' }}>
+          {isRouteLoading || !routeBounds ? (
+            // Loading state: map not yet ready — show a branded spinner
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#050505' }}>
+              <MaterialCommunityIcons name="map-clock" size={48} color={colors.secondary} style={{ opacity: 0.6 }} />
+              <Text style={{ color: 'rgba(255,255,255,0.5)', marginTop: 16, fontSize: 13, fontWeight: '700', letterSpacing: 1 }}>
+                Calcul de l’iténéraire...
+              </Text>
+            </View>
+          ) : (
+            <EBMap
+              mode="NAVIGATION"
+              markers={mapPreviewMarkers}
+              routeData={mapPreviewRouteData}
+              cameraConfig={mapPreviewCameraConfig}
+              showControls={true}
+              onRoutePress={(idx) => setSelectedRouteIndex(idx)}
+              style={{ flex: 1 }}
+            />
+          )}
           <AppTouchableOpacity style={styles.closeMapBtn} onPress={() => setShowMapPreview(false)}>
             <MaterialIcons name="close" size={28} color="#FFF" />
           </AppTouchableOpacity>
@@ -186,6 +205,9 @@ export function HomeTab({ navigation }: any) {
         handleConfirmPressIn={handleConfirmPressIn}
         handleConfirmPressOut={handleConfirmPressOut}
         confirmProgress={confirmProgress}
+        handleRefusePressIn={handleRefusePressIn}
+        handleRefusePressOut={handleRefusePressOut}
+        refuseProgress={refuseProgress}
         navigation={navigation}
       />
 

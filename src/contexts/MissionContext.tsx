@@ -79,6 +79,8 @@ interface SupabaseDispatch {
   completed_at?: string | null;
   updated_at?: string | null;
   dispatch_notes?: string | null;
+  admission_recorded_at?: string | null;
+  admission_recorded_by?: string | null;
   incidents: SupabaseIncident;
 }
 
@@ -322,6 +324,8 @@ export function MissionProvider({ children }: { children: ReactNode }) {
           suggested_hospitals_computed_at: row.suggested_hospitals_computed_at || null,
           suggested_hospitals_origin_lat: row.suggested_hospitals_origin_lat || null,
           suggested_hospitals_origin_lng: row.suggested_hospitals_origin_lng || null,
+          admission_recorded_at: row.admission_recorded_at || null,
+          admission_recorded_by: row.admission_recorded_by || null,
           updated_at: row.updated_at || null,
           assigned_structure: buildAssignedStructureFromDispatchRow(row),
           incident,
@@ -353,6 +357,12 @@ export function MissionProvider({ children }: { children: ReactNode }) {
   const mergeDispatchUpdateIntoState = useCallback((payload: { new?: Record<string, unknown> }) => {
     const n = (payload.new || {}) as any;
     if (!n.id) return;
+    
+    // Safety: ignore updates for missions that aren't the current active one
+    if (activeMissionRef.current && String(n.id) !== String(activeMissionRef.current.id)) {
+      return;
+    }
+
     setActiveMission((prev) => {
       if (!prev || String(prev.id) !== String(n.id)) return prev;
       const hospital_status =
@@ -446,11 +456,15 @@ export function MissionProvider({ children }: { children: ReactNode }) {
         },
         (payload: any) => {
           const row = (payload.new || {}) as Record<string, unknown>;
-          console.log('[Mission] 📡 UPDATE dispatches (unit_id)', row.id, row.assigned_structure_id);
-          if (row.assigned_structure_id != null) {
-            logStructureGps('Realtime postgres_changes (unit_id)', row);
-            console.log('Realtime postgres_changes (unit_id)', row);
+          const isActive = activeMissionRef.current && String(row.id) === String(activeMissionRef.current.id);
+          
+          if (isActive) {
+            console.log('[Mission] 📡 UPDATE dispatches (unit_id)', row.id, row.status);
+            if (row.assigned_structure_id != null) {
+              logStructureGps('Realtime postgres_changes (unit_id)', row);
+            }
           }
+          
           mergeDispatchUpdateIntoState(payload);
           scheduleSilentRefetch();
         }

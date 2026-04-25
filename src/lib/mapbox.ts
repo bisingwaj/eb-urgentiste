@@ -290,7 +290,7 @@ export function buildRouteFeature(route: RouteResult): GeoJSON.FeatureCollection
 /** Bornes caméra Mapbox à partir d’une LineString (padding homogène). */
 export function geometryToCameraBounds(
   geometry: GeoJSON.LineString,
-  padding: number,
+  padding: number = 100,
 ): {
   ne: [number, number];
   sw: [number, number];
@@ -310,11 +310,13 @@ export function geometryToCameraBounds(
     minLat = Math.min(minLat, c[1]);
     maxLat = Math.max(maxLat, c[1]);
   }
+  
+  // Apply slightly more padding at bottom/top for UI elements
   return {
     ne: [maxLng, maxLat],
     sw: [minLng, minLat],
-    paddingTop: padding,
-    paddingBottom: padding,
+    paddingTop: padding + 40, 
+    paddingBottom: padding + 120, // Extra space for pills/buttons at bottom
     paddingLeft: padding,
     paddingRight: padding,
   };

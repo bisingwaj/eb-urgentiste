@@ -103,13 +103,18 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
   const systemColorScheme = useColorScheme();
   const mapRef = useRef<Mapbox.MapView>(null);
   const cameraRef = useRef<Mapbox.Camera>(null);
+  const isFirstRender = useRef(true);
   const [selectedMarkerId, setSelectedMarkerId] = useState<string | null>(null);
+
+  useEffect(() => {
+    isFirstRender.current = false;
+  }, []);
 
   // ── Route draw animation ──
   const [routeDrawProgress, setRouteDrawProgress] = useState(1.0);
   const animFrameRef = useRef<number | null>(null);
   const animStartRef = useRef<number>(0);
-  const ROUTE_ANIM_DURATION = 1400; // ms
+  const ROUTE_ANIM_DURATION = 1800; // ms
 
   // Key that changes whenever a genuinely new primary route is loaded
   const primaryRouteKey = routeData?.routes?.[routeData.selectedIndex]?.distance ?? null;
@@ -120,9 +125,11 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
     setRouteDrawProgress(0);
     animStartRef.current = Date.now();
     const step = () => {
-      const p = Math.min((Date.now() - animStartRef.current) / ROUTE_ANIM_DURATION, 1.0);
-      setRouteDrawProgress(p);
-      if (p < 1.0) animFrameRef.current = requestAnimationFrame(step);
+      const raw = Math.min((Date.now() - animStartRef.current) / ROUTE_ANIM_DURATION, 1.0);
+      // Ease-out cubic: fast start, smooth deceleration — eliminates visible stepping at slow speeds
+      const eased = 1 - Math.pow(1 - raw, 3);
+      setRouteDrawProgress(eased);
+      if (raw < 1.0) animFrameRef.current = requestAnimationFrame(step);
     };
     animFrameRef.current = requestAnimationFrame(step);
     return () => { if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current); };
@@ -389,8 +396,8 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
           heading={!followUserLocation ? cameraState.heading : undefined}
           pitch={!followUserLocation ? cameraState.pitch : undefined}
           
-          animationMode="flyTo"
-          animationDuration={1000}
+          animationMode={isFirstRender.current ? "none" : "flyTo"}
+          animationDuration={isFirstRender.current ? 0 : 1000}
         />
 
         {/* User location tracking (camera follow + native position) */}
@@ -440,14 +447,30 @@ export const EBMap = forwardRef<Mapbox.MapView, EBMapProps>((props, ref) => {
           const layerId = `route-layer-${i}`;
           const glowId = `route-glow-${i}`;
 
-          // Animated shape: slice coordinates for smooth drawing on primary route
+          // Animated shape: sub-coordinate interpolation for smooth, step-free drawing
           let routeShape = buildRouteFeature(r);
           if (isPrimary && routeDrawProgress < 1.0) {
             const allCoords = r.geometry.coordinates;
-            const sliceCount = Math.max(2, Math.floor(allCoords.length * routeDrawProgress));
+            const exactCount = (allCoords.length - 1) * routeDrawProgress;
+            const fullCount = Math.floor(exactCount);
+            const fraction = exactCount - fullCount;
+
+            let animCoords: number[][];
+            if (fullCount >= allCoords.length - 1) {
+              animCoords = allCoords;
+            } else {
+              // Sub-coordinate interpolation: smooth tip between two waypoints
+              const tipA = allCoords[fullCount];
+              const tipB = allCoords[fullCount + 1];
+              const interpolatedTip = [
+                tipA[0] + (tipB[0] - tipA[0]) * fraction,
+                tipA[1] + (tipB[1] - tipA[1]) * fraction,
+              ];
+              animCoords = [...allCoords.slice(0, fullCount + 1), interpolatedTip];
+            }
             routeShape = buildRouteFeature({
               ...r,
-              geometry: { ...r.geometry, coordinates: allCoords.slice(0, sliceCount) }
+              geometry: { ...r.geometry, coordinates: animCoords }
             });
           }
 

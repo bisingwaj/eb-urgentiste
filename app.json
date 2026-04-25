@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "apps-v2",
-    "slug": "apps-v2",
+    "name": "eb-urgence",
+    "slug": "eb-urgence",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",

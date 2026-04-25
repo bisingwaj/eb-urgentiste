@@ -208,7 +208,7 @@ export function MissionActiveScreen({ navigation }: any) {
 
       if (next === 'on_scene' || next === 'arrived_hospital') {
         const targetStatus = next;
-        const targetStep = next === 'arrived_hospital' ? 'closure' : 'assessment';
+        const targetStep = next === 'arrived_hospital' ? 'waiting' : 'assessment';
         
         setIsTransitioning(true);
         navigation.replace('Signalement', {

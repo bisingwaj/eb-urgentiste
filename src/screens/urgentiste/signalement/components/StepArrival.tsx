@@ -10,7 +10,7 @@ interface StepArrivalProps {
    selectedMission: any;
    urgentisteLoc: any;
    urgentisteHeadingDeg: number;
-   routeGeoJSON: any;
+   allPatientRoutes: any[];
    arrivalCameraBounds: any;
    displayAddress: string;
    elapsedSeconds: number;
@@ -25,7 +25,7 @@ export const StepArrival: React.FC<StepArrivalProps> = ({
    selectedMission,
    urgentisteLoc,
    urgentisteHeadingDeg,
-   routeGeoJSON,
+   allPatientRoutes,
    arrivalCameraBounds,
    displayAddress,
    elapsedSeconds,
@@ -47,17 +47,13 @@ export const StepArrival: React.FC<StepArrivalProps> = ({
    }, [selectedMission.location?.lat, selectedMission.location?.lng, urgentisteLoc, urgentisteHeadingDeg]);
 
    const mapRouteData = useMemo(() => {
-      if (!routeGeoJSON) return undefined;
+      if (!allPatientRoutes || allPatientRoutes.length === 0) return undefined;
       return {
-         routes: [{
-            geometry: routeGeoJSON.features[0].geometry,
-            duration: 0,
-            distance: 0,
-            steps: [],
-         }],
+         routes: allPatientRoutes,
          selectedIndex: 0,
+         showAlternatives: allPatientRoutes.length > 1,
       };
-   }, [routeGeoJSON]);
+   }, [allPatientRoutes]);
 
    return (
       <View
