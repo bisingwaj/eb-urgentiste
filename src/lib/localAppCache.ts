@@ -3,7 +3,7 @@ import type { Mission } from '../types/mission';
 import type { EmergencyCase } from '../screens/hospital/hospitalTypes';
 import type { UserProfile } from '../types/userProfile';
 
-const PREFIX = '@eb_urgentiste/v1';
+const PREFIX = '@eb_urgence/v1';
 
 /**
  * Clés AsyncStorage (préfixe PREFIX) :

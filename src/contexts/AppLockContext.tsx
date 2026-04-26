@@ -17,7 +17,7 @@ import {
 import { useAuth } from './AuthContext';
 import { AppLockOverlay } from '../components/security/AppLockOverlay';
 
-const STORAGE_KEY = '@eburgentiste/app_lock_enabled';
+const STORAGE_KEY = '@eb_urgence/app_lock_enabled';
 
 function authErrorMessage(err?: string): string | null {
   if (!err || err === 'user_cancel' || err === 'system_cancel' || err === 'app_cancel') {
@@ -119,7 +119,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const requestUnlock = useCallback(async () => {
     const result = await authenticateAsync({
       promptMessage: 'Déverrouiller l’application',
-      promptSubtitle: 'Etoile Bleue Urgentiste',
+      promptSubtitle: 'EB-URGENCE',
       cancelLabel: 'Annuler',
       fallbackLabel: 'Code du téléphone',
       disableDeviceFallback: false,
@@ -162,7 +162,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
 
     const result = await authenticateAsync({
       promptMessage: 'Confirmer l’activation de la protection',
-      promptSubtitle: 'Etoile Bleue Urgentiste',
+      promptSubtitle: 'EB-URGENCE',
       cancelLabel: 'Annuler',
       fallbackLabel: 'Code du téléphone',
       disableDeviceFallback: false,

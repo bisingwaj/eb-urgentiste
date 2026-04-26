@@ -318,7 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (loaded.role !== 'secouriste') {
           return {
             ok: false,
-            error: 'Ce compte est réservé au portail urgentiste. Choisissez « Urgentiste » sur l’écran d’accueil.',
+            error: 'Ce compte est réservé au portail EB-Urgence. Choisissez « Urgence » sur l’écran d’accueil.',
           };
         }
       }

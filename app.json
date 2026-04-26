@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.eburgentiste.app",
+      "bundleIdentifier": "com.eburgence.app",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio",
@@ -41,7 +41,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.eburgentiste.app",
+      "package": "com.eburgence.app",
       "versionCode": 12
     },
     "web": {
