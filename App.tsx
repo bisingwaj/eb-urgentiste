@@ -217,7 +217,7 @@ export default function App() {
     // Mode plein écran sur Android (Immersive Mode)
     if (Platform.OS === 'android') {
       void NavigationBar.setVisibilityAsync('hidden');
-      void NavigationBar.setBehaviorAsync('sticky-immersive');
+      void NavigationBar.setBehaviorAsync('overlay-swipe');
     }
   }, []);
 
