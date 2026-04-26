@@ -4,9 +4,11 @@ import * as SystemUI from 'expo-system-ui';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { navigationRef } from './src/navigation/navigationRef';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { StatusBar, View, Text, ScrollView, Appearance, DeviceEventEmitter } from 'react-native';
+import { StatusBar, View, Text, ScrollView, Appearance, DeviceEventEmitter, Platform } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import Mapbox from '@rnmapbox/maps';
+import * as NavigationBar from 'expo-navigation-bar';
+import * as Device from 'expo-device';
 import { AlarmService, ALARM_STOP_EVENT } from './src/services/AlarmService';
 
 const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_TOKEN?.trim();
@@ -211,6 +213,12 @@ export default function App() {
     /** Toujours sombre : barres système / contrôles comme en mode dark, même si le téléphone est en mode clair. */
     Appearance.setColorScheme('dark');
     void SystemUI.setBackgroundColorAsync('#000000');
+
+    // Mode plein écran sur Android (Immersive Mode)
+    if (Platform.OS === 'android') {
+      void NavigationBar.setVisibilityAsync('hidden');
+      void NavigationBar.setBehaviorAsync('sticky-immersive');
+    }
   }, []);
 
   useEffect(() => {
@@ -244,7 +252,7 @@ export default function App() {
           <HospitalProvider>
             <AppLockProvider>
               <SafeAreaProvider>
-                <StatusBar barStyle="light-content" backgroundColor="#000000" />
+                <StatusBar hidden={true} barStyle="light-content" backgroundColor="#000000" />
                 <View
                   style={{ flex: 1 }}
                   onTouchStart={() => {

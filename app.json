@@ -40,6 +40,12 @@
         "backgroundColor": "#0D0D0D"
       },
       "edgeToEdgeEnabled": true,
+      "statusBar": {
+        "hidden": true
+      },
+      "navigationBar": {
+        "visible": "sticky-immersive"
+      },
       "predictiveBackGestureEnabled": false,
       "package": "com.eburgentiste.app",
       "versionCode": 12
