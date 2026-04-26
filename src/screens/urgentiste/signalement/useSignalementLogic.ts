@@ -4,7 +4,7 @@ import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../../lib/supabase";
-import { getRoute, buildRouteFeature, geometryToCameraBounds } from "../../../lib/mapbox";
+import { getRouteWithAlternatives, buildRouteFeature, geometryToCameraBounds, type RouteResult } from "../../../lib/mapbox";
 import { useActiveMission } from "../../../hooks/useActiveMission";
 import { useMission } from "../../../contexts/MissionContext";
 import { useMapPuckHeading } from "../../../hooks/useMapPuckHeading";
@@ -41,9 +41,9 @@ export function useSignalementLogic(navigation: any, route: any) {
          case 'dispatched': return 'arrival';
          case 'en_route': return 'arrival';
          case 'on_scene': return 'assessment';
-         // If we are en route or arrived at hospital, skip to closure (Map handled externally)
+         // If we are en route or arrived at hospital, skip to waiting
          case 'en_route_hospital': 
-         case 'arrived_hospital': 
+         case 'arrived_hospital': return 'waiting';
          case 'mission_end': 
          case 'completed': 
             return 'closure';
@@ -105,9 +105,17 @@ export function useSignalementLogic(navigation: any, route: any) {
             const status = activeMission.dispatch_status;
             const isCompleted = status === 'mission_end' || status === 'completed';
             const isAtHospital = status === 'arrived_hospital';
+            const releaseStatuses = ['admis', 'triage', 'prise_en_charge', 'monitoring', 'cloture'];
+            const isHandoverStarted = !!activeMission?.admission_recorded_at || releaseStatuses.includes(activeMission?.hospital_data?.status as string);
             
-            if ((isCompleted || isAtHospital) && step !== 'closure') {
-               console.log("[Signalement] Mission advanced to final stages. Jumping to closure.");
+            if (isAtHospital && !isHandoverStarted && step !== 'waiting' && step !== 'closure') {
+               console.log("[Signalement] Mission arrived at hospital. Jumping to waiting.");
+               setStep('waiting');
+            } else if (isCompleted && step !== 'closure') {
+               console.log("[Signalement] Mission advanced to final stages (Backend). Jumping to closure.");
+               setStep('closure');
+            } else if (isHandoverStarted && step === 'waiting') {
+               console.log("[Signalement] Handshake Complete: Hospital admitted patient. Jumping to closure.");
                setStep('closure');
             }
          }
@@ -116,8 +124,19 @@ export function useSignalementLogic(navigation: any, route: any) {
          console.log("[Signalement] ⏹ Mission disappeared. Cleaning up.");
          prevMissionIdRef.current = null;
          resetStates();
+         // If it wasn't a manual finish, go back to dashboard
+         if (!isFinishing) {
+            navigation.goBack();
+         }
       }
-   }, [activeMission?.id, activeMission?.dispatch_status, resetStates, step]);
+   }, [
+      activeMission?.id, 
+      activeMission?.dispatch_status, 
+      activeMission?.hospital_data?.status, 
+      activeMission?.admission_recorded_at,
+      resetStates, 
+      step
+   ]);
 
    useEffect(() => {
       if (activeMission?.type || initialMission?.type) {
@@ -166,6 +185,7 @@ export function useSignalementLogic(navigation: any, route: any) {
    const [urgentisteLoc, setUrgentisteLoc] = useState<Location.LocationObject | null>(null);
    const urgentisteHeadingDeg = useMapPuckHeading(urgentisteLoc);
    const [routeGeoJSON, setRouteGeoJSON] = useState<GeoJSON.FeatureCollection | null>(null);
+   const [allPatientRoutes, setAllPatientRoutes] = useState<RouteResult[]>([]);
    const [routeDuration, setRouteDuration] = useState<number | null>(null);
    const [routeDistance, setRouteDistance] = useState<number | null>(null);
    const lastRouteFetch = useRef<number>(0);
@@ -261,15 +281,16 @@ export function useSignalementLogic(navigation: any, route: any) {
       lastRouteFetch.current = now;
       const pLat = selectedMission.location?.lat || -4.322447;
       const pLng = selectedMission.location?.lng || 15.307045;
-      getRoute(
+      getRouteWithAlternatives(
          [urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude],
          [pLng, pLat],
-         { profile: "driving-traffic" },
+         { profile: "driving-traffic", alternatives: true },
       ).then((result) => {
          if (result) {
-            setRouteGeoJSON(buildRouteFeature(result));
-            setRouteDuration(result.duration);
-            setRouteDistance(result.distance);
+            setAllPatientRoutes(result.routes);
+            setRouteGeoJSON(buildRouteFeature(result.primary));
+            setRouteDuration(result.primary.duration);
+            setRouteDistance(result.primary.distance);
          }
       });
    }, [urgentisteLoc?.coords.latitude, urgentisteLoc?.coords.longitude, selectedMission?.location?.lat, selectedMission?.location?.lng]);
@@ -301,8 +322,9 @@ export function useSignalementLogic(navigation: any, route: any) {
       [routeCameraBounds, cameraBounds],
    );
 
-   // Hospital routing logic
+    // Hospital routing logic
    const [hospitalRouteGeoJSON, setHospitalRouteGeoJSON] = useState<any>(null);
+   const [allHospitalRoutes, setAllHospitalRoutes] = useState<RouteResult[]>([]);
    const [hospitalRouteDuration, setHospitalRouteDuration] = useState<number | null>(null);
    const [hospitalRouteDistance, setHospitalRouteDistance] = useState<number | null>(null);
 
@@ -313,13 +335,14 @@ export function useSignalementLogic(navigation: any, route: any) {
       }
       const fetchHospitalRoute = async () => {
          try {
-            const start: [number, number] = [urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude];
+             const start: [number, number] = [urgentisteLoc.coords.longitude, urgentisteLoc.coords.latitude];
             const end: [number, number] = [targetHospital.coords.longitude, targetHospital.coords.latitude];
-            const result = await getRoute(start, end);
+            const result = await getRouteWithAlternatives(start, end, { alternatives: true });
             if (result) {
-               setHospitalRouteGeoJSON(buildRouteFeature(result));
-               setHospitalRouteDuration(result.duration);
-               setHospitalRouteDistance(result.distance);
+               setAllHospitalRoutes(result.routes);
+               setHospitalRouteGeoJSON(buildRouteFeature(result.primary));
+               setHospitalRouteDuration(result.primary.duration);
+               setHospitalRouteDistance(result.primary.distance);
             }
          } catch (e) {
             console.error("Hospital route error", e);
@@ -631,7 +654,7 @@ export function useSignalementLogic(navigation: any, route: any) {
       try {
          await updateDispatchStatus('arrived_hospital');
          addTimelineEvent("Arrivée à l'hôpital", "local-hospital");
-         transitionTo("closure");
+         transitionTo("waiting");
       } catch (err) { }
    };
 
@@ -642,17 +665,29 @@ export function useSignalementLogic(navigation: any, route: any) {
       const status = activeMission?.dispatch_status;
       const isAtHospitalStage = status === 'en_route_hospital' || status === 'arrived_hospital';
 
-      // Auto-trigger departure when hospital accepts (which now automatically updates status)
-      // OR if someone manually updated it. We avoid the intermediate "Depart" click.
+      // 1. Auto-transition from assignment to navigation if hospital accepts
       if (isAtHospitalStage && step === 'assignment') {
          console.log("[Signalement] Remote Status Updated to En Route Hospital -> Auto-Navigating to Map");
-         // Use a small delay to ensure the user sees the confirmation if they were watching
          const timer = setTimeout(() => {
             navigation.navigate('MissionActive', { mission: activeMission || selectedMission });
          }, 500);
          return () => clearTimeout(timer);
       }
-   }, [activeMission?.dispatch_status, step, isFinishing]);
+
+      // 2. Handshake: transition from waiting to closure when hospital starts triage (early release)
+      const releaseStatuses = ['admis', 'triage', 'prise_en_charge', 'monitoring', 'cloture'];
+      const isHandoverStarted = !!activeMission?.admission_recorded_at || releaseStatuses.includes(activeMission?.hospital_data?.status as string);
+      if ((status === 'mission_end' || status === 'completed' || isHandoverStarted) && step === 'waiting') {
+         console.log("[Signalement] Handshake Complete -> Releasing to final screen");
+         transitionTo("closure");
+      }
+   }, [
+      activeMission?.dispatch_status, 
+      activeMission?.hospital_data?.status, 
+      activeMission?.admission_recorded_at,
+      step, 
+      isFinishing
+   ]);
 
    const handleDepartVersStructure = async () => {
       if (departingEnRoute || !targetHospital?.coords) return;
@@ -793,8 +828,8 @@ export function useSignalementLogic(navigation: any, route: any) {
 
    return {
       step, setStep, selectedMission, setSelectedMission, timeline, setTimeline, elapsedSeconds,
-      urgentisteLoc, urgentisteHeadingDeg, routeGeoJSON, routeDuration, routeDistance, routeCameraBounds,
-      hospitalRouteGeoJSON, hospitalRouteDuration, hospitalRouteDistance, hospitalRouteCameraBounds,
+      urgentisteLoc, urgentisteHeadingDeg, routeGeoJSON, allPatientRoutes, routeDuration, routeDistance, routeCameraBounds,
+      hospitalRouteGeoJSON, allHospitalRoutes, hospitalRouteDuration, hospitalRouteDistance, hospitalRouteCameraBounds,
       resolvedAddress, displayAddress, distanceInfo, routeInfoText,
       assessment, setAssessment, careChecklist, setCareChecklist, decision, setDecision,
       targetHospital, setTargetHospital, pendingStructureInfo, setPendingStructureInfo,

@@ -1,0 +1,57 @@
+stateDiagram-v2
+    direction LR
+
+    [*] --> incident_new : Citizen SOS / PBX
+    incident_new --> incident_in_progress : Operator claims call (claim_call_fast)
+    incident_in_progress --> dispatch_pending : Dashboard "Dispatcher"
+
+    state "DISPATCH LIFECYCLE" as DL {
+        dispatch_pending --> dispatched : useDispatchAction\nINSERT dispatches\nUPDATE units.status=dispatched
+        dispatched --> en_route : Mobile App (rescuer)
+        en_route --> on_scene : Mobile App\n(triggers compute-mission-hospitals)
+        on_scene --> en_route_hospital : Mobile App
+        en_route_hospital --> arrived_hospital : Mobile App
+        arrived_hospital --> mission_end : Mobile App ("Cloturer")
+        on_scene --> completed : Resolution sur place
+        mission_end --> auto_release_unit : trg_release_unit_on_dispatch_end\nUPDATE units.status=available\nUPDATE active_rescuers.status=active
+        completed --> auto_release_unit
+        auto_release_unit --> [*]
+    }
+
+    state "HOSPITAL HANDOVER (parallel)" as HH {
+        hp_pending : hospital_status=pending
+        hp_accepted : hospital_status=accepted
+        hp_refused : hospital_status=refused
+        hp_admis : hospital_data.status=admis\nadmission_recorded_at=now()
+        hp_pending --> hp_accepted : Hospital App accepts
+        hp_pending --> hp_refused : Hospital App refuses
+        hp_accepted --> hp_admis : Hospital App "Valider l'admission"\n(trg_notify_patient_hospital_status -> push)
+        hp_admis --> auto_mission_end : trg_hospital_admission_mission_end\nAUTO dispatches.status=mission_end
+    }
+
+    incident_in_progress --> incident_resolved : RPC resolve_incident\n(operator manual close)
+    incident_resolved --> cascade_close : trg_on_incident_closed_release_units\n1. UPDATE dispatches SET status=completed\n2. UPDATE units SET status=available\n3. UPDATE active_rescuers SET status=active
+    cascade_close --> [*]
+
+    note right of DL
+        FIXED: trg_release_unit_on_dispatch_end
+        fires on mission_end / completed / cancelled
+        and atomically:
+        - units.status = available
+        - active_rescuers.status = active
+        Resilient to mobile app crashes.
+    end note
+
+    note right of HH
+        FIXED: trg_hospital_admission_mission_end
+        fires BEFORE UPDATE when
+        hospital_data->>status = 'admis'
+        and auto-sets dispatches.status = mission_end
+        which then triggers unit release above.
+    end note
+
+    note left of incident_resolved
+        SAFETY: Mobile fetchActiveMission MUST filter
+        WHERE status NOT IN ('completed','cancelled','mission_end','archived')
+        to avoid resurrecting closed missions.
+    end note

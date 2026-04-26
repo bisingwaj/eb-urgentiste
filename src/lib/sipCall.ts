@@ -4,8 +4,7 @@ import {
   RTCSessionDescription,
   mediaDevices,
   MediaStream,
-  MediaStreamTrack,
-  MediaStreamTrackEvent
+  MediaStreamTrack
 } from 'react-native-webrtc';
 import { UserAgent, Registerer, Inviter, SessionState, TransportState } from 'sip.js';
 import InCallManager from 'react-native-incall-manager';
@@ -23,7 +22,7 @@ if (!global.window) {
 (global.window as any).MediaStreamTrack = MediaStreamTrack;
 
 // FIX CRASH : Injection ou Mock de MediaStreamTrackEvent
-(global.window as any).MediaStreamTrackEvent = MediaStreamTrackEvent || function() {};
+(global.window as any).MediaStreamTrackEvent = function() {};
 
 if (!global.navigator) {
   (global as any).navigator = {};
@@ -145,7 +144,7 @@ export const startSipCall = async (
     if (!targetUri) throw new Error("Numéro cible invalide");
 
     currentInviter = new Inviter(userAgent, targetUri, {
-      sessionDescriptionHandlerFactoryOptions: {
+      sessionDescriptionHandlerOptions: {
         constraints: { audio: true, video: false }
       }
     });

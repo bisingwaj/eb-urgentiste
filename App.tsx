@@ -61,7 +61,6 @@ import { IncomingCallSubscriber } from './src/components/calls/IncomingCallSubsc
 import { IncomingCallNotificationHandler } from './src/components/calls/IncomingCallNotificationHandler';
 import { usePushTokenRegistration } from './src/hooks/usePushTokenRegistration';
 import { FloatingCallBar } from './src/components/calls/FloatingCallBar';
-import { SignalementScreen } from './src/screens/urgentiste/SignalementScreen';
 import { ProtocolesScreen } from './src/screens/urgentiste/ProtocolesScreen';
 import { SignalerProblemeScreen } from './src/screens/urgentiste/SignalerProblemeScreen';
 import { MissionActiveScreen } from './src/screens/urgentiste/MissionActiveScreen';
@@ -70,6 +69,7 @@ import { NotificationsScreen } from './src/screens/urgentiste/NotificationsScree
 import { SignalementHubScreen } from './src/screens/urgentiste/SignalementHubScreen';
 import { SuiviSignalementsScreen } from './src/screens/urgentiste/SuiviSignalementsScreen';
 import { SignalementDetailScreen } from './src/screens/urgentiste/SignalementDetailScreen';
+import SignalementScreen from './src/screens/urgentiste/signalement';
 
 const Stack = createNativeStackNavigator();
 
@@ -186,12 +186,12 @@ function RootNavigator() {
             options={{ gestureEnabled: false, animation: 'slide_from_bottom' }}
           />
           <Stack.Screen name="CallHistoryCalls" component={CallHistoryCallsScreen} />
-          <Stack.Screen name="Signalement" component={SignalementScreen} />
           <Stack.Screen name="Protocoles" component={ProtocolesScreen} />
           <Stack.Screen name="SignalerProbleme" component={SignalerProblemeScreen} />
           <Stack.Screen name="SignalementHub" component={SignalementHubScreen} />
           <Stack.Screen name="SuiviSignalements" component={SuiviSignalementsScreen} />
           <Stack.Screen name="SignalementDetail" component={SignalementDetailScreen} />
+          <Stack.Screen name="Signalement" component={SignalementScreen} />
           <Stack.Screen name="MissionActive" component={MissionActiveScreen} />
           <Stack.Screen name="MissionDetail" component={MissionDetailScreen} />
           <Stack.Screen name="Notifications" component={NotificationsScreen} />

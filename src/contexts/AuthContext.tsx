@@ -9,7 +9,6 @@ import {
 } from '../lib/localAppCache';
 import { runSessionBootstrap } from '../lib/sessionBootstrap';
 
-export type { UserProfile };
 
 interface AuthState {
   session: Session | null;
@@ -18,7 +17,7 @@ interface AuthState {
   isAuthenticated: boolean;
 }
 
-export type AuthPortal = 'urgentiste' | 'hopital';
+type AuthPortal = 'urgentiste' | 'hopital';
 
 interface AuthContextType extends AuthState {
   signInWithAgent: (agentLoginId: string, pinCode: string) => Promise<{ success: boolean; error?: string; mustChangePassword?: boolean }>;
@@ -319,7 +318,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (loaded.role !== 'secouriste') {
           return {
             ok: false,
-            error: 'Ce compte est réservé au portail urgentiste. Choisissez « Urgentiste » sur l’écran d’accueil.',
+            error: 'Ce compte est réservé au portail EB-Urgence. Choisissez « Urgence » sur l’écran d’accueil.',
           };
         }
       }

@@ -72,7 +72,7 @@ export function BrandedSplashScreen({ showSpinner = false }: Props) {
             accessibilityLabel="Croix médicale"
           />
           <Text style={styles.footer}>
-            sante.gouv.cd ©2026 — ÉTOILE BLEUE is the official vital emergency{"\n"}
+            sante.gouv.cd ©2026 — EB-URGENCE is the official vital emergency{"\n"}
             application of the Ministry of Health of the Democratic Republic of{"\n"}
             the Congo.
           </Text>

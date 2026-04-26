@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "apps-v2",
-    "slug": "apps-v2",
+    "name": "eb-urgence",
+    "slug": "eb-urgence",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.eburgentiste.app",
+      "bundleIdentifier": "com.eburgence.app",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio",
@@ -47,7 +47,7 @@
         "visible": "sticky-immersive"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.eburgentiste.app",
+      "package": "com.eburgence.app",
       "versionCode": 12
     },
     "web": {

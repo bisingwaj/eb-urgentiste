@@ -2,7 +2,7 @@ import type {
   CaseStatus,
   EmergencyCase,
   UrgencyLevel,
-} from '../screens/hospital/HospitalDashboardTab';
+} from '../screens/hospital/hospitalTypes';
 
 /** Aligné sur la liste Admissions — dossiers actifs à la structure. */
 export const ACTIVE_ADMISSION_STATUSES: readonly CaseStatus[] = [

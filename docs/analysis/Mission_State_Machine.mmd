@@ -1,0 +1,47 @@
+stateDiagram-v2
+    direction LR
+
+    [*] --> incident_new : Citizen SOS / PBX
+    incident_new --> incident_in_progress : Operator claims call (claim_call_fast)
+    incident_in_progress --> dispatch_pending : Dashboard "Dispatcher"
+
+    state "DISPATCH LIFECYCLE" as DL {
+        dispatch_pending --> dispatched : useDispatchAction\nINSERT dispatches\nUPDATE units.status=dispatched
+        dispatched --> en_route : Mobile App (rescuer)
+        en_route --> on_scene : Mobile App\n(triggers compute-mission-hospitals)
+        on_scene --> en_route_hospital : Mobile App
+        en_route_hospital --> arrived_hospital : Mobile App
+        arrived_hospital --> mission_end : Mobile App ("Cloturer")
+        on_scene --> completed : Resolution sur place
+        mission_end --> [*]
+        completed --> [*]
+    }
+
+    state "HOSPITAL HANDOVER (parallel)" as HH {
+        hp_pending : hospital_status=pending
+        hp_accepted : hospital_status=accepted
+        hp_refused : hospital_status=refused
+        hp_admis : hospital_data.status=admis\nadmission_recorded_at=now()
+        hp_pending --> hp_accepted : Hospital App accepts
+        hp_pending --> hp_refused : Hospital App refuses
+        hp_accepted --> hp_admis : Hospital App "Valider l'admission"\n(trg_notify_patient_hospital_status -> push)
+    }
+
+    incident_in_progress --> incident_resolved : RPC resolve_incident\n(operator manual close)
+    incident_resolved --> auto_complete_dispatch : trg_on_incident_closed_release_units\nUPDATE dispatches SET status=completed
+    auto_complete_dispatch --> [*]
+
+    note right of DL
+        ⚠️ GAP: NO trigger sets
+        units.status back to 'available'
+        when dispatch completes.
+        Unit stays 'dispatched' forever
+        unless mobile app updates it.
+    end note
+
+    note right of HH
+        Hospital admission updates
+        ONLY dispatches.hospital_*
+        It does NOT touch incidents
+        and does NOT release units.
+    end note

@@ -117,7 +117,7 @@ export function LocationGatekeeper({ children }: { children: React.ReactNode }) 
 
         <View style={styles.footerBlock}>
           <Text style={styles.footerText}>
-            Sans cette permission, ÉTOILE BLEUE ne peut pas assurer le suivi tactique nécessaire aux missions d'urgence.
+            Sans cette permission, EB-URGENCE ne peut pas assurer le suivi tactique nécessaire aux missions d'urgence.
           </Text>
         </View>
       </SafeAreaView>

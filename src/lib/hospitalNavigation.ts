@@ -1,4 +1,4 @@
-import type { CaseStatus, EmergencyCase } from '../screens/hospital/HospitalDashboardTab';
+import type { CaseStatus, EmergencyCase } from '../screens/hospital/hospitalTypes';
 
 /**
  * Statuts après lesquels le suivi ambulance n’est plus l’action principale sur l’écran détail

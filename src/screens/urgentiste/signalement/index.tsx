@@ -12,6 +12,7 @@ import { StepAssessment } from './components/StepAssessment';
 import { StepAid } from './components/StepAid';
 import { StepDecision } from './components/StepDecision';
 import { StepAssignment } from './components/StepAssignment';
+import { StepWaiting } from './components/StepWaiting';
 import { StepClosure } from './components/StepClosure';
 import { FullscreenMapModal } from '../../../components/map/FullscreenMapModal';
 import { EBMap, EBMapMarker } from '../../../components/map/EBMap';
@@ -29,7 +30,8 @@ export default function SignalementScreen(props: any) {
 
    const {
       step, selectedMission, timeline, urgentisteLoc, urgentisteHeadingDeg,
-      routeGeoJSON, displayAddress, routeInfoText,
+      routeGeoJSON, allPatientRoutes, routeDuration, routeDistance, routeCameraBounds,
+      displayAddress, routeInfoText,
       assessment, setAssessment, careChecklist, decision,
       targetHospital, pendingStructureInfo, transportMode,
       arrivalCameraBounds, hospitalRouteGeoJSON, hospitalRouteDuration, hospitalRouteDistance, hospitalRouteCameraBounds,
@@ -52,6 +54,7 @@ export default function SignalementScreen(props: any) {
             case 'aid': return "Premiers Soins";
             case 'decision': return "Orientation";
             case 'assignment': return "Destination";
+            case 'waiting': return "Admission";
             case 'arrival': return "En Route";
             default: return formatIncidentType(selectedMission?.type);
          }
@@ -125,16 +128,24 @@ export default function SignalementScreen(props: any) {
       }
 
       // Convert route feature back to EBMap compatible route list if needed
-      // Actually, EBMap can take routeData.
-      const mapRouteData = routeDataRaw ? {
-         routes: [{
-            geometry: routeDataRaw.features[0].geometry,
-            duration: isHospitalStep ? logic.hospitalRouteDuration || 0 : logic.routeDuration || 0,
-            distance: isHospitalStep ? logic.hospitalRouteDistance || 0 : logic.routeDistance || 0,
-            steps: [],
-         }],
-         selectedIndex: 0,
-      } : undefined;
+      const mapRouteData = isHospitalStep ? (
+         logic.hospitalRouteGeoJSON ? {
+            routes: [{
+               geometry: logic.hospitalRouteGeoJSON.features[0].geometry,
+               duration: logic.hospitalRouteDuration || 0,
+               distance: logic.hospitalRouteDistance || 0,
+               steps: [],
+            }],
+            selectedIndex: 0,
+            showAlternatives: false, // Hospital route logic still needs update for alternatives
+         } : undefined
+      ) : (
+         allPatientRoutes.length > 0 ? {
+            routes: allPatientRoutes,
+            selectedIndex: 0,
+            showAlternatives: allPatientRoutes.length > 1,
+         } : undefined
+      );
 
       return (
          <EBMap
@@ -174,7 +185,7 @@ export default function SignalementScreen(props: any) {
                      selectedMission={selectedMission}
                      urgentisteLoc={urgentisteLoc}
                      urgentisteHeadingDeg={urgentisteHeadingDeg}
-                     routeGeoJSON={routeGeoJSON}
+                     allPatientRoutes={allPatientRoutes}
                      arrivalCameraBounds={arrivalCameraBounds}
                      displayAddress={displayAddress}
                      elapsedSeconds={logic.elapsedSeconds}
@@ -238,6 +249,13 @@ export default function SignalementScreen(props: any) {
                   />
                )}
 
+               {step === "waiting" && (
+                  <StepWaiting
+                     selectedMission={selectedMission}
+                     renderStepInlineHeader={renderStepInlineHeader}
+                  />
+               )}
+               
                {step === "closure" && (
                   <StepClosure
                      onReturnToDashboard={handleCompleteMission}

@@ -56,7 +56,7 @@ function getDispatchIdForHospitalAlert(structureId: string, payload: {
 }
 
 /** Pourquoi la liste peut être vide malgré une affectation côté centrale */
-export type HospitalListBlocker =
+type HospitalListBlocker =
   | null
   | 'not_hospital_role'
   | 'no_structure_link'

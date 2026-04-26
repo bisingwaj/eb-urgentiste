@@ -5,6 +5,7 @@ export type MissionStep =
    | "aid"
    | "decision"
    | "assignment"
+   | "waiting"
    | "transport_mode"
    | "transport"
    | "closure";
@@ -43,10 +44,11 @@ export const STEP_LABELS: Record<MissionStep, string> = {
    assignment: "Affectation",
    transport_mode: "Mode de transport",
    transport: "Transport en cours",
+   waiting: "Attente admission",
    closure: "Clôture",
 };
 
-export const STEP_ORDER: MissionStep[] = ["standby", "arrival", "assessment", "aid", "decision", "assignment", "transport_mode", "transport", "closure"];
+export const STEP_ORDER: MissionStep[] = ["standby", "arrival", "assessment", "aid", "decision", "assignment", "transport_mode", "transport", "waiting", "closure"];
 
 /** TYPES POUR LE SYSTÈME DE QUESTIONNAIRE DYNAMIQUE (BILAN MÉDICAL) */
 

@@ -180,7 +180,7 @@ export function HospitalAdminScreen({ navigation }: any) {
 
         <View style={styles.footer}>
           <Text style={styles.versionText}>Application Hospitalière v1.5.0</Text>
-          <Text style={styles.copyrightText}>Etoile Bleue Systems</Text>
+          <Text style={styles.copyrightText}>EB-URGENCE Systems</Text>
         </View>
       </ScrollView>
     </View>
