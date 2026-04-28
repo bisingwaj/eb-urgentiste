@@ -37,9 +37,10 @@ export default function SignalementScreen(props: any) {
       arrivalCameraBounds, hospitalRouteGeoJSON, hospitalRouteDuration, hospitalRouteDistance, hospitalRouteCameraBounds,
       fadeAnim, mapFullscreenOpen, setMapFullscreenOpen,
       voipLoading, terrainPhotoBusy, radarAnim, notifyAnim, isAssigned,
-      nearbyHospitals, hospitalsLoading, handleSelectHospital,
+      nearbyHospitals, hospitalsLoading, loadingMoreHospitals, handleLoadMoreHospitals, searchQuery, handleSearchHospitals,
       handleArrivalOnScene, handleConfirmAssessment, handleToggleCare, handleConfirmAid,
       handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure, handleCompleteMission,
+      handleSelectHospital, fetchNearbyHospitals, handleCancelHospitalAssignment,
       pickAndUploadTerrainPhoto, runVictimVoip, runVictimPstn,
       transitionTo, formatTime
    } = logic;
@@ -224,30 +225,34 @@ export default function SignalementScreen(props: any) {
                   />
                )}
 
-               {step === "assignment" && (
-                  <StepAssignment
-                     pendingStructureInfo={pendingStructureInfo}
-                     targetHospital={targetHospital}
-                     nearbyHospitals={nearbyHospitals}
-                     hospitalsLoading={hospitalsLoading}
-                     urgentisteLoc={urgentisteLoc}
-                     urgentisteHeadingDeg={urgentisteHeadingDeg}
-                     hospitalRouteGeoJSON={logic.hospitalRouteGeoJSON}
-                     hospitalRouteDuration={logic.hospitalRouteDuration}
-                     hospitalRouteDistance={logic.hospitalRouteDistance}
-                     hospitalRouteCameraBounds={logic.hospitalRouteCameraBounds}
-                     departingEnRoute={logic.departingEnRoute}
-                     selectedMission={selectedMission}
-                     recalculating={logic.isRecalculating}
-                     onRecalculate={logic.handleRecalculateHospitals}
-                     onDepartVersStructure={handleDepartVersStructure}
-                     onSelectHospital={handleSelectHospital}
-                     urgencyCategory={selectedMission?.type}
-                     onOpenFullscreenMap={() => setMapFullscreenOpen(true)}
-                     renderStepInlineHeader={renderStepInlineHeader}
-                     onCancelAssignment={logic.handleCancelHospitalAssignment}
-                  />
-               )}
+                {step === "assignment" && (
+                   <StepAssignment
+                      pendingStructureInfo={pendingStructureInfo}
+                      targetHospital={targetHospital}
+                      nearbyHospitals={nearbyHospitals}
+                      hospitalsLoading={hospitalsLoading}
+                      urgentisteLoc={urgentisteLoc}
+                      urgentisteHeadingDeg={urgentisteHeadingDeg}
+                      hospitalRouteGeoJSON={logic.hospitalRouteGeoJSON}
+                      hospitalRouteDuration={logic.hospitalRouteDuration}
+                      hospitalRouteDistance={logic.hospitalRouteDistance}
+                      hospitalRouteCameraBounds={logic.hospitalRouteCameraBounds}
+                      departingEnRoute={logic.departingEnRoute}
+                      selectedMission={selectedMission}
+                      recalculating={logic.isRecalculating}
+                      onRecalculate={logic.handleRecalculateHospitals}
+                      onDepartVersStructure={handleDepartVersStructure}
+                      onSelectHospital={handleSelectHospital}
+                      urgencyCategory={selectedMission?.type}
+                      onOpenFullscreenMap={() => setMapFullscreenOpen(true)}
+                      renderStepInlineHeader={renderStepInlineHeader}
+                      onCancelAssignment={logic.handleCancelHospitalAssignment}
+                      loadingMore={loadingMoreHospitals}
+                      onLoadMore={handleLoadMoreHospitals}
+                      searchQuery={searchQuery}
+                      onSearch={handleSearchHospitals}
+                   />
+                )}
 
                {step === "waiting" && (
                   <StepWaiting

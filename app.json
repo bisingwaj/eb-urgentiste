@@ -47,7 +47,7 @@
         "visible": "sticky-immersive"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.eburgence",
+      "package": "com.eburgence.app",
       "versionCode": 12
     },
     "web": {

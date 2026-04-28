@@ -166,6 +166,7 @@ interface MissionContextType {
   ) => Promise<void>;
   /** Récupérant les hôpitaux depuis le snapshot serveur de la mission */
   fetchHospitals: () => Promise<HospitalSuggestion[]>;
+  fetchAdditionalHospitals: (excludeIds: string[], limit?: number) => Promise<HospitalSuggestion[]>;
   /** Demande d'affectation à une structure par l'urgentiste */
   requestHospitalAssignment: (hospitalId: string, hospital: HospitalSuggestion) => Promise<void>;
   /** Annule la demande d'affectation en cours */
@@ -835,6 +836,43 @@ export function MissionProvider({ children }: { children: ReactNode }) {
     return activeMission.suggested_hospitals || [];
   };
 
+  const fetchAdditionalHospitals = async (excludeIds: string[] = [], limit = 5): Promise<HospitalSuggestion[]> => {
+    try {
+      console.log(`[MissionContext] 🔍 Fetching ${limit} additional hospitals...`);
+      let query = supabase
+        .from('health_structures')
+        .select('*')
+        .eq('is_open', true);
+
+      if (excludeIds.length > 0) {
+        query = query.not('id', 'in', `(${excludeIds.join(',')})`);
+      }
+
+      const { data, error } = await query.limit(limit);
+      if (error) throw error;
+
+      return (data || []).map((h, idx) => ({
+        id: h.id,
+        name: h.name,
+        type: h.type || 'Hôpital',
+        lat: h.lat || 0,
+        lng: h.lng || 0,
+        address: h.address,
+        phone: h.phone,
+        capacity: h.capacity,
+        availableBeds: h.available_beds,
+        specialties: h.specialties || [],
+        distanceKm: 0, // Will be calculated on frontend if needed
+        etaMin: 0,
+        score: 0,
+        rank: 99 + idx
+      }));
+    } catch (err) {
+      console.error('[MissionContext] fetchAdditionalHospitals error:', err);
+      return [];
+    }
+  };
+
   const requestHospitalAssignment = async (hospitalId: string, hospital: HospitalSuggestion) => {
     if (!activeMission) return;
 
@@ -932,6 +970,7 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       updateMissionDetails,
       appendIncidentTerrainPhoto,
       fetchHospitals,
+      fetchAdditionalHospitals,
       requestHospitalAssignment,
       cancelHospitalAssignment
     }}>

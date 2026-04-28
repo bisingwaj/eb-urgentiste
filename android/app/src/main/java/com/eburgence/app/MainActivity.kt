@@ -1,4 +1,4 @@
-package com.eburgence
+package com.eburgence.app
 
 import android.os.Build
 import android.os.Bundle

@@ -18,7 +18,14 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export function useSignalementLogic(navigation: any, route: any) {
    const { activeMission, isLoading: missionLoading, updateDispatchStatus, refresh } = useActiveMission();
-   const { updateMissionDetails, appendIncidentTerrainPhoto, fetchHospitals, requestHospitalAssignment, cancelHospitalAssignment } = useMission();
+   const { 
+      updateMissionDetails, 
+      appendIncidentTerrainPhoto, 
+      fetchHospitals, 
+      fetchAdditionalHospitals,
+      requestHospitalAssignment, 
+      cancelHospitalAssignment 
+   } = useMission();
    const initialMission = route?.params?.mission || activeMission;
 
    const getInitialStep = useCallback((): MissionStep => {
@@ -196,7 +203,9 @@ export function useSignalementLogic(navigation: any, route: any) {
    // --- HOSPITAL SELECTION STATE ---
    const [nearbyHospitals, setNearbyHospitals] = useState<HospitalSuggestion[]>([]);
    const [hospitalsLoading, setHospitalsLoading] = useState(false);
+   const [loadingMoreHospitals, setLoadingMoreHospitals] = useState(false);
    const [isRecalculating, setIsRecalculating] = useState(false);
+   const [searchQuery, setSearchQuery] = useState("");
 
    const handleRecalculateHospitals = async () => {
       if (!selectedMission?.id) return;
@@ -476,6 +485,72 @@ export function useSignalementLogic(navigation: any, route: any) {
          setHospitalsLoading(false);
       }
    }, [fetchHospitals]);
+
+   const handleLoadMoreHospitals = async () => {
+      if (loadingMoreHospitals) return;
+      setLoadingMoreHospitals(true);
+      try {
+         const excludeIds = nearbyHospitals.map(h => h.id);
+         
+         // Wait a bit to show the loader as requested
+         await new Promise(r => setTimeout(r, 800));
+
+         const more = await fetchAdditionalHospitals(excludeIds, 5);
+         if (more.length > 0) {
+            setNearbyHospitals(prev => [...prev, ...more]);
+         } else {
+            Alert.alert("Information", "Aucun autre établissement trouvé à proximité.");
+         }
+      } catch (err) {
+         console.error("[Signalement] loadMore failed:", err);
+      } finally {
+         setLoadingMoreHospitals(false);
+      }
+   };
+
+   const handleSearchHospitals = async (query: string) => {
+      setSearchQuery(query);
+      if (query.length < 3) {
+         if (query.length === 0) fetchNearbyHospitals(); // Restore original suggestions
+         return;
+      }
+      
+      setHospitalsLoading(true);
+      try {
+         // Direct search in DB
+         const { data, error } = await supabase
+            .from('health_structures')
+            .select('*')
+            .or(`name.ilike.%${query}%,short_name.ilike.%${query}%`)
+            .eq('is_open', true)
+            .limit(10);
+
+         if (error) throw error;
+
+         const results: HospitalSuggestion[] = (data || []).map((h, idx) => ({
+            id: h.id,
+            name: h.name,
+            type: h.type || 'Hôpital',
+            lat: h.lat || 0,
+            lng: h.lng || 0,
+            address: h.address,
+            phone: h.phone,
+            capacity: h.capacity,
+            availableBeds: h.available_beds,
+            specialties: h.specialties || [],
+            distanceKm: 0, 
+            etaMin: 0,
+            score: 0,
+            rank: 100 + idx
+         }));
+
+         setNearbyHospitals(results);
+      } catch (err) {
+         console.error("[Signalement] Search failed:", err);
+      } finally {
+         setHospitalsLoading(false);
+      }
+   };
 
    // Les rafraîchissements Realtime sont désormais gérés par le MissionContext
    useEffect(() => {
@@ -839,8 +914,8 @@ export function useSignalementLogic(navigation: any, route: any) {
       transportMode, setTransportMode, departingEnRoute,
       arrivalCameraBounds, fadeAnim, mapFullscreenOpen, setMapFullscreenOpen,
       voipLoading, terrainPhotoBusy, radarAnim, notifyAnim, isAssigned,
-      nearbyHospitals, hospitalsLoading,
-      isRecalculating, handleRecalculateHospitals,
+      nearbyHospitals, hospitalsLoading, loadingMoreHospitals, searchQuery,
+      isRecalculating, handleRecalculateHospitals, handleLoadMoreHospitals, handleSearchHospitals,
       handleStartMission, handleArrivalOnScene, handleConfirmAssessment, handleToggleCare, handleConfirmAid,
       handleDecideTransport, handleSelectTransportMode, handleArrivedAtHospital, handleDepartVersStructure, handleCompleteMission,
       handleSelectHospital, fetchNearbyHospitals, handleCancelHospitalAssignment,
