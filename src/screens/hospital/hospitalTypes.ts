@@ -24,7 +24,9 @@ export type LovableDischargeType =
 export type HospitalStatus = 
   | "pending"
   | "accepted"
-  | "refused";
+  | "refused"
+  | "cancelled"
+  | "withdrawn";
 
 export interface Intervention {
   id: string;
@@ -157,6 +159,7 @@ export interface EmergencyCase {
   closureTime?: string;
   reportSent?: boolean;
   reportSentAt?: string;
+  updatedAt?: string;
 }
 
 export interface HealthStructure {

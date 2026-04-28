@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { DeviceEventEmitter } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+import { ALARM_STOP_EVENT } from '../services/AlarmService';
 import {
   EmergencyCase,
   CaseStatus,
@@ -27,7 +28,12 @@ function getDispatchIdForHospitalAlert(structureId: string, payload: {
   old?: Record<string, unknown> | null;
 }): string | null {
   const n = payload.new;
-  if (!n || String(n.assigned_structure_id ?? '') !== structureId) return null;
+  if (!n) return null;
+
+  // Si assigned_structure_id est présent, il doit correspondre. 
+  // S'il est absent (UPDATE partiel), on considère que le filtre du canal Supabase a déjà fait le travail.
+  const rowStructId = n.assigned_structure_id !== undefined ? String(n.assigned_structure_id ?? '') : structureId;
+  if (rowStructId !== structureId) return null;
 
   const hs = n.hospital_status;
   const isPending = hs === 'pending' || hs == null || hs === undefined;
@@ -489,18 +495,86 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
         'postgres_changes',
         { event: '*', schema: 'public', table: 'dispatches', filter: `assigned_structure_id=eq.${structureId}` },
         (payload: { eventType?: string; new?: Record<string, unknown> | null; old?: Record<string, unknown> | null }) => {
-          console.log('[HospitalContext] Dispatch updated, refreshing cases...');
+          console.log(`[HospitalContext] 📡 Realtime event: ${payload.eventType} for structure ${structureId}`);
+          
+          const n = payload.new;
+          if (!n) return;
+
+          // 1. Détection annulation/retrait -> Stop Alarme immédiat
+          if (n.hospital_status === 'cancelled' || n.hospital_status === 'withdrawn') {
+            console.log('[HospitalContext] 🚫 Request retracted by urgentist — stopping alarm');
+            DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+          }
+
+          // 2. Mise à jour locale immédiate de l'état (Evite la latence du fetch)
+          if (n.id) {
+            setActiveCases(prev => {
+              const next = prev.map(c => {
+                if (String(c.id) === String(n.id)) {
+                  console.log(`[HospitalContext] ⚡️ Updating local case ${n.id} status to ${n.hospital_status}`);
+                  return { 
+                    ...c, 
+                    hospitalStatus: (n.hospital_status as HospitalStatus) || c.hospitalStatus,
+                    hospitalNotes: (n.hospital_notes as string) || c.hospitalNotes,
+                    dispatchStatus: (n.status as string) || c.dispatchStatus,
+                    updatedAt: (n.updated_at as string) || c.updatedAt
+                  };
+                }
+                return c;
+              });
+              
+              // Recalculer le nombre d'alertes en attente
+              const pendingCount = next.filter(c => c.hospitalStatus === 'pending' && !isCaseClosed(c)).length;
+              setPendingAlertCount(pendingCount);
+              
+              return next;
+            });
+          }
+
+          // 3. Notification de nouvelle alerte
           const dispatchId = getDispatchIdForHospitalAlert(structureId, payload);
           if (dispatchId) {
+            console.log('[HospitalContext] 🔔 New alert detected:', dispatchId);
             DeviceEventEmitter.emit(NEW_HOSPITAL_ALERT, { dispatchId });
           }
+          
+          // 4. Refresh complet en arrière-plan pour la cohérence des jointures
+          console.log('[HospitalContext] 🔄 Background refresh of cases list...');
           void fetchCases({ silent: true });
         },
+      )
+      // AJOUT DU CANAL DE SIGNALISATION BROADCAST (PLUS RAPIDE)
+      .on(
+        'broadcast',
+        { event: 'CANCEL_MISSION' },
+        (payload) => {
+          console.log('[HospitalContext] 📢 Broadcast CANCEL received!', payload);
+          DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+          void fetchCases({ silent: true });
+        }
+      );
+
+    channel.subscribe((status) => {
+      console.log(`[HospitalContext] 🛰 Realtime subscription status: ${status} for channel hospital-dashboard-${structureId}`);
+    });
+
+    // On s'abonne aussi au canal spécifique de signaux si différent
+    const signalChannel = supabase
+      .channel(`structure-signals-${structureId}`)
+      .on(
+        'broadcast',
+        { event: 'CANCEL_MISSION' },
+        (payload) => {
+          console.log('[HospitalContext] 📢 Broadcast CANCEL received (via signal channel)!', payload);
+          DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+          void fetchCases({ silent: true });
+        }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(signalChannel);
     };
   }, [fetchCases, profile?.health_structure_id, profile?.role]);
 

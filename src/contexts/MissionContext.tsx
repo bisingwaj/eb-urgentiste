@@ -874,20 +874,34 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase
         .from('dispatches')
         .update({
-          assigned_structure_id: null,
-          assigned_structure_name: null,
-          assigned_structure_lat: null,
-          assigned_structure_lng: null,
-          assigned_structure_phone: null,
-          assigned_structure_address: null,
-          assigned_structure_type: null,
-          hospital_status: null,
-          hospital_notes: null,
+          assigned_structure_id: activeMission.assigned_structure?.id, // Force inclusion for Realtime filter
+          hospital_status: 'cancelled',
+          hospital_notes: 'Demande annulée par l\'unité',
           updated_at: new Date().toISOString(),
         })
         .eq('id', activeMission.id);
 
       if (error) throw error;
+
+      // --- BROADCAST SIGNAL (FAST PATH) ---
+      // On envoie un signal direct au canal de la structure pour un arrêt immédiat de l'alarme
+      const structId = activeMission.assigned_structure?.id;
+      if (structId) {
+        const signalChannel = supabase.channel(`structure-signals-${structId}`);
+        signalChannel.subscribe(async (status) => {
+          if (status === 'SUBSCRIBED') {
+            await signalChannel.send({
+              type: 'broadcast',
+              event: 'CANCEL_MISSION',
+              payload: { missionId: activeMission.id }
+            });
+            console.log(`[MissionContext] 📢 Broadcast CANCEL sent to structure ${structId}`);
+            // Nettoyage rapide du canal éphémère
+            setTimeout(() => supabase.removeChannel(signalChannel), 2000);
+          }
+        });
+      }
+
       refresh();
     } catch (err: any) {
       console.error('[MissionContext] cancelHospitalAssignment error:', err.message);

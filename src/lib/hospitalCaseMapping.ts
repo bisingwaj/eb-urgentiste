@@ -177,11 +177,16 @@ export function mapDispatchRowToEmergencyCase(
         : undefined,
 
     hospitalStatus:
-      d.hospital_status === 'pending' || d.hospital_status === 'accepted' || d.hospital_status === 'refused'
+      d.hospital_status === 'pending' || 
+      d.hospital_status === 'accepted' || 
+      d.hospital_status === 'refused' || 
+      d.hospital_status === 'cancelled' || 
+      d.hospital_status === 'withdrawn'
         ? d.hospital_status
         : 'pending',
     hospitalNotes: d.hospital_notes,
     hospitalRespondedAt: d.hospital_responded_at,
+    updatedAt: typeof d.updated_at === 'string' ? d.updated_at : undefined,
     patientProfile,
     sosResponses:
       sosResponsesRaw.length > 0
