@@ -116,7 +116,7 @@ export function LoginPage({ navigation }: any) {
         
         <View style={styles.header}>
           <MaterialIcons name="medical-services" color={colors.secondary} size={32} />
-          <Text style={styles.title}>EB-URGENCE</Text>
+          <Text style={styles.title}>ÉTOILE BLEUE URGENCE</Text>
         </View>
         <Text style={styles.subtitle}>S'IDENTIFIER</Text>
 

@@ -119,7 +119,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
   const requestUnlock = useCallback(async () => {
     const result = await authenticateAsync({
       promptMessage: 'Déverrouiller l’application',
-      promptSubtitle: 'EB-URGENCE',
+      promptSubtitle: 'Etoile Bleue Urgentiste',
       cancelLabel: 'Annuler',
       fallbackLabel: 'Code du téléphone',
       disableDeviceFallback: false,
@@ -162,7 +162,7 @@ export function AppLockProvider({ children }: { children: React.ReactNode }) {
 
     const result = await authenticateAsync({
       promptMessage: 'Confirmer l’activation de la protection',
-      promptSubtitle: 'EB-URGENCE',
+      promptSubtitle: 'Etoile Bleue Urgence',
       cancelLabel: 'Annuler',
       fallbackLabel: 'Code du téléphone',
       disableDeviceFallback: false,

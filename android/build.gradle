@@ -1,19 +1,6 @@
 // Top-level build file where you can add configuration options common to all sub-projects/modules.
 
 buildscript {
-  ext {
-    // NDK version is read from local.properties (gitignored) so each
-    // developer can use their own NDK without causing merge conflicts.
-    // To override, add this line to android/local.properties:
-    //   ndk.version=27.0.12077973      (← Mac / NDK 27)
-    //   ndk.version=26.1.10909125      (← Windows / NDK 26)
-    def localProps = new Properties()
-    def localPropsFile = rootProject.file('local.properties')
-    if (localPropsFile.exists()) {
-      localPropsFile.withInputStream { localProps.load(it) }
-    }
-    ndkVersion = localProps.getProperty('ndk.version', '26.1.10909125')
-  }
   repositories {
     google()
     mavenCentral()

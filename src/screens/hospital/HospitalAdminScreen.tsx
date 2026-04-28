@@ -7,7 +7,6 @@ import {
   Alert,
 } from "react-native";
 import { AppTouchableOpacity } from '../../components/ui/AppTouchableOpacity';
-import { TabScreenSafeArea } from "../../components/layout/TabScreenSafeArea";
 import { MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { colors } from "../../theme/colors";
 import { useAuth } from "../../contexts/AuthContext";
@@ -180,7 +179,7 @@ export function HospitalAdminScreen({ navigation }: any) {
 
         <View style={styles.footer}>
           <Text style={styles.versionText}>Application Hospitalière v1.5.0</Text>
-          <Text style={styles.copyrightText}>EB-URGENCE Systems</Text>
+          <Text style={styles.copyrightText}>Etoile Bleue Systems</Text>
         </View>
       </ScrollView>
     </View>

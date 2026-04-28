@@ -64,9 +64,8 @@ react {
 }
 
 /**
- * The preferred build flavor of JavaScriptCore (JSC)
+ * Set this to true in release builds to optimize the app using [R8](https://developer.android.com/topic/performance/app-optimization/enable-app-optimization).
  */
-def enableSeparateBuildPerCPUArchitecture = false
 def enableMinifyInReleaseBuilds = (findProperty('android.enableMinifyInReleaseBuilds') ?: false).toBoolean()
 
 /**
@@ -96,9 +95,9 @@ packagingOptions {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.eburgentiste.app'
+    namespace 'com.eburgence.app'
     defaultConfig {
-        applicationId 'com.eburgentiste.app'
+        applicationId 'com.eburgence.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 12

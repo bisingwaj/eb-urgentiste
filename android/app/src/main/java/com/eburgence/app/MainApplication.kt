@@ -1,4 +1,4 @@
-package com.eburgentiste.app
+package com.eburgence.app
 
 import android.app.Application
 import android.content.res.Configuration

@@ -109,7 +109,7 @@ export function ProfileTab({ navigation }: any) {
   const handleLogout = () => {
     showDialog({
       title: "Déconnexion",
-      message: "Voulez-vous vraiment vous déconnecter de la plateforme EB-URGENCE ?",
+      message: "Voulez-vous vraiment vous déconnecter de la plateforme Étoile Bleue ?",
       icon: "logout",
       confirmText: "DÉCONNEXION",
       cancelText: "ANNULER",
@@ -129,7 +129,7 @@ export function ProfileTab({ navigation }: any) {
   const showAvatarPhoto = Boolean(photoUri) && !avatarLoadError;
 
   const roleLabel =
-    profile?.role === "secouriste" ? "Agent EB-Urgence" : profile?.role || "—";
+    profile?.role === "secouriste" ? "Médecin urgentiste" : profile?.role || "—";
   const matricule = profile?.agent_login_id || profile?.matricule || "—";
   const grade = profile?.grade?.trim() || "—";
   const zone = profile?.zone?.trim() || "—";

@@ -1,4 +1,4 @@
-# Documentation — applications mobiles « Étoile Bleue » (eb-urgentiste)
+# Documentation — applications mobiles EB-Urgence
 
 Application **React Native / Expo** pour la régulation sanitaire : **urgentistes** (unités mobiles) et **structures hospitalières**. Elle s’appuie sur **Supabase** (données, auth, temps réel, stockage, Edge Functions) et sur des services tiers (Mapbox, Agora, FCM).
 
@@ -26,8 +26,8 @@ Application **React Native / Expo** pour la régulation sanitaire : **urgentiste
 
 | Élément | Description |
 |--------|-------------|
-| **Nom package** | `apps-v2` (slug Expo : `apps-v2`) |
-| **Identifiants natifs** | `com.eburgentiste.app` (Android & iOS) |
+| **Nom package** | `eb-urgence` (slug Expo : `eb-urgence`) |
+| **Identifiants natifs** | `com.eburgence.app` (Android & iOS) |
 | **UI** | Thème **sombre** imposé (Appearance + System UI) |
 | **New Architecture** | Activée (`newArchEnabled`: true) |
 | **Point d’entrée JS** | `index.ts` → enregistre les tâches push / Notifee, puis `App.tsx` |
@@ -175,6 +175,7 @@ La distinction est faite dans **`RootNavigator`** selon `profile?.role === 'hopi
 - Mise à jour des statuts : **`updateDispatchStatus`** (table `dispatches`, alignement `incidents`, synchro **`active_rescuers`**)
 - **Realtime** sur `dispatches` et `incidents` (position victime, hôpital, médias)
 - **`updateMissionDetails`** — notamment évaluation concaténée dans `incidents.description` (comportement actuel)
+- **Gestion du Service (Disponibilité)** : Voir [docs/duty-status-logic.md](./docs/duty-status-logic.md) pour le détail technique du commutateur "En service/Hors service".
 
 ### 8.2 Écran « Signalement » (mission terrain) — `SignalementScreen`
 

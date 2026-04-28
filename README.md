@@ -1,6 +1,6 @@
-# 🚑 Étoile Bleue - Emergency Responder & Hospital Portal
+# 🚑 EB-Urgence - Responder & Hospital Portal
 
-Welcome to the **Étoile Bleue (Mobile)** repository. This "Mission-Critical" application is designed for First Responders, Emergency Physicians, and Hospital Admissions services. 
+Welcome to the **EB-Urgence (Mobile)** repository. This "Mission-Critical" application is designed for First Responders, Emergency Physicians, and Hospital Admissions services. 
 It enables real-time interception of emergency alerts, duty status management, and medical intervention tracking.
 
 ---
@@ -86,6 +86,7 @@ To avoid clutter, documentation is organized into thematic subfolders within the
 - **/docs/integration**: Guides for integrating with Hospital systems and external SDKs.
 - **/docs/strategy**: Migration plans and project roadmaps.
 - **/docs/analysis**: Deep dives into system components and performance.
+- **[Duty Status Logic](./docs/duty-status-logic.md)**: Technical detail for agent availability.
 
 *For historical context or legacy prompt logs, refer to the subfolders within `docs/` or previous commit history.*
 
