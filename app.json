@@ -4,13 +4,13 @@
     "slug": "eb-urgence",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/app-icon-padded.png",
+    "icon": "./assets/playstore.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/app-icon-padded.png",
+      "image": "./assets/playstore.png",
       "resizeMode": "contain",
-      "backgroundColor": "#0D0D0D"
+      "backgroundColor": "#FFFFFF"
     },
     "ios": {
       "supportsTablet": true,
@@ -36,8 +36,8 @@
         "android.permission.WAKE_LOCK"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/app-icon-padded.png",
-        "backgroundColor": "#0D0D0D"
+        "foregroundImage": "./assets/playstore.png",
+        "backgroundColor": "#FFFFFF"
       },
       "edgeToEdgeEnabled": true,
       "statusBar": {
@@ -47,7 +47,7 @@
         "visible": "sticky-immersive"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.eburgence.app",
+      "package": "com.eburgence",
       "versionCode": 12
     },
     "web": {

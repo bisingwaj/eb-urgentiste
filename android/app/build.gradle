@@ -95,9 +95,9 @@ packagingOptions {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.eburgence.app'
+    namespace 'com.eburgence'
     defaultConfig {
-        applicationId 'com.eburgence.app'
+        applicationId 'com.eburgence'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 12
