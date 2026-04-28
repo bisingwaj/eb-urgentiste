@@ -169,21 +169,23 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                            { paddingVertical: 12 }
                         ]}
                      >
-                        <View style={styles.hospitalCardInfo}>
-                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                              <Text style={[styles.hospitalCardName, { marginBottom: 0 }]} numberOfLines={1}>
+                        <View style={[styles.hospitalCardInfo, { marginRight: 12 }]}>
+                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%' }}>
+                              <Text style={[styles.hospitalCardName, { marginBottom: 0, flex: 1 }]} numberOfLines={1}>
                                  {h.name}
                               </Text>
-                              {isCentralePick && (
-                                 <View style={[styles.hospitalTypeBadge, styles.badgeCentrale, { marginLeft: 0 }]}>
-                                    <Text style={styles.badgeTextCentrale}>CENTRALE</Text>
-                                 </View>
-                              )}
-                              {isRecommended && !isCentralePick && (
-                                 <View style={[styles.hospitalTypeBadge, styles.badgeRecommended, { marginLeft: 0 }]}>
-                                    <Text style={styles.badgeTextRecommended}>PROCHE</Text>
-                                 </View>
-                              )}
+                              <View style={{ flexDirection: 'row', gap: 4, flexShrink: 0 }}>
+                                 {isCentralePick && (
+                                    <View style={[styles.hospitalTypeBadge, styles.badgeCentrale, { marginLeft: 0 }]}>
+                                       <Text style={styles.badgeTextCentrale}>CENTRALE</Text>
+                                    </View>
+                                 )}
+                                 {isRecommended && !isCentralePick && (
+                                    <View style={[styles.hospitalTypeBadge, styles.badgeRecommended, { marginLeft: 0 }]}>
+                                       <Text style={styles.badgeTextRecommended}>PROCHE</Text>
+                                    </View>
+                                 )}
+                              </View>
                            </View>
                            
                            {h.address && (
@@ -205,12 +207,14 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                            </View>
                         </View>
                         
-                        <AppTouchableOpacity 
-                           style={[styles.selectHospBtn, { paddingVertical: 10, paddingHorizontal: 14 }]}
-                           onPress={() => onSelectHospital(h)}
-                        >
-                           <Text style={[styles.selectHospBtnText, { fontSize: 13 }]}>DEMANDER</Text>
-                        </AppTouchableOpacity>
+                        <View style={{ flexShrink: 0 }}>
+                           <AppTouchableOpacity 
+                              style={[styles.selectHospBtn, { paddingVertical: 10, paddingHorizontal: 14 }]}
+                              onPress={() => onSelectHospital(h)}
+                           >
+                              <Text style={[styles.selectHospBtnText, { fontSize: 13 }]}>DEMANDER</Text>
+                           </AppTouchableOpacity>
+                        </View>
                      </View>
                   );
                })}
@@ -232,11 +236,11 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
             </Text>
             <ActivityIndicator size="small" color={colors.secondary} style={{ marginTop: 32 }} />
 
-            <View style={{ flexDirection: 'row', gap: 12, marginTop: 48 }}>
+            <View style={{ width: '100%', gap: 12, marginTop: 40 }}>
                <AppTouchableOpacity 
                   onPress={() => setCallModalVisible(true)}
                   style={{ 
-                     flex: 1,
+                     width: '100%',
                      paddingVertical: 14, 
                      borderRadius: 14,
                      backgroundColor: 'rgba(48,209,88,0.1)',
@@ -255,16 +259,17 @@ export const StepAssignment: React.FC<StepAssignmentProps> = ({
                <AppTouchableOpacity 
                   onPress={onCancelAssignment}
                   style={{ 
+                     width: '100%',
                      paddingVertical: 14, 
-                     paddingHorizontal: 20, 
                      borderRadius: 14,
                      borderWidth: 1,
                      borderColor: 'rgba(255,59,48,0.3)',
                      backgroundColor: 'rgba(255,59,48,0.05)',
+                     alignItems: 'center',
                      justifyContent: 'center'
                   }}
                >
-                  <Text style={{ color: '#FF3B30', fontWeight: '700', fontSize: 14 }}>Annuler</Text>
+                  <Text style={{ color: '#FF3B30', fontWeight: '700', fontSize: 14 }}>Annuler la demande</Text>
                </AppTouchableOpacity>
             </View>
             
