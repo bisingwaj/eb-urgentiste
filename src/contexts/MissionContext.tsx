@@ -874,7 +874,13 @@ export function MissionProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase
         .from('dispatches')
         .update({
-          assigned_structure_id: activeMission.assigned_structure?.id, // Force inclusion for Realtime filter
+          assigned_structure_id: null,
+          assigned_structure_name: null,
+          assigned_structure_lat: null,
+          assigned_structure_lng: null,
+          assigned_structure_phone: null,
+          assigned_structure_address: null,
+          assigned_structure_type: null,
           hospital_status: 'cancelled',
           hospital_notes: 'Demande annulée par l\'unité',
           updated_at: new Date().toISOString(),

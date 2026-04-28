@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
-import { DeviceEventEmitter } from 'react-native';
+import { DeviceEventEmitter, Alert } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
 import { ALARM_STOP_EVENT } from '../services/AlarmService';
@@ -577,6 +577,56 @@ export function HospitalProvider({ children }: { children: ReactNode }) {
       supabase.removeChannel(signalChannel);
     };
   }, [fetchCases, profile?.health_structure_id, profile?.role]);
+
+  /**
+   * 5. Écoute des notifications (Table public.notifications)
+   * Cas critique : redirection ou annulation par l'urgentiste. 
+   * Si assigned_structure_id change, l'UPDATE dispatches n'est plus capté par le canal filtré.
+   * On utilise donc la table notifications alimentée par trigger DB.
+   */
+  useEffect(() => {
+    const userId = session?.user?.id;
+    if (!userId || profile?.role !== 'hopital') return;
+
+    const notifChannel = supabase
+      .channel(`hospital-notifs-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const n = payload.new as any;
+          if (n.type === 'hospital_request') {
+            console.log('[HospitalContext] 🔔 Notification hospitalière reçue:', n.title);
+            
+            // 1. Mise à jour optimiste locale (On retire la mission si c'est une annulation/redirection)
+            if (n.reference_id && (n.title?.includes('annulée') || n.title?.includes('redirigée'))) {
+              setActiveCases(prev => prev.filter(c => String(c.id) !== String(n.reference_id)));
+            }
+
+            // 2. Arrêt de l'alarme sonore
+            DeviceEventEmitter.emit(ALARM_STOP_EVENT);
+
+            // 3. Rafraîchissement complet pour synchroniser
+            void fetchCases({ silent: true });
+
+            // 4. Feedback visuel (Toast/Alert)
+            if (n.title) {
+              Alert.alert(n.title, n.message || "Le statut de la demande a changé.");
+            }
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(notifChannel);
+    };
+  }, [session?.user?.id, profile?.role, fetchCases]);
 
   /**
    * Transitions métier : aligné PROMPT_CURSOR_HOPITAL_WORKFLOW §12

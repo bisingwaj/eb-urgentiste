@@ -644,6 +644,9 @@ export function useSignalementLogic(navigation: any, route: any) {
    const handleCancelHospitalAssignment = async () => {
       try {
          await cancelHospitalAssignment();
+         // Optimistically clear local states to return to hospital selection list
+         setPendingStructureInfo(null);
+         setTargetHospital(null);
          addTimelineEvent("Demande d'affectation annulée par l'unite", "cancel");
       } catch (err) {
          Alert.alert("Erreur", "Impossible d'annuler la demande.");
