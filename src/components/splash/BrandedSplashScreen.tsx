@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   useWindowDimensions,
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -25,31 +26,23 @@ type Props = {
 
 export function BrandedSplashScreen({ showSpinner = false }: Props) {
   const { width } = useWindowDimensions();
-  const flagWidth = Math.min(132, width - H_PADDING * 2);
+  const logoSize = 100;
 
   return (
     <View style={styles.root}>
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        {/* Bloc central : drapeau + gros titre + petit titre — alignés à gauche, centrés verticalement dans la zone utile */}
         <View style={styles.upper}>
           <View style={styles.upperInner}>
-            <View
-              style={[styles.flagRow, { width: flagWidth, height: flagWidth * 0.52 }]}
-            >
-              <View style={[styles.flagStripe, { backgroundColor: FLAG_BLUE }]}>
-                <Text style={styles.star} accessibilityLabel="Étoile">
-                  ★
-                </Text>
-              </View>
-              <View style={[styles.flagStripe, { backgroundColor: FLAG_YELLOW }]} />
-              <View style={[styles.flagStripe, { backgroundColor: FLAG_RED }]} />
-            </View>
+            <Image 
+              source={require("../../../assets/logo-etoiel-blue-urgence.png")}
+              style={{ width: logoSize, height: logoSize, marginBottom: 24 }}
+              resizeMode="contain"
+            />
 
-            <Text style={styles.titleBig}>ÉTOILE</Text>
-            <Text style={[styles.titleBig, styles.titleSecondLine]}>BLEUE</Text>
+            <Text style={styles.titleBig}>EB URGENCE</Text>
 
             <Text style={styles.tagline}>
-              Vital emergency, at your fingertips.
+              VITAL EMERGENCY, AT YOUR FINGERTIPS.
             </Text>
 
             {showSpinner ? (
@@ -62,19 +55,9 @@ export function BrandedSplashScreen({ showSpinner = false }: Props) {
           </View>
         </View>
 
-        {/* Bas : croix rouge puis texte légal — même marge gauche que le haut, tout aligné à gauche */}
         <View style={styles.bottomBlock}>
-          <MaterialCommunityIcons
-            name="plus"
-            size={24}
-            color="#E53935"
-            style={styles.crossIcon}
-            accessibilityLabel="Croix médicale"
-          />
           <Text style={styles.footer}>
-            sante.gouv.cd ©2026 — ÉTOILE BLEUE URGENCE { /*is the official vital emergency{"\n"}
-            application of the Ministry of Health of the Democratic Republic of{"\n"}
-            the Congo.**/}
+            sante.gouv.cd — 2026
           </Text>
         </View>
       </SafeAreaView>
@@ -93,68 +76,41 @@ const styles = StyleSheet.create({
   upper: {
     flex: 1,
     justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: H_PADDING,
   },
   upperInner: {
-    alignSelf: "stretch",
-    alignItems: "flex-start",
-  },
-  flagRow: {
-    flexDirection: "row",
-    borderRadius: 4,
-    overflow: "hidden",
-    marginBottom: 22,
-  },
-  flagStripe: {
-    flex: 1,
-    justifyContent: "center",
     alignItems: "center",
-  },
-  star: {
-    color: "#FFFFFF",
-    fontSize: 30,
-    lineHeight: 34,
-    fontWeight: "700",
   },
   titleBig: {
     color: "#FFFFFF",
-    fontSize: 32,
-    fontWeight: "800",
-    letterSpacing: 0.5,
-    textAlign: "left",
-    width: "100%",
-    lineHeight: 38,
-  },
-  titleSecondLine: {
-    marginTop: -2,
+    fontSize: 24,
+    fontWeight: "900",
+    letterSpacing: 2,
+    textAlign: "center",
+    lineHeight: 32,
   },
   tagline: {
-    marginTop: 16,
-    color: "rgba(255,255,255,0.85)",
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: "400",
-    textAlign: "left",
-    width: "100%",
-    maxWidth: 340,
+    marginTop: 12,
+    color: "rgba(255,255,255,0.45)",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1.5,
+    textAlign: "center",
+    textTransform: "uppercase",
   },
   spinner: {
-    marginTop: 18,
-    alignSelf: "flex-start",
+    marginTop: 32,
   },
   bottomBlock: {
-    paddingHorizontal: H_PADDING,
-    paddingBottom: 8,
-    alignItems: "flex-start",
-  },
-  crossIcon: {
-    marginBottom: 10,
+    paddingBottom: 24,
+    alignItems: "center",
   },
   footer: {
-    color: "rgba(255,255,255,0.45)",
-    fontSize: 11,
-    lineHeight: 16,
-    textAlign: "left",
-    width: "100%",
+    color: "rgba(255,255,255,0.25)",
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 1,
+    textAlign: "center",
   },
 });

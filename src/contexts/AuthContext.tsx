@@ -247,13 +247,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           if (error.context && typeof error.context.json === 'function') {
             const errorBody = await error.context.json();
-            console.error('[Auth] Edge Function error body:', JSON.stringify(errorBody));
+            console.log('[Auth] Edge Function error body:', JSON.stringify(errorBody));
             errorDetail = errorBody?.error || errorBody?.message || errorDetail;
           } else {
-            console.error('[Auth] Edge Function error:', error.message || error);
+            console.log('[Auth] Edge Function error:', error.message || error);
           }
         } catch (parseErr) {
-          console.error('[Auth] Edge Function error (raw):', error);
+          console.log('[Auth] Edge Function error (raw):', error);
         }
         return { success: false, error: errorDetail };
       }

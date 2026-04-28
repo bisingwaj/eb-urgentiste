@@ -83,7 +83,7 @@ export const HospitalHeader: React.FC<HospitalHeaderProps> = ({
         ) : (
           <View style={styles.logoRow}>
             <View style={styles.logoCircle}>
-              <Image source={require('../../../../assets/icon.png')} style={styles.logoImage} />
+              <Image source={require('../../../../assets/logo-etoiel-blue-urgence.png')} style={styles.logoImage} />
             </View>
             {hasAlert && (
               <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>

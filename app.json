@@ -1,14 +1,14 @@
 {
   "expo": {
-    "name": "eb-urgence",
+    "name": "EB Urgence",
     "slug": "eb-urgence",
     "version": "1.0.1",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app-icon-padded.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/app-icon-padded.png",
       "resizeMode": "contain",
       "backgroundColor": "#0D0D0D"
     },
@@ -36,7 +36,7 @@
         "android.permission.WAKE_LOCK"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/app-icon-padded.png",
         "backgroundColor": "#0D0D0D"
       },
       "edgeToEdgeEnabled": true,

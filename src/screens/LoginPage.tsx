@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Dimensions, ActivityIndicator, LayoutAnimation, Platform, UIManager, Animated } from 'react-native';
+import { View, Text, StyleSheet, Dimensions, ActivityIndicator, LayoutAnimation, Platform, UIManager, Animated, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors } from '../theme/colors';
@@ -24,6 +24,16 @@ export function LoginPage({ navigation }: any) {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const pinValueAnim = React.useRef(new Animated.Value(0)).current;
+  const shakeAnim = React.useRef(new Animated.Value(0)).current;
+
+  const triggerShake = () => {
+    Animated.sequence([
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: -10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 10, duration: 50, useNativeDriver: true }),
+      Animated.timing(shakeAnim, { toValue: 0, duration: 50, useNativeDriver: true }),
+    ]).start();
+  };
 
   React.useEffect(() => {
     Animated.timing(pinValueAnim, {
@@ -96,6 +106,7 @@ export function LoginPage({ navigation }: any) {
         setErrorMessage(result.error || 'Identifiant ou code PIN invalide');
         setPin('');
         setIsLoading(false);
+        triggerShake();
         return;
       }
 
@@ -103,7 +114,7 @@ export function LoginPage({ navigation }: any) {
       console.log('[Login] Succès ! Navigation auto via AuthContext...');
 
     } catch (err) {
-      console.error('[Login] Exception:', err);
+      console.log('[Login] Exception:', err);
       setErrorMessage('Erreur réseau. vérifiez votre connexion.');
       setPin('');
       setIsLoading(false);
@@ -113,15 +124,25 @@ export function LoginPage({ navigation }: any) {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <View style={styles.content}>
-        
+
         <View style={styles.header}>
-          <MaterialIcons name="medical-services" color={colors.secondary} size={32} />
-          <Text style={styles.title}>ÉTOILE BLEUE URGENCE</Text>
+          <Image
+            source={require('../../assets/logo-etoiel-blue-urgence.png')}
+            style={{ width: 64, height: 64, marginBottom: 12 }}
+            resizeMode="contain"
+          />
         </View>
-        <Text style={styles.subtitle}>S'IDENTIFIER</Text>
+        <Text style={styles.title}>ETOILE BLEUE URGENCE</Text>
+
+        <View style={{ flex: 1 }} />
 
         <View style={styles.middleSection}>
-          <View style={styles.stepContainer}>
+          <Animated.View
+            style={[
+              styles.stepContainer,
+              { transform: [{ translateX: shakeAnim }] }
+            ]}
+          >
             {/* IDENTIFIER FIELD */}
             <AppTouchableOpacity onPress={resetToId} activeOpacity={0.8}>
               <Text style={[styles.stepTitle, activeInput === 'PIN' && styles.stepTitleInactive]}>IDENTIFIANT</Text>
@@ -138,8 +159,10 @@ export function LoginPage({ navigation }: any) {
                         activeInput === 'PIN' ? styles.boxInactive : null,
                         {
                           backgroundColor: isFilled ? 'rgba(255,255,255,0.1)' : 'transparent',
-                          borderColor: isCurrent ? colors.secondary : (isFilled ? 'rgba(255,255,255,0.54)' : 'rgba(255,255,255,0.24)'),
-                          borderWidth: isCurrent ? 2 : 1,
+                          borderColor: errorMessage
+                            ? colors.primary
+                            : (isCurrent ? colors.secondary : (isFilled ? 'rgba(255,255,255,0.54)' : 'rgba(255,255,255,0.24)')),
+                          borderWidth: isCurrent || errorMessage ? 2 : 1,
                         }
                       ]}
                     >
@@ -151,7 +174,7 @@ export function LoginPage({ navigation }: any) {
             </AppTouchableOpacity>
 
             {/* PIN FIELD */}
-            <Animated.View 
+            <Animated.View
               style={[
                 styles.pinSection,
                 {
@@ -177,8 +200,10 @@ export function LoginPage({ navigation }: any) {
                         styles.box,
                         {
                           backgroundColor: isFilled ? 'rgba(255,255,255,0.1)' : 'transparent',
-                          borderColor: isCurrent ? colors.secondary : (isFilled ? 'rgba(255,255,255,0.54)' : 'rgba(255,255,255,0.24)'),
-                          borderWidth: isCurrent ? 2 : 1,
+                          borderColor: errorMessage
+                            ? colors.primary
+                            : (isCurrent ? colors.secondary : (isFilled ? 'rgba(255,255,255,0.54)' : 'rgba(255,255,255,0.24)')),
+                          borderWidth: isCurrent || errorMessage ? 2 : 1,
                         }
                       ]}
                     >
@@ -188,7 +213,7 @@ export function LoginPage({ navigation }: any) {
                 })}
               </View>
             </Animated.View>
-          </View>
+          </Animated.View>
 
           <View style={styles.actionArea}>
             {isLoading && <ActivityIndicator color={colors.secondary} size="large" />}
@@ -236,11 +261,11 @@ export function LoginPage({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#050505' },
-  content: { flex: 1, minHeight: height, paddingVertical: 40 },
-  header: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  title: { color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 2.0, marginLeft: 12 },
+  content: { flex: 1, paddingVertical: 10 },
+  header: { justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+  title: { color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 2.0, textAlign: 'center', marginBottom: 4 },
   subtitle: { alignSelf: 'center', color: colors.secondary, fontWeight: 'bold', fontSize: 12, letterSpacing: 1.5, marginBottom: 20 },
-  middleSection: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  middleSection: { justifyContent: 'flex-end', alignItems: 'center', marginBottom: 0, marginTop: 12 },
   stepContainer: { alignItems: 'center', width: '100%' },
   pinSection: { alignItems: 'center', width: '100%', marginTop: 24, paddingVertical: 8, overflow: 'hidden' },
   stepTitle: { color: '#FFF', fontSize: 14, letterSpacing: 2.0, fontWeight: 'bold', marginBottom: 16 },
@@ -251,9 +276,9 @@ const styles = StyleSheet.create({
   boxInactive: { height: 45 },
   boxText: { color: '#FFF', fontSize: 24, fontWeight: 'bold' },
   dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: '#FFF' },
-  actionArea: { height: 50, justifyContent: 'center', alignItems: 'center', marginTop: 16 },
+  actionArea: { height: 32, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
   errorText: { color: colors.primary, fontWeight: 'bold', textAlign: 'center' },
-  numpad: { paddingHorizontal: 40, paddingBottom: 40 },
+  numpad: { paddingHorizontal: 40, paddingBottom: 10 },
   numpadRow: { flexDirection: 'row', justifyContent: 'space-evenly', marginBottom: 16 },
   numpadKey: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)' },
   numpadText: { color: '#FFF', fontSize: 28, fontWeight: '400' },
